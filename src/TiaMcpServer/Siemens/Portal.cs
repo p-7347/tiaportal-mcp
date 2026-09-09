@@ -730,7 +730,7 @@ namespace TiaMcpServer.Siemens
 
             if (IsProjectNull())
             {
-                return null;
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
             }
 
             var type = GetType(softwarePath, typePath);
@@ -748,7 +748,7 @@ namespace TiaMcpServer.Siemens
 
             if (IsProjectNull())
             {
-                return null;
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
             }
 
             var block = GetBlock(softwarePath, blockPath);
