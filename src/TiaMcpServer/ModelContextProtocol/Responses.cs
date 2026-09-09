@@ -236,4 +236,41 @@ namespace TiaMcpServer.ModelContextProtocol
     public class ResponseExportTagTable : ResponseMessage
     {
     }
+
+    public class ResponseCrossReferenceLocation
+    {
+        public string? Name { get; set; }
+        public string? Address { get; set; }
+        public string? TypeName { get; set; }
+        public string? Access { get; set; }
+        public string? ReferenceType { get; set; }
+        public string? ReferenceLocation { get; set; }
+        public string? ReferencedAsName { get; set; }
+    }
+
+    public class ResponseCrossReferenceReference
+    {
+        public string? Name { get; set; }
+        public string? Path { get; set; }
+        public string? Address { get; set; }
+        public string? Device { get; set; }
+        public string? TypeName { get; set; }
+        public IEnumerable<ResponseCrossReferenceLocation>? Locations { get; set; }
+    }
+
+    public class ResponseCrossReferenceSource
+    {
+        public string? Name { get; set; }
+        public string? Path { get; set; }
+        public string? Address { get; set; }
+        public string? Device { get; set; }
+        public string? TypeName { get; set; }
+        public IEnumerable<ResponseCrossReferenceReference>? References { get; set; }
+        public IEnumerable<ResponseCrossReferenceSource>? Children { get; set; }
+    }
+
+    public class ResponseCrossReferences : ResponseMessage
+    {
+        public IEnumerable<ResponseCrossReferenceSource>? Sources { get; set; }
+    }
 }

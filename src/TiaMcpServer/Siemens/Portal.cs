@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using Siemens.Engineering;
 using Siemens.Engineering.Compiler;
+using Siemens.Engineering.CrossReference;
 using Siemens.Engineering.Hmi;
 using Siemens.Engineering.HmiUnified;
 using Siemens.Engineering.HW;
@@ -9,6 +10,7 @@ using Siemens.Engineering.Multiuser;
 using Siemens.Engineering.Safety;
 using Siemens.Engineering.SW;
 using Siemens.Engineering.SW.Blocks;
+using Siemens.Engineering.SW.Blocks.Interface;
 using Siemens.Engineering.SW.Tags;
 using Siemens.Engineering.SW.Types;
 using System;
@@ -716,6 +718,42 @@ namespace TiaMcpServer.Siemens
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Cross-references for a PLC type (UDT): everywhere the type - or its members - are used
+        /// across the project, via Openness's CrossReferenceService.
+        /// </summary>
+        public CrossReferenceResult? GetTypeCrossReferences(string softwarePath, string typePath, CrossReferenceFilter filter = CrossReferenceFilter.AllObjects)
+        {
+            _logger?.LogInformation($"Getting cross references for type: {typePath}");
+
+            if (IsProjectNull())
+            {
+                return null;
+            }
+
+            var type = GetType(softwarePath, typePath);
+            var xrefService = type?.GetService<CrossReferenceService>();
+            return xrefService?.GetCrossReferences(filter);
+        }
+
+        /// <summary>
+        /// Cross-references for a block (e.g. an FB used elsewhere as an instance type, or an
+        /// FC/OB called from other blocks): everywhere the block is used across the project.
+        /// </summary>
+        public CrossReferenceResult? GetBlockCrossReferences(string softwarePath, string blockPath, CrossReferenceFilter filter = CrossReferenceFilter.AllObjects)
+        {
+            _logger?.LogInformation($"Getting cross references for block: {blockPath}");
+
+            if (IsProjectNull())
+            {
+                return null;
+            }
+
+            var block = GetBlock(softwarePath, blockPath);
+            var xrefService = block?.GetService<CrossReferenceService>();
+            return xrefService?.GetCrossReferences(filter);
         }
 
         public PlcType? GetType(string softwarePath, string typePath)

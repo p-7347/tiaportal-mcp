@@ -831,6 +831,71 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
+        [McpServerTool(Name = "GetTypeCrossReferences", Title = "Get type cross references", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Find every place a PLC data type (UDT) is used across the project. For an FB used as an instance type, use GetBlockCrossReferences instead.")]
+        public static ResponseCrossReferences GetTypeCrossReferences(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("typePath: defines the path in the project structure to the type")] string typePath)
+        {
+            try
+            {
+                var result = Portal.GetTypeCrossReferences(softwarePath, typePath);
+                if (result == null)
+                {
+                    throw new McpException($"Type not found, or has no cross-reference service, at '{typePath}' in '{softwarePath}'");
+                }
+
+                var typeLeafName = typePath.Contains('/') ? typePath.Substring(typePath.LastIndexOf('/') + 1) : typePath;
+                var sources = Helper.BuildCrossReferenceSourceList(result.Sources, typeLeafName);
+
+                return new ResponseCrossReferences
+                {
+                    Message = $"Cross references retrieved for '{typePath}' in '{softwarePath}'",
+                    Sources = sources,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving cross references for '{typePath}' in '{softwarePath}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "GetBlockCrossReferences", Title = "Get block cross references", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Find every place a block is used across the project - e.g. an FB used as an instance type (how many/which blocks declare a Static instance of it), or an FC/OB and who calls it")]
+        public static ResponseCrossReferences GetBlockCrossReferences(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("blockPath: defines the path in the project structure to the block")] string blockPath)
+        {
+            try
+            {
+                var result = Portal.GetBlockCrossReferences(softwarePath, blockPath);
+                if (result == null)
+                {
+                    throw new McpException($"Block not found, or has no cross-reference service, at '{blockPath}' in '{softwarePath}'");
+                }
+
+                var blockLeafName = blockPath.Contains('/') ? blockPath.Substring(blockPath.LastIndexOf('/') + 1) : blockPath;
+                var sources = Helper.BuildCrossReferenceSourceList(result.Sources, blockLeafName);
+
+                return new ResponseCrossReferences
+                {
+                    Message = $"Cross references retrieved for '{blockPath}' in '{softwarePath}'",
+                    Sources = sources,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving cross references for '{blockPath}' in '{softwarePath}': {ex.Message}", ex);
+            }
+        }
 
 
         [McpServerTool(Name = "ExportBlock", Title = "Export block to XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export a block from plc software to file")]

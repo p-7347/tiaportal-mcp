@@ -2,6 +2,90 @@
 
 Centralized list of actionable improvements gathered from initial repo review. Use this to track, prioritize, and reference across PRs. See file paths in backticks.
 
+## Block interface / cross-reference tools (2026-09-09 roadmap)
+
+Came out of a live debugging session on the Mahindra_CPU01_V20_260909_k1_001 project
+(finding duplicate `Main_Tracking_Data` instance declarations, and tracing who calls
+`0_Main_CallEnv`). See `CHANGES.md` (2026-09-09 entries) for the bugs found/fixed along
+the way (path-prefix stripping, device-name-with-'/' fix, attribute JSON-serialization fix).
+
+1. **`GetBlockInterface(softwarePath, blockPath)`** - read Static/Temp/Input/Output/InOut
+   member declarations ({name, dataType, startValue}) as structured JSON, instead of the
+   `ExportAsDocuments` → `.s7dcl`/`.s7res` → grep workaround used today.
+   - **Status: blocked on the Openness API side.** Verified empirically against the live
+     V20 `Siemens.Engineering.dll` (reflection + `GetServiceInfos()`/`GetCompositionInfos()`
+     on a real FB instance): a `PlcBlock` exposes exactly 7 services
+     (`ICompilable`, `CrossReferenceService`, `LibraryTypeInstanceInfo`,
+     `PlcBlockProtectionProvider`, `FingerprintProvider`, `SupervisionProvider`,
+     `SafetySignatureProvider`) and only one composition (`Supervisions`) - no interface/member
+     accessor among them. `Siemens.Engineering.SW.Blocks.Interface.PlcBlockInterface` is a real
+     type ("Interface for all blocks" per the shipped XML docs) but nothing on `PlcBlock` in
+     this V20 install actually returns one - not `GetService<T>()`, not `GetComposition("...")`.
+     `InterfaceSnapshot` (which *is* a valid service) is for online monitoring snapshot
+     *values*, not the interface *definition*. Before sinking more time in: re-check whether a
+     newer Openness version (V21+) or a different PLC block subtype exposes this differently.
+   - Fallback if it stays blocked: keep the `.s7dcl`/`.s7res` export-and-parse route, but see
+     the "snapshot export" idea below to stop paying the round-trip cost per block.
+
+2. **Cross-reference lookup** ("where is this block/type/tag used") - would have made
+   today's manual "export 0_Main_CallEnv, not it, export Main_DataSetting, ..." caller search
+   a single call.
+   - Option A: use `CrossReferenceService` directly (it's a real service on `PlcBlock`, per the
+     empirical service list above) - needs its actual API surface investigated (what it
+     returns, whether it's queryable by name/type or only enumerable per-object) before
+     committing to a tool shape.
+   - Option B (safer fallback, no dependency on an unconfirmed API): bulk `ExportBlocksAsDocuments`
+     the whole PLC software once, then regex/grep the exported `.s7dcl` files server-side for a
+     call/instance pattern and return matching block names. Less precise than a real
+     compiler-backed cross-reference (can false-positive on comments/similar names) but only
+     needs tools already implemented.
+
+3. **Snapshot export mode** - rather than exporting one candidate block at a time while
+   searching, add a mode that bulk-exports a PLC software's blocks to a local folder once
+   (already possible today via `ExportBlocksAsDocuments`/`ExportBlocks` with an empty
+   `regexName`), so follow-up analysis (call tracing, pattern search) runs against local files
+   instead of round-tripping to TIA Portal per candidate. Needs a policy for when the snapshot
+   is considered stale (e.g. only refresh after `CompileSoftware`, or require an explicit
+   re-export) - not a new tool per se, more a recommended *usage pattern* worth documenting in
+   `docs/TOOLS.md` once cross-reference (above) is resolved one way or the other.
+
+4. **Online state / Run-Stop** - `GetOnlineState(devicePath)` plus explicit
+   `GoOnline`/`GoOffline`, backed by the `Siemens.Engineering.Online` namespace (Openness
+   standard feature, not yet verified against this V20 install the way items 1-2 were).
+   - Read-only status query is low risk and worth doing.
+   - **Do not expose Run/Stop control as a plain tool** - accidentally stopping a live PLC is
+     a real safety risk (see the "what these tools can't do" note in `docs/TOOLS.md`, which
+     would need updating the day this ships). If ever added, gate it behind an explicit
+     opt-in flag/confirmation, separate from any read-only status tool.
+
+5. **Live tag value monitoring** (e.g. reading `icnt`/`icnt2`/`icnt3` without opening a Trace
+   view) - **out of Openness's scope entirely**, confirmed against the standard Openness
+   feature list (engineering metadata only - name/address/type/comment - never live runtime
+   values) and against the separate TIA Portal Test Suite add-on (test-case automation, not
+   live tag access either). Would need a completely separate S7 communication stack:
+   - Snap7 / S7NetPlus (raw S7 protocol, ISO-on-TCP port 102): simplest, but most blocks in
+     this project use `MemoryLayout: Optimized` (confirmed on `Main_Tracking_Data` too), whose
+     absolute offsets shift per compile - these libraries generally need symbolic (by-name)
+     addressing support to be usable here, which plain Snap7/S7NetPlus don't provide.
+   - OPC UA client (`OPCFoundation.NetStandard.Opc.Ua`): this project already has an `OPC UA_1`
+     hardware component under `PLC_1`. Enabling the CPU's built-in OPC UA server and subscribing
+     by tag name sidesteps the Optimized-offset problem entirely - the more realistic path if
+     this is ever built.
+   - Recommendation: if pursued, build as a **separate small MCP server**, not folded into
+     `tiaportal-mcp` - this project is an engineering-automation tool; live tag monitoring makes
+     it a SCADA client, a different concern.
+
+6. **Event subscription** (block-changed/compile-completed notifications) - Openness supports
+   registering event handlers, but MCP's request/response model has no clean way to push a
+   server-side event to the client in real time. Low priority; skip unless a concrete need
+   shows up.
+
+7. **HW/network health-check** (servo/cylinder physical config sanity, network topology
+   review) - explicitly a **separate, later effort**. `GetDeviceInfo`/`GetDeviceItemInfo`
+   already provide the raw access; what's missing is a checklist of what "correct" looks like
+   for this kind of hardware, which needs to be worked out on its own rather than folded into
+   the logic-bug-hunting tools above.
+
 ## Documentation
 - [ ] Add a "CLI Options" section to `README.md` documenting `--tia-major-version <int>` and `--logging <1|2|3>` with defaults and effect (1=stderr, 2=Debug, 3=Event Log). Cross-link to samples.
 - [ ] Add a "Build and Run" section to `README.md` showing `dotnet build`, `dotnet run --project src/TiaMcpServer/TiaMcpServer.csproj`, and running compiled `TiaMcpServer.exe`.
