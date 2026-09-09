@@ -5,6 +5,46 @@
 
 ---
 
+## [2026-09-09] GetDeviceInfo가 이름에 '/'가 들어간 디바이스에서 항상 "Device not found"
+
+### 증상
+- `GetDeviceInfo("S7-1500/ET200MP station_1")`가 매번 즉시 "Device not found"로 실패.
+- Claude Desktop 쪽에서 직접 원인을 특정해서 알려준 케이스 — 이 디바이스 이름 자체에
+  `/`가 리터럴로 포함돼 있는데, `GetDeviceByPath`가 `devicePath`를 `/` 기준으로
+  단순 split해버려서 `["S7-1500", "ET200MP station_1"]` 두 조각으로 쪼개진 뒤,
+  "S7-1500"을 디바이스 그룹 이름으로 착각하고 찾다가 실패하는 것으로 추정 → 실제로
+  코드 확인해서 그대로 맞았음.
+
+### 원인
+`Portal.cs`의 `GetDeviceByPath`(오직 `GetDeviceInfo`만 사용)에는 "하드웨어 PLC는
+`Device.Name`이 `'S7-1500/ET200MP-Station_1'`처럼 TIA Portal IDE에는 안 보이는 형태로
+슬래시를 포함할 수 있다"는 케이스에 대한 처리가 아예 없었음. 반면 바로 옆
+`GetSoftwareContainerInDevices`(softwarePath 계열 툴들이 사용)와
+`GetDeviceItemByPath`(`GetDeviceItemInfo`가 사용)에는 이미 이 케이스를 위한 폴백
+로직이 있고, 코드 주석에도 정확히 이 상황이 설명돼 있었음 — `GetDeviceByPath`만
+그 처리가 누락된 상태였음.
+
+**이 버그는 upstream 원본에도 그대로 있던 것**이고(`upstream/main`의 `GetDeviceByPath`와
+동일), 우리가 이번에 새로 만든 게 아님 — 원작자가 이 함수 하나만 놓친 것으로 보임.
+
+### 조치 (`Portal.cs`, 커밋 `854aec2`)
+- `FindDeviceByFullName()` 추가: `/`로 split하기 전에, 전달받은 `devicePath` 전체
+  문자열을 실제 디바이스 이름과 통짜로 먼저 비교(최상위 devices + 모든
+  device group을 재귀적으로 탐색). 매치되면 바로 반환하고, 안 되면 기존 split 기반
+  탐색으로 폴백.
+- 실제 회사 프로젝트의 진짜 디바이스 이름(`"S7-1500/ET200MP station_1"`)으로 직접
+  재현·검증: 수정 전 "Device not found" → 수정 후 정상 조회.
+
+### 남은 한계
+- 지금 고친 건 "devicePath 전체가 통째로 그 슬래시 포함 디바이스 이름과 일치하는"
+  케이스임. 만약 그 디바이스가 그룹 안에 있고, 그 디바이스 *밑의* 하위 항목까지
+  경로에 넣어야 하는 상황(예: `"그룹/S7-1500/ET200MP station_1/무언가"`처럼 슬래시
+  포함 이름 뒤에 추가 세그먼트가 더 붙는 경우)이면 여전히 안 될 수 있음 — 그런
+  케이스가 실제로 나오면 그때 더 일반적인(그리디 프리픽스 매칭) 방식으로 확장 필요.
+  당장 보고된 케이스(디바이스 이름 자체를 통째로 넘기는 것)는 확실히 해결됨.
+
+---
+
 ## [2026-09-09] 블록/타입 단위 조회(GetBlockInfo/ExportBlock 등)가 전부 막혀있던 버그 수정
 
 ### 증상
