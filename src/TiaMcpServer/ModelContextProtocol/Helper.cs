@@ -17,16 +17,54 @@ namespace TiaMcpServer.ModelContextProtocol
                 foreach (var attr in obj.GetAttributeInfos())
                 {
                     object value = obj.GetAttribute(attr.Name);
+
                     attributes.Add(new Attribute
                     {
                         Name = attr.Name,
-                        Value = value,
+                        Value = SanitizeAttributeValue(value),
                         AccessMode = Enum.GetName(typeof(EngineeringAttributeAccessMode), attr.AccessMode)
                     });
                 }
             }
 
             return attributes;
+        }
+
+        /// <summary>
+        /// TIA attribute values are usually primitives, but some (a project's Path as
+        /// FileSystemInfo, a description as MultilingualText, ...) are complex Openness/BCL
+        /// objects whose Parent/Root/Culture-style navigation properties recurse far past the
+        /// JSON serializer's max depth. Reduce anything that isn't safely serializable to a string.
+        /// </summary>
+        private static object? SanitizeAttributeValue(object? value)
+        {
+            switch (value)
+            {
+                case null:
+                case string:
+                case bool:
+                case byte:
+                case sbyte:
+                case short:
+                case ushort:
+                case int:
+                case uint:
+                case long:
+                case ulong:
+                case float:
+                case double:
+                case decimal:
+                case DateTime:
+                case DateTimeOffset:
+                case Guid:
+                    return value;
+                case Enum e:
+                    return e.ToString();
+                case MultilingualText mlt:
+                    return MultilingualTextToString(mlt);
+                default:
+                    return value.ToString();
+            }
         }
 
         public static BlockGroupInfo BuildBlockHierarchy(PlcBlockGroup group)
