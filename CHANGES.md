@@ -5,6 +5,47 @@
 
 ---
 
+## [2026-09-09] GetProject/GetDevices가 항상 에러 나던 버그 수정
+
+### 증상
+- V20 연결은 정상인데 `GetProject`, `GetDevices` 툴만 호출하면 매번
+  `"An error occurred invoking 'X'."` (내용 없는 일반 에러)로 실패.
+- `Portal.cs`/`McpServer.cs`의 try/catch에는 안 걸림 — 정상적으로 응답 객체를
+  만들어서 반환까지 갔는데, 그 이후 MCP SDK가 JSON으로 직렬화하는 단계에서
+  죽는 패턴이었음.
+
+### 원인
+`Helper.GetAttributeList()`가 TIA Openness의 `obj.GetAttribute(name)` 값을
+그대로 `Attribute.Value`(`object?`)에 담아서 반환하는데, 속성에 따라 이 값이
+단순 문자열/숫자가 아니라 **복잡한 .NET/Openness 객체**로 오는 경우가 있었음:
+- 프로젝트의 `Path` 속성 → `System.IO.FileSystemInfo` (`.Directory.Parent.Parent...Root.Root...`)
+- 디바이스의 설명류 속성 → `MultilingualText` → 내부 `CultureInfo` → `.Parent.Parent...`
+  (`CultureInfo.Parent`는 InvariantCulture에서 자기 자신을 가리켜 진짜 순환이 됨)
+
+`System.Text.Json`이 이런 객체를 리플렉션으로 직렬화하다가 최대 깊이(64)를
+넘겨서 `JsonException: A possible object cycle was detected`로 죽고, MCP SDK가
+이걸 뭉뚱그려 `"An error occurred invoking 'X'."`로만 클라이언트에 보여줬던 것.
+`--logging 1`로 stderr 로그를 켜야만 진짜 예외 메시지가 보임.
+
+### 조치 (`Helper.cs`, 커밋 `9900f4e`)
+- `SanitizeAttributeValue()` 헬퍼 추가: 문자열/불리언/숫자/`DateTime`/`Guid`/
+  enum처럼 JSON 직렬화가 안전한 타입만 그대로 통과시키고, 그 외 나머지
+  (`FileSystemInfo`, `MultilingualText`, `CultureInfo` 등 뭐가 됐든)는 전부
+  `.ToString()`으로 납작하게 만들어서 넣음.
+- `GetProject`, `GetDevices` 둘 다 실제 stdio로 재검증 완료 (`IsError = False`).
+
+### 다음에 참고할 점
+- TIA attribute 값을 다루는 새 툴을 추가할 때, `Helper.GetAttributeList()`를
+  거치면 이제 자동으로 안전하지만, 만약 `obj.GetAttribute()` 결과를 다른 곳에서
+  직접 JSON 응답에 넣는 코드를 새로 짠다면 똑같은 함정에 걸릴 수 있음 — 원시
+  타입이 아니면 반드시 문자열화할 것.
+- 이런 종류의 버그는 항상 우리 쪽 try/catch를 통과한 뒤(성공 응답을 만든 뒤)
+  SDK의 직렬화 단계에서 터지므로, `--logging 1`을 켜고 stderr를 봐야
+  `fail: ... threw an unhandled exception` 로 진짜 원인이 보임 — 클라이언트에
+  오는 메시지만 봐서는 절대 원인을 못 찾음.
+
+---
+
 ## [2026-09-09] Claude Desktop이 tiaportal-mcp에 연결 안 되던 문제 (MSIX 가상화 config)
 
 ### 증상
