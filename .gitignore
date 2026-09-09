@@ -1,5 +1,6 @@
 .vs/
 exports/
+_tmp_export/
 snapshots/
 tia-inventory/
 .gemini/
