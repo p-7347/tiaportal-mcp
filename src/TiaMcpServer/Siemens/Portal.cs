@@ -2451,6 +2451,13 @@ namespace TiaMcpServer.Siemens
                 // Split the path by '/' to get each group name
                 var groupNames = groupPath.Split(['/'], StringSplitOptions.RemoveEmptyEntries);
 
+                // GetSoftwareTree labels the block root "Program blocks" for readability, but it
+                // isn't a real subgroup - strip it if callers pasted a path straight from that tree.
+                if (groupNames.Length > 0 && groupNames[0].Equals("Program blocks", StringComparison.OrdinalIgnoreCase))
+                {
+                    groupNames = groupNames.Skip(1).ToArray();
+                }
+
                 PlcBlockGroup? currentGroup = plcSoftware.BlockGroup;
 
                 foreach (var groupName in groupNames)
@@ -2485,6 +2492,13 @@ namespace TiaMcpServer.Siemens
                 }
 
                 var groupNames = groupPath.Split(['/'], StringSplitOptions.RemoveEmptyEntries);
+
+                // GetSoftwareTree labels the type root "PLC data types" for readability, but it
+                // isn't a real subgroup - strip it if callers pasted a path straight from that tree.
+                if (groupNames.Length > 0 && groupNames[0].Equals("PLC data types", StringComparison.OrdinalIgnoreCase))
+                {
+                    groupNames = groupNames.Skip(1).ToArray();
+                }
 
                 PlcTypeGroup? currentGroup = plcSoftware.TypeGroup;
 
