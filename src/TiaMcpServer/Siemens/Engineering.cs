@@ -23,15 +23,25 @@ namespace TiaMcpServer.Siemens
                 return null;
             }
 
-            var tiaInstallPath = GetTiaPortalInstallPath();
-            if (string.IsNullOrEmpty(tiaInstallPath))
+            try
             {
+                var tiaInstallPath = GetTiaPortalInstallPath();
+                if (string.IsNullOrEmpty(tiaInstallPath))
+                {
+                    return null;
+                }
+
+                var assemblyPath = FindAssembly(tiaInstallPath!, TiaMajorVersion, assemblyName.Name + ".dll");
+
+                return assemblyPath != null ? Assembly.LoadFrom(assemblyPath) : null;
+            }
+            catch
+            {
+                // A restricted host process (e.g. limited registry/filesystem access) must not take
+                // down assembly resolution entirely - fall through and let the original
+                // FileNotFoundException for the requested assembly surface instead.
                 return null;
             }
-
-            var assemblyPath = FindAssembly(tiaInstallPath!, TiaMajorVersion, assemblyName.Name + ".dll");
-
-            return assemblyPath != null ? Assembly.LoadFrom(assemblyPath) : null;
         }
 
         /// <summary>
@@ -64,7 +74,18 @@ namespace TiaMcpServer.Siemens
 
         private static string? GetTiaPortalInstallPath()
         {
-            var registryPath = GetTiaPortalInstallPath(TiaMajorVersion);
+            string? registryPath;
+            try
+            {
+                registryPath = GetTiaPortalInstallPath(TiaMajorVersion);
+            }
+            catch
+            {
+                // Registry access can be restricted depending on how the host process was started -
+                // fall back to the environment variable instead of failing resolution outright.
+                registryPath = null;
+            }
+
             if (!string.IsNullOrEmpty(registryPath))
             {
                 return registryPath;
