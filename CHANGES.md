@@ -5,6 +5,48 @@
 
 ---
 
+## [2026-09-09] 블록/타입 단위 조회(GetBlockInfo/ExportBlock 등)가 전부 막혀있던 버그 수정
+
+### 증상
+- `GetBlocksWithHierarchy`, `GetSoftwareTree` 같은 벌크 조회는 되는데, 블록 하나를
+  집어서 보는 `GetBlockInfo`는 즉시 "Block not found" 에러, `ExportBlock`/
+  `ExportBlocksAsDocuments`는 응답이 아예 안 오고 60초쯤 지나서 타임아웃.
+
+### 원인
+`GetSoftwareTree`가 사람이 읽기 좋으라고 블록 루트를 `"Program blocks"`, 타입
+루트를 `"PLC data types"`라는 **표시용 라벨**로 붙여서 트리를 그리는데, 실제로는
+`plcSoftware.BlockGroup`/`TypeGroup` 자체가 그 루트라서 저 이름을 가진 진짜
+하위 그룹은 존재하지 않음. 그런데 `GetPlcBlockGroupByPath`/`GetPlcTypeGroupByPath`
+(블록·타입 경로를 실제 그룹으로 바꿔주는 내부 함수)는 이 라벨을 진짜 그룹
+이름인 줄 알고 첫 세그먼트부터 찾다가 실패 → `GetBlockInfo`는 바로 "not found",
+`ExportBlock`류는 not-found 이후 이름 후보를 찾으려고 전체 블록 트리를 다시
+훑는 무거운 폴백 로직을 타면서 사실상 멈춘 것처럼 보였던 것으로 추정.
+
+트리를 보고 경로를 구성하면(사람이든 LLM이든) 자연스럽게
+`"Program blocks/Group/BlockName"` 같은 형태로 만들게 되는데, 그게 항상 실패하는
+구조였음 — 즉 트리 출력과 경로 파서가 서로 다른 규칙을 쓰고 있던 게 근본 원인.
+
+### 조치 (`Portal.cs`, 커밋 `6e32d8b`)
+- `GetPlcBlockGroupByPath`/`GetPlcTypeGroupByPath`가 경로의 첫 세그먼트가
+  `"Program blocks"`/`"PLC data types"`(대소문자 무관)면 무시하고 건너뛰도록 수정.
+- 실제 V20 프로젝트에 붙여서 stdio로 직접 검증: 이전엔 "Block not found"였던
+  `"Program blocks/000_OB_Cycle/Main"` 경로로 `GetBlockInfo`/`ExportBlock` 둘 다
+  블록을 정상적으로 찾는 것까지 확인. (단, `ExportBlock` 자체는 TIA 프로젝트가
+  온라인/모니터링 모드일 때 "This function is not supported in online mode."로
+  거부되는데, 이건 코드 버그가 아니라 TIA Portal 자체 제약 — 오프라인일 때만
+  export 가능.)
+
+### 다음에 참고할 점
+- 블록/타입 경로를 다루는 새 함수를 추가한다면 `GetPlcBlockGroupByPath`/
+  `GetPlcTypeGroupByPath`를 거치게 하거나, 최소한 같은 라벨 스트리핑 규칙을
+  지킬 것 — 안 그러면 이 버그가 다른 함수에서 또 재발함.
+- `GetSoftwareTree`/`GetBlocksWithHierarchy`의 출력을 보고 경로를 만드는 게
+  자연스러운 사용 패턴이므로, 트리 표시 라벨과 경로 파서의 실제 그룹 이름 규칙은
+  항상 일치시키거나(지금처럼 파서 쪽에서 라벨을 흡수), 아니면 문서에 "트리의
+  루트 라벨은 경로에 넣지 마세요"라고 명확히 적어둬야 함.
+
+---
+
 ## [2026-09-09] GetProject/GetDevices가 항상 에러 나던 버그 수정
 
 ### 증상
