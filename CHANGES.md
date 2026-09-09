@@ -5,6 +5,62 @@
 
 ---
 
+## [2026-09-09] GetTypeCrossReferences/GetBlockCrossReferences 추가 (+ GetBlockInterface 시도는 폐기)
+
+### 배경
+- Mahindra_CPU01 프로젝트에서 "`Main_Tracking_Data`(FB) 인스턴스가 몇 개, 어느 블록에
+  선언돼 있는지" 확인하려고 했는데, 기존엔 블록 하나씩 `ExportAsDocuments`로 뽑아서
+  `.s7dcl`을 grep하는 식으로 수동 왕복하고 있었음 (`0_Main_CallEnv` 봤다가 없어서
+  `Main_DataSetting` 봤다가...). Claude Desktop이 "`PlcBlock.Interface`로 Static
+  인터페이스를 직접 구조화해서 읽는 툴을 추가하자"고 제안해서 시도함.
+
+### `GetBlockInterface` 시도 — 막다른 길로 확인됨
+- 실제 설치된 V20 `Siemens.Engineering.dll`을 리플렉션 + 라이브 연결로 직접 검증:
+  `PlcBlock`(FB) 인스턴스가 실제로 제공하는 서비스는 `ICompilable`,
+  `CrossReferenceService`, `LibraryTypeInstanceInfo`, `PlcBlockProtectionProvider`,
+  `FingerprintProvider`, `SupervisionProvider`, `SafetySignatureProvider` 7개뿐이고,
+  컴포지션은 `Supervisions` 하나, 속성 목록에도 "Interface" 관련 항목이 전혀 없음.
+- `Siemens.Engineering.SW.Blocks.Interface.PlcBlockInterface`라는 타입 자체는
+  실존함("Interface for all blocks", DLL에 동봉된 XML 문서 기준)but, 이 V20 설치본에서
+  `PlcBlock`이 그걸 반환하는 경로(서비스/컴포지션/속성 그 무엇도)가 없음.
+  `InterfaceSnapshot`(서비스로는 실존)은 이름과 달리 "런타임 모니터링 스냅샷 값"용이지
+  인터페이스 구조가 아님.
+- 결론: **V20 Openness로는 블록의 Static/Input/Output 선언을 구조화된 형태로 직접
+  읽을 방법이 없음.** 향후 V21+에서 되는지는 미확인 — `TODO.md`에 남겨둠.
+
+### `GetTypeCrossReferences`/`GetBlockCrossReferences`로 방향 전환 — 성공
+- `CrossReferenceService`는 실제로 존재하고 (`PlcType`/`PlcBlock` 둘 다
+  `GetService<CrossReferenceService>()`로 얻어짐), `.GetCrossReferences(filter)`가
+  `Sources → References → Locations` 트리를 컴파일러가 실제로 파싱한 결과로 돌려줌
+  (regex grep보다 신뢰도 높음 — 주석/비슷한 이름에 false positive 안 남).
+- 단, **첫 시도에서 응답이 3.4MB**가 나옴 — 원인 두 가지:
+  1. `GetCrossReferences`는 조회한 객체 자신뿐 아니라 그 안에 선언/사용된 모든 요소
+     (로컬 변수, 네트워크 등)까지 전부 별도 `Source` 항목으로 펼쳐서 반환함.
+  2. 각 `Source`의 `References` 목록도 "누가 나를 쓰는지"(`ReferenceType.UsedBy`)와
+     "내가 내부적으로 뭘 쓰는지"(`ReferenceType.Uses`)가 뒤섞여 있음.
+- 조치 (`Helper.cs`): 조회한 객체 자신의 `Source` 항목만 이름으로 필터링하고,
+  `UsedBy` 위치만 남기도록 정리 → **3.4MB → 2.5KB**.
+- 실제 프로젝트로 검증: `Main_Tracking_Data` 조회 시 `0_Main_CallEnv`가
+  `Call`(NW1 호출)과 `Multiinstance`(`Main_Tracking_Data_Instance`라는 이름의 Static
+  인스턴스 선언) 두 위치로 정확히 잡힘 — 오늘 하려던 조사가 한 번의 호출로 끝남.
+
+### 다음에 참고할 점
+- `Main_Tracking_Data`는 UDT가 아니라 **FB 블록**이었음 — Program blocks 트리 밑에
+  있었고 PLC data types 밑이 아니었음. "인스턴스 타입으로 쓰이는 FB"는
+  `GetTypeCrossReferences`가 아니라 `GetBlockCrossReferences`로 조회해야 함.
+- `CrossReferenceFilter`는 `AllObjects`/`ObjectsWithReferences`/
+  `ObjectsWithoutReferences`/`UnusedObjects` 4가지가 있음. 지금은 항상
+  `AllObjects`로 호출한 뒤 우리 쪽에서 후처리 필터링하는 방식 — 원본 Sources를
+  그대로(필터링 없이) 노출하는 걸 원한다면 `Helper.BuildCrossReferenceSourceList`의
+  `onlyName`/`maxDepth`/`Uses` 제외 로직을 확인할 것.
+- 이 API 탐색에 쓴 리플렉션 기법(설치된 DLL을 직접 로드해서 `GetTypes()`,
+  `GetServiceInfos()`, `GetCompositionInfos()`, `GetAttributeInfos()`로 실제
+  런타임 표면을 확인하고, DLL 옆의 `Siemens.Engineering.xml` 문서로 교차 검증)은
+  Openness API 관련 다른 기능을 추가할 때도 똑같이 유용함 — 문서만 믿지 말고 항상
+  라이브로 검증할 것.
+
+---
+
 ## [2026-09-09] GetDeviceInfo가 이름에 '/'가 들어간 디바이스에서 항상 "Device not found"
 
 ### 증상

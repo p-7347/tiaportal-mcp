@@ -64,6 +64,7 @@ project (never reaches actual PLC hardware - see the "Safety" note at the end).
 | `ExportBlock` | **Destructive** | `softwarePath`, `blockPath`, `exportPath`, `preservePath` (optional) | Exports one block to XML. Fails with "not found" + path suggestions if `blockPath` is a bare, ambiguous name. Requires the project to be **offline** - TIA Portal itself refuses export while online/monitoring. |
 | `ImportBlock` | **Destructive** | `softwarePath`, `groupPath`, `importPath` (XML file) | Overwrites an existing block of the same name. |
 | `ExportBlocks` | **Destructive**, async w/ progress | `softwarePath`, `exportPath`, `regexName` (optional), `preservePath` (optional) | Bulk export. Skips inconsistent blocks and reports them separately in `Inconsistent`; compile first if you need them included. |
+| `GetBlockCrossReferences` | RO | `softwarePath`, `blockPath` | Compiler-backed "where is this block used" - e.g. an FB used as an instance type: which blocks declare a Static instance of it (`access: "Multiinstance"`), or an FC/OB and who calls it (`access: "Call"`). Only returns `UsedBy` locations for the block's own entry (its internal `Uses` - what it calls/reads - is filtered out; see `CHANGES.md` 2026-09-09). |
 
 ## Types (PLC data types)
 
@@ -74,6 +75,7 @@ project (never reaches actual PLC hardware - see the "Safety" note at the end).
 | `ExportType` | **Destructive** | `softwarePath`, `exportPath`, `typePath`, `preservePath` (optional) | Same offline-mode requirement as `ExportBlock`. |
 | `ImportType` | **Destructive** | `softwarePath`, `groupPath`, `importPath` (XML file) | |
 | `ExportTypes` | **Destructive**, async w/ progress | `softwarePath`, `exportPath`, `regexName` (optional), `preservePath` (optional) | Bulk export, same inconsistent-item handling as `ExportBlocks`. |
+| `GetTypeCrossReferences` | RO | `softwarePath`, `typePath` | Same as `GetBlockCrossReferences` but for a PLC data type (UDT). Note: an FB used as an instance type is a *block*, not a type - use `GetBlockCrossReferences` for those (e.g. `Main_Tracking_Data`). |
 
 ## Documents (.s7dcl/.s7res) - **requires TIA Portal V20+**
 
