@@ -2,6 +2,7 @@
 using Siemens.Engineering.SW.Blocks;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace TiaMcpServer.ModelContextProtocol
 {
@@ -64,6 +65,23 @@ namespace TiaMcpServer.ModelContextProtocol
             groupInfo.Groups = groupList;
 
             return groupInfo;
+        }
+        public static string? MultilingualTextToString(MultilingualText? text)
+        {
+            if (text == null)
+            {
+                return null;
+            }
+
+            foreach (var item in text.Items)
+            {
+                if (!string.IsNullOrWhiteSpace(item.Text))
+                {
+                    return item.Text;
+                }
+            }
+
+            return null;
         }
     }
 }
