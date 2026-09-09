@@ -2312,6 +2312,17 @@ namespace TiaMcpServer.Siemens
             if (_project?.Devices == null || string.IsNullOrWhiteSpace(devicePath))
                 return null;
 
+            // A hardware PLC's Device.Name can itself contain '/' (e.g. 'S7-1500/ET200MP station_1'),
+            // which isn't visible as such in the TIA Portal IDE. Always try an exact whole-string
+            // match against real device names first, before treating '/' as a path separator -
+            // otherwise a name like that gets mis-split into bogus group/device segments and the
+            // device is reported as not found.
+            var exactMatch = FindDeviceByFullName(devicePath);
+            if (exactMatch != null)
+            {
+                return exactMatch;
+            }
+
             var pathSegments = devicePath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
             if (pathSegments.Length == 0)
             {
@@ -2347,6 +2358,52 @@ namespace TiaMcpServer.Siemens
                 if (group == null)
                 {
                     break;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Searches top-level devices and every device group (recursively) for a device whose
+        /// Name matches the given string exactly - used to find devices whose own name contains
+        /// '/' before that character gets treated as a path separator.
+        /// </summary>
+        private Device? FindDeviceByFullName(string name)
+        {
+            if (_project?.Devices == null)
+            {
+                return null;
+            }
+
+            var device = _project.Devices.FirstOrDefault(d => d.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (device != null)
+            {
+                return device;
+            }
+
+            return FindDeviceByFullNameInGroups(_project.DeviceGroups, name);
+        }
+
+        private static Device? FindDeviceByFullNameInGroups(DeviceUserGroupComposition? groups, string name)
+        {
+            if (groups == null)
+            {
+                return null;
+            }
+
+            foreach (var group in groups)
+            {
+                var device = group.Devices?.FirstOrDefault(d => d.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+                if (device != null)
+                {
+                    return device;
+                }
+
+                var found = FindDeviceByFullNameInGroups(group.Groups, name);
+                if (found != null)
+                {
+                    return found;
                 }
             }
 
