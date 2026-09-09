@@ -15,6 +15,8 @@ A MCP server which connects to Siemens TIA Portal.
 - Browse and interact with TIA Portal projects
 - Perform basic project operations from within VS Code
 
+See [`docs/TOOLS.md`](docs/TOOLS.md) for the full list of MCP tools, their parameters, and notes.
+
 ## Requirements
 
 - __.net Framework 4.8__ installed
