@@ -5,6 +5,40 @@
 
 ---
 
+## [2026-09-10] GetBlockCrossReferences "버그" 오진 — 사실은 Connect 안 함
+
+### 증상
+- Claude Desktop 재시작해서 새 툴(`GetTypeCrossReferences`/`GetBlockCrossReferences`)
+  등록시킨 직후, 4가지 경로로 다 시도해봐도 전부 "Block not found, or has no
+  cross-reference service" — 심지어 어제 성공했던 정확히 같은 경로
+  (`Program blocks/001_Main/1_DataSetting/Main_Tracking_Data`)도, 제일 단순한
+  `Main [OB1]`도 실패. "경로 파싱 공통 헬퍼 버그(GetBlockInfo 때 봤던 것과 같은)"로
+  오진했음.
+
+### 실제 원인
+로그 확인해보니 `warn: No TIA project available.` — 그냥 **`Connect` 없이 바로 호출**한
+거였음. 앱을 재시작하면 MCP 서버 프로세스가 새로 뜨면서 이전 연결 상태가 초기화되는데,
+새 프로세스에서 `Connect`를 안 하고 바로 블록 조회 툴을 부르면 어떤 경로를 넣어도
+100% 실패함 (`IsProjectNull()`이 참이라 블록 자체를 못 찾음). 경로 파싱과는 무관.
+
+### 조치 (`Portal.cs`, 커밋 `d4baaa8`)
+- `GetTypeCrossReferences`/`GetBlockCrossReferences`가 프로젝트 미연결 시 조용히
+  `null` 리턴하던 걸 `PortalException(InvalidState, "No project is open in TIA
+  Portal")`로 명확히 던지도록 수정 — `ExportBlock` 등 기존에 이미 있던 패턴과 통일.
+  이제 "블록 못 찾음"과 "프로젝트 자체가 안 열림"이 메시지로 구분됨.
+- `IsProjectNull()` 체크하는 다른 함수들 다수(`Portal.cs` 전역, `grep`으로 20곳+
+  확인)는 여전히 이 구분이 없음 — `TODO.md`의 "가드/not-found 헬퍼 추가" 항목으로
+  이미 트래킹 중이라 오늘은 새로 만든 두 툴만 고침.
+
+### 다음에 참고할 점
+- **Claude Desktop을 재시작(또는 MCP 서버 프로세스가 새로 뜬) 직후엔 반드시
+  `Connect`부터 호출할 것** — 이전 세션의 연결 상태는 새 프로세스로 안 넘어옴.
+- "여러 경로를 다 시도했는데 제일 단순한 것까지 실패한다"는 신호는 경로 버그보다
+  "애초에 연결/프로젝트가 안 열려있다"를 먼저 의심할 것 — `GetState`나 `Doctor`로
+  연결 상태부터 확인하는 게 삽질을 줄임.
+
+---
+
 ## [2026-09-09] GetTypeCrossReferences/GetBlockCrossReferences 추가 (+ GetBlockInterface 시도는 폐기)
 
 ### 배경
