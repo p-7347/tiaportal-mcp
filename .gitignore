@@ -1,5 +1,7 @@
 .vs/
-export/
+exports/
+snapshots/
+tia-inventory/
 .gemini/
 .claude/
 .github/
