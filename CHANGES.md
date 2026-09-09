@@ -5,6 +5,65 @@
 
 ---
 
+## [2026-09-09] Claude Desktop이 tiaportal-mcp에 연결 안 되던 문제 (MSIX 가상화 config)
+
+### 증상
+- `%APPDATA%\Claude\claude_desktop_config.json`을 V20으로 고치고 Claude Desktop을
+  몇 번을 재시작해도 계속 같은 에러(`Server disconnected`, TIA V21로 뜸)가 반복됨.
+- 로그(`%LOCALAPPDATA%\Claude\logs\mcp-server-tiaportal-mcp.log`)에는 매번
+  `System.IO.FileNotFoundException: ...Siemens.Engineering, Version=20.0.0.0...`
+  가 `ModelContextProtocol.Server.AIFunctionMcpServerTool.CreateMetadata` 단계에서
+  발생 — 즉 TIA Portal에 연결 시도하기도 전에, MCP 툴 메타데이터를 리플렉션으로
+  만드는 중에 어셈블리를 못 찾아서 죽는 패턴이었음.
+- 이상한 점: 완전히 같은 exe를 PowerShell로 직접 stdio 프로토콜을 태워서 띄우면
+  매번 정상 연결됐음 (V20으로 `Connect`/`GetState` 성공). Claude Desktop이 띄울
+  때만 100% 재현되는 실패였음.
+
+### 진짜 원인 — 두 가지가 겹쳐 있었음
+1. **가짜 config 파일을 계속 고치고 있었음.** 이 PC의 Claude Desktop은
+   `C:\Program Files\WindowsApps\Claude_...\app\Claude.exe` 경로의 **MSIX 패키지
+   앱**이라, 일반적으로 앱이 참조하는 `%APPDATA%\Claude\claude_desktop_config.json`
+   경로가 Windows의 MSIX 앱 데이터 가상화(app data virtualization)에 의해
+   실제로는 아래 경로로 리다이렉트됨:
+   ```
+   C:\Users\USER\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\claude_desktop_config.json
+   ```
+   `%APPDATA%\Claude\claude_desktop_config.json`(일반 경로)에 아무리 V20으로
+   수정해도 앱은 그 파일을 안 읽고 있었던 것 — 그래서 몇 번을 고쳐도 반영이
+   안 됐던 것처럼 보였음. **실제 config는 항상 `LocalCache\Roaming\Claude` 쪽을
+   봐야 함.** (Claude Desktop 앱 내 설정 화면의 "인수"/"환경 변수" 표시가 이
+   진짜 파일 내용을 반영함 — 거기서 여전히 V21이 보이면 진짜 파일이 아직도
+   V21이라는 뜻.)
+2. **`Engineering.cs`의 레지스트리 조회에 `try/catch`가 없었음.** MSIX 앱이
+   띄우는 자식 프로세스는 일반 셸에서 띄운 프로세스보다 권한/환경이 제한적일
+   수 있는데, `GetTiaPortalInstallPath(int)`의 레지스트리 접근이 예외를 던지면
+   `AssemblyResolve` 핸들러 전체가 조용히 깨지면서 `TiaPortalLocation` 환경변수
+   폴백까지 가지도 못하고 원본 `FileNotFoundException`만 밖으로 새어나가는
+   구조였음. `src/TiaMcpServer/Siemens/Engineering.cs`의 `Resolver()`와
+   `GetTiaPortalInstallPath()`에 try/catch를 추가해서, 레지스트리 조회가
+   실패해도 항상 `TiaPortalLocation` 환경변수로 폴백하도록 고침.
+
+### 조치
+- 진짜 config 파일(`LocalCache\Roaming\Claude\claude_desktop_config.json`)의
+  `tiaportal-mcp` 항목을 `--tia-major-version 20`으로, `env`에
+  `TiaPortalLocation`(`Portal V20` 경로) + `SystemRoot`/`TEMP`/`USERPROFILE`
+  등 기본 시스템 환경변수를 명시적으로 추가.
+- `Engineering.cs` 리졸버를 방어적으로 수정 (커밋 `eede8b0`).
+
+### 다음에 새로 빌드/설정할 때 참고할 점
+- **이 PC에서 Claude Desktop 설정을 고칠 땐 `%APPDATA%\Claude\`가 아니라
+  `%LOCALAPPDATA%\Packages\Claude_<해시>\LocalCache\Roaming\Claude\`를 고쳐야
+  함.** 패키지 해시(`pzs8sxrjxfjjc`)는 업데이트되면 바뀔 수 있으니
+  `Get-Process Claude | Select Path`나 `C:\Program Files\WindowsApps\Claude_*`
+  로 현재 설치 버전을 먼저 확인할 것.
+- Claude Desktop 앱 내 설정 화면(연결된 MCP 서버 목록 > tiaportal-mcp 클릭 >
+  고급 옵션)에 표시되는 "인수"/"환경 변수"가 실제 반영 여부를 확인하는 가장
+  빠른 방법 — 파일을 고친 뒤 이 화면이 새 값을 보여주는지로 진위 판단 가능.
+- 설정을 고친 뒤에는 창 닫기(X)가 아니라 **트레이 아이콘에서 Quit**으로 완전히
+  종료 후 재실행해야 반영됨 (그냥 재실행하면 기존 인스턴스에 포커스만 감).
+
+---
+
 ## [2026-09-09] upstream(origin/main) 동기화 + TIA Portal V20 빌드 복구
 
 ### 배경
