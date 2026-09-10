@@ -2,6 +2,28 @@
 
 Centralized list of actionable improvements gathered from initial repo review. Use this to track, prioritize, and reference across PRs. See file paths in backticks.
 
+## Multi-instance selection + cross-project compare (2026-09-10 idea, not started)
+
+Not needed right now - noted for later.
+
+1. **Let the user pick which running TIA Portal instance to attach to, and switch later.**
+   `Connect` (`Portal.ConnectPortal`, `src/TiaMcpServer/Siemens/Portal.cs`) currently calls
+   `TiaPortal.GetProcesses()` and always attaches to `.First()` with no way to choose - if two
+   instances are open, which one gets used is arbitrary and silent. `TiaPortal.GetProcesses()`
+   already returns all of them, so a `ListTiaPortalInstances` tool (PID + open project/session
+   name per instance) plus an optional selector on `Connect` (by PID or a project-name substring)
+   is straightforward - no new Openness API surface to research, just wiring.
+
+2. **Cross-project/program compare.** TIA Portal's own compare only works between components
+   *within a single open instance* and mostly just says "different", not much more - not
+   actually useful for the kind of comparison being asked for here. Rather than chasing whatever
+   Openness compare API exists (likely just as shallow), the more promising route is building it
+   on top of tools already in this server: export both sides' blocks (`ExportBlock`/
+   `ExportBlocksAsDocuments`, or once multi-instance selection above exists, from two different
+   open projects) and diff the exported text/XML ourselves, in the same spirit as
+   `tools/tia_xml_parser.py`'s existing StructuredText-v4 reconstruction. Bigger scope than item
+   1 - treat as a separate effort once there's an actual comparison need in front of us.
+
 ## Block interface / cross-reference tools (2026-09-09 roadmap)
 
 Came out of a live debugging session on the Mahindra_CPU01_V20_260909_k1_001 project
