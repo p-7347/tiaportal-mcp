@@ -5,6 +5,42 @@
 
 ---
 
+## [2026-09-10] GetOnlineState/GoOnline/GoOffline 추가
+
+### 배경
+- 어제 export가 "온라인 모드라 안 됨"으로 막혔던 것, 그리고 어제 로드맵(`TODO.md`
+  4번)에 후보로만 있던 "TIA 온라인/오프라인 전환"을 실제로 구현.
+- 사용자 요청: **PLC Run/Stop 제어는 위험하니 제외**, TIA Portal 자체의
+  온라인/오프라인 연결 전환만 있으면 충분하다는 방향으로 스코프 확정.
+
+### 구현
+- `Siemens.Engineering.Online.OnlineProvider` 서비스 사용 —
+  `Device`/`DeviceItem` 둘 다 `GetService<OnlineProvider>()`로 얻을 수 있고,
+  `.State`(속성), `.GoOnline()`, `.GoOffline()` 전부 공개 멤버라
+  `CrossReferenceService` 때처럼 explicit interface 캐스팅이 필요 없었음.
+- `Portal.GetOnlineProvider(path)`가 `GetDevice`/`GetDeviceItem`과 같은 방식으로
+  Device 먼저 시도하고 안 되면 DeviceItem으로 폴백.
+- 새 툴 3개: `GetOnlineState`(RO), `GoOnline`, `GoOffline`.
+
+### 검증 (실제 프로젝트, `PLC_1` 대상)
+- `GetOnlineState` → `"Offline"` 정확히 읽음.
+- `GoOffline` → 이미 오프라인이어도 에러 없이 idempotent하게 성공.
+- `GoOnline` → TIA 자체가 "연결을 수립할 수 없음" 에러를 냄 (PLCSIM Advanced
+  인스턴스가 이 연결 대상과 안 맞거나 꺼져있는 것으로 추정) — 코드 버그가 아니라
+  실제 Openness/PLCSIM 환경 문제이며, 에러 메시지를 있는 그대로 잘 전달함을 확인.
+  이후 상태도 그대로 `Offline` 유지 — 원치 않는 부작용 없음.
+
+### 다음에 참고할 점
+- **PLC Run/Stop 제어는 의도적으로 구현 안 함** — 실수로 살아있는 PLC를 멈추는
+  리스크 때문. 나중에 필요해지면 이 커넥션 전용 툴들과 분리해서 별도 opt-in
+  플래그로 게이팅할 것.
+- `GoOnline`이 "연결 수립 불가"로 실패하는 경우, 이 프로젝트 환경에서는 PLCSIM
+  Advanced 인스턴스 상태/설정 문제일 가능성이 높음 — TIA Portal UI에서 한 번
+  수동으로 "Go online" 해서 연결 대상(PG/PC 인터페이스 등)이 제대로 설정돼 있는지
+  먼저 확인해볼 것.
+
+---
+
 ## [2026-09-10] GetBlockCrossReferences "버그" 오진 — 사실은 Connect 안 함
 
 ### 증상

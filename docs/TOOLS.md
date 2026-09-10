@@ -43,8 +43,11 @@ project (never reaches actual PLC hardware - see the "Safety" note at the end).
 | Tool | Flags | Parameters | Notes |
 |---|---|---|---|
 | `GetDevices` | RO | - | Lists all devices in the project with their attributes. |
-| `GetDeviceInfo` | RO | `devicePath` | Path from `GetProjectTree`/`GetDevices`. |
+| `GetDeviceInfo` | RO | `devicePath` | Path from `GetProjectTree`/`GetDevices`. Handles device names that themselves contain `/` (e.g. `S7-1500/ET200MP station_1`, see `CHANGES.md` 2026-09-09). |
 | `GetDeviceItemInfo` | RO | `deviceItemPath` | For sub-items of a device (modules, submodules). |
+| `GetOnlineState` | RO | `path` (device or device item) | Reads the engineering station's own online/diagnostic connection state (`Offline`/`Connecting`/`Online`/...) - unrelated to whether the PLC itself is Run/Stop. Tries a Device first, then a DeviceItem (e.g. the CPU module, like `PLC_1`) at the same path. |
+| `GoOnline` | idempotent | `path` (device or device item) | Establishes that connection. Fails with TIA's own error if the target isn't reachable/configured (e.g. PLCSIM Advanced instance not running) - a real Openness error, not a bug in this tool. |
+| `GoOffline` | idempotent | `path` (device or device item) | Disconnects it; a no-op if already offline. |
 
 ## PLC software
 
@@ -103,6 +106,13 @@ SIMATIC SD document format, mainly useful for round-tripping SCL logic through t
 None of the above ever downloads to, starts/stops, or forces I/O on an actual PLC. Every
 `Destructive`-flagged tool only reads or writes the **local TIA Portal engineering project**
 (the open `.apXX`/`.alsXX` file and the block/type/tag XML files on disk) - there is no "download to
-device", "go online/offline", "start/stop CPU", or force-write tool implemented anywhere in this
-server. Reaching a live PLC from a changed project still requires a human to do that explicitly in
-TIA Portal itself.
+device", "start/stop CPU", or force-write tool implemented anywhere in this server. Reaching a live
+PLC from a changed project still requires a human to do that explicitly in TIA Portal itself.
+
+`GoOnline`/`GoOffline` are the one exception worth calling out explicitly: they do establish/drop
+the engineering station's own online *connection* (the same thing the "Go online" button in TIA
+Portal's toolbar does) - but that connection is for diagnostics/monitoring only. It never commands
+the PLC to Run or Stop, and going offline never stops the PLC either; the PLC keeps doing whatever
+it was doing regardless of whether this connection exists. Deliberate choice: Run/Stop control is
+intentionally not implemented (see `TODO.md`) - accidentally stopping a live PLC is a real safety
+risk that a plain MCP tool call shouldn't be able to trigger.

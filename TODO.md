@@ -49,14 +49,14 @@ the way (path-prefix stripping, device-name-with-'/' fix, attribute JSON-seriali
    re-export) - not a new tool per se, more a recommended *usage pattern* worth documenting in
    `docs/TOOLS.md` once cross-reference (above) is resolved one way or the other.
 
-4. **Online state / Run-Stop** - `GetOnlineState(devicePath)` plus explicit
-   `GoOnline`/`GoOffline`, backed by the `Siemens.Engineering.Online` namespace (Openness
-   standard feature, not yet verified against this V20 install the way items 1-2 were).
-   - Read-only status query is low risk and worth doing.
-   - **Do not expose Run/Stop control as a plain tool** - accidentally stopping a live PLC is
-     a real safety risk (see the "what these tools can't do" note in `docs/TOOLS.md`, which
-     would need updating the day this ships). If ever added, gate it behind an explicit
-     opt-in flag/confirmation, separate from any read-only status tool.
+4. ~~**Online state / Run-Stop**~~ - **Done (2026-09-10)**, connection state only.
+   `GetOnlineState`/`GoOnline`/`GoOffline` shipped, backed by
+   `Siemens.Engineering.Online.OnlineProvider` (`GetService<OnlineProvider>()` on a Device or
+   DeviceItem - plain public `.State`/`GoOnline()`/`GoOffline()`, verified live against
+   `PLC_1`). `docs/TOOLS.md`'s "what these tools can't do" note has been updated accordingly.
+   - **Run/Stop control is still deliberately not implemented** - accidentally stopping a live
+     PLC is a real safety risk. If ever added, gate it behind an explicit opt-in
+     flag/confirmation, separate from these connection-only tools.
 
 5. **Live tag value monitoring** (e.g. reading `icnt`/`icnt2`/`icnt3` without opening a Trace
    view) - **out of Openness's scope entirely**, confirmed against the standard Openness
