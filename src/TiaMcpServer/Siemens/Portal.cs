@@ -25,6 +25,14 @@ using System.Text.RegularExpressions;
 
 namespace TiaMcpServer.Siemens
 {
+    /// <summary>One running TIA Portal process, as reported by TiaPortal.GetProcesses() - listable without attaching.</summary>
+    public class TiaPortalProcessInfo
+    {
+        public int Id { get; set; }
+        public string? ProjectPath { get; set; }
+        public string? Mode { get; set; }
+    }
+
     public class Portal
     {
         // closing parantheses for regex characters ommitted, because they are not relevant for regex detection
@@ -130,9 +138,30 @@ namespace TiaMcpServer.Siemens
 
         #region portal
 
-        public bool ConnectPortal()
+        /// <summary>
+        /// Lists all running TIA Portal processes on this machine without attaching to any of
+        /// them - use this to see what's available (and which project each has open) before
+        /// calling ConnectPortal with a specific processId.
+        /// </summary>
+        public List<TiaPortalProcessInfo> GetTiaPortalProcesses()
         {
-            _logger?.LogInformation("Connecting to TIA Portal...");
+            _logger?.LogInformation("Listing TIA Portal processes...");
+
+            return TiaPortal.GetProcesses()
+                .Select(p => new TiaPortalProcessInfo
+                {
+                    Id = p.Id,
+                    ProjectPath = p.ProjectPath?.FullName,
+                    Mode = p.Mode.ToString()
+                })
+                .ToList();
+        }
+
+        public bool ConnectPortal(int? processId = null)
+        {
+            _logger?.LogInformation(processId.HasValue
+                ? $"Connecting to TIA Portal process {processId.Value}..."
+                : "Connecting to TIA Portal...");
 
             _project = null;
             _session = null;
@@ -142,7 +171,27 @@ namespace TiaMcpServer.Siemens
             var processes = TiaPortal.GetProcesses();
             if (processes.Any())
             {
-                _portal = processes.First().Attach();
+                TiaPortalProcess targetProcess;
+                if (processId.HasValue)
+                {
+                    targetProcess = processes.FirstOrDefault(p => p.Id == processId.Value)
+                        ?? throw new PortalException(PortalErrorCode.NotFound, $"No running TIA Portal process with Id {processId.Value}");
+                }
+                else
+                {
+                    // No selection given and more than one instance is running - which one we'd
+                    // silently attach to is arbitrary, so make the caller choose explicitly via
+                    // GetTiaPortalProcesses()/processId instead of guessing.
+                    if (processes.Count() > 1)
+                    {
+                        throw new PortalException(PortalErrorCode.InvalidParams,
+                            "Multiple TIA Portal processes are running - call GetTiaPortalProcesses() to list them, then Connect with a specific processId.");
+                    }
+
+                    targetProcess = processes.First();
+                }
+
+                _portal = targetProcess.Attach();
 
                 // check for existing local sessions
                 if (_portal.LocalSessions.Any())

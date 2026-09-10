@@ -56,14 +56,44 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region portal
 
-        [McpServerTool(Name = "Connect", Title = "Connect to TIA Portal", Destructive = false, Idempotent = true, OpenWorld = false), Description("Connect to TIA-Portal")]
-        public static ResponseConnect Connect()
+        [McpServerTool(Name = "ListTiaPortalInstances", Title = "List TIA Portal instances", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("List every running TIA Portal process on this machine (id, open project path, mode) without attaching to any of them. Use this before Connect if more than one might be open, to pick the right processId.")]
+        public static ResponseTiaPortalInstances ListTiaPortalInstances()
+        {
+            try
+            {
+                var processes = Portal.GetTiaPortalProcesses();
+
+                return new ResponseTiaPortalInstances
+                {
+                    Message = $"{processes.Count} TIA Portal process(es) found",
+                    Items = processes.Select(p => new ResponseTiaPortalInstance
+                    {
+                        Id = p.Id,
+                        ProjectPath = p.ProjectPath,
+                        Mode = p.Mode
+                    }).ToList(),
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error listing TIA Portal instances: {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "Connect", Title = "Connect to TIA Portal", Destructive = false, Idempotent = true, OpenWorld = false), Description("Connect to TIA-Portal. If more than one TIA Portal process is running, this fails and asks you to call ListTiaPortalInstances first, then pass its processId explicitly - it never silently guesses which one you meant.")]
+        public static ResponseConnect Connect(
+            [Description("processId: PID of a specific running TIA Portal process to attach to, from ListTiaPortalInstances. Omit when only one instance is running.")] int? processId = null)
         {
             Logger?.LogInformation("Connecting to TIA Portal...");
 
             try
             {
-                if (Portal.ConnectPortal())
+                if (Portal.ConnectPortal(processId))
                 {
                     return new ResponseConnect
                     {

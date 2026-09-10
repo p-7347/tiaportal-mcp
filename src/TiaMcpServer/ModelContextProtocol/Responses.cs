@@ -75,6 +75,18 @@ namespace TiaMcpServer.ModelContextProtocol
     {
     }
 
+    public class ResponseTiaPortalInstance
+    {
+        public int Id { get; set; }
+        public string? ProjectPath { get; set; }
+        public string? Mode { get; set; }
+    }
+
+    public class ResponseTiaPortalInstances : ResponseMessage
+    {
+        public IEnumerable<ResponseTiaPortalInstance>? Items { get; set; }
+    }
+
     public class ResponseDisconnect : ResponseMessage
     {
     }
