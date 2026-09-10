@@ -275,6 +275,62 @@ namespace TiaMcpServer.ModelContextProtocol
     {
     }
 
+    public class ResponseCreateTagTable : ResponseMessage
+    {
+        public string? Name { get; set; }
+    }
+
+    public class ResponseDeleteTagTable : ResponseMessage
+    {
+    }
+
+    public class ResponseCreateTag : ResponseMessage
+    {
+        public string? Name { get; set; }
+    }
+
+    public class ResponseDeleteTag : ResponseMessage
+    {
+    }
+
+    public class ResponseSetTagAttribute : ResponseMessage
+    {
+    }
+
+    public class ResponseDeleteBlock : ResponseMessage
+    {
+    }
+
+    public class ResponseDeleteType : ResponseMessage
+    {
+    }
+
+    public class ResponseSetBlockAttribute : ResponseMessage
+    {
+    }
+
+    public class ResponseSetTypeAttribute : ResponseMessage
+    {
+    }
+
+    public class ResponseCreateBlockGroup : ResponseMessage
+    {
+        public string? Name { get; set; }
+    }
+
+    public class ResponseDeleteBlockGroup : ResponseMessage
+    {
+    }
+
+    public class ResponseCreateTypeGroup : ResponseMessage
+    {
+        public string? Name { get; set; }
+    }
+
+    public class ResponseDeleteTypeGroup : ResponseMessage
+    {
+    }
+
     public class ResponseExternalSourceInfo : ResponseAttributes
     {
         public string? Name { get; set; }

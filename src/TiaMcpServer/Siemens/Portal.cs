@@ -3348,6 +3348,444 @@ namespace TiaMcpServer.Siemens
 
         #endregion
 
+        #region plc tag write CRUD
+
+        // Unlike blocks/types, tags have no SCL-generation route - PlcTagComposition.Create is
+        // the only way to make one with real content, so (unlike block/type CRUD) a dedicated
+        // create tool is warranted here.
+
+        public PlcTagTable CreateTagTable(string softwarePath, string groupPath, string name)
+        {
+            _logger?.LogInformation($"Creating tag table '{name}' under '{groupPath}'");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            var group = GetPlcTagTableGroupByPath(softwarePath, groupPath)
+                ?? throw new PortalException(PortalErrorCode.NotFound, $"Tag table group not found at '{groupPath}'");
+
+            try
+            {
+                return group.TagTables.Create(name);
+            }
+            catch (Exception ex)
+            {
+                var pex = new PortalException(PortalErrorCode.ExportFailed, "Create tag table failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["groupPath"] = groupPath;
+                pex.Data["name"] = name;
+                _logger?.LogError(pex, "CreateTagTable failed for {SoftwarePath} {GroupPath} {Name}", softwarePath, groupPath, name);
+                throw pex;
+            }
+        }
+
+        public void DeleteTagTable(string softwarePath, string tagTablePath)
+        {
+            _logger?.LogInformation($"Deleting tag table: {tagTablePath}");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            var table = GetTagTable(softwarePath, tagTablePath)
+                ?? throw new PortalException(PortalErrorCode.NotFound, "Tag table not found");
+
+            try
+            {
+                table.Delete();
+            }
+            catch (Exception ex)
+            {
+                var pex = new PortalException(PortalErrorCode.ExportFailed, "Delete tag table failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["tagTablePath"] = tagTablePath;
+                _logger?.LogError(pex, "DeleteTagTable failed for {SoftwarePath} {TagTablePath}", softwarePath, tagTablePath);
+                throw pex;
+            }
+        }
+
+        // logicalAddress: pass null/empty to let TIA auto-assign the next free address.
+        public PlcTag CreateTag(string softwarePath, string tagTablePath, string name, string dataType, string? logicalAddress = null)
+        {
+            _logger?.LogInformation($"Creating tag '{name}' in table '{tagTablePath}'");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            var table = GetTagTable(softwarePath, tagTablePath)
+                ?? throw new PortalException(PortalErrorCode.NotFound, $"Tag table not found at '{tagTablePath}'");
+
+            try
+            {
+                return table.Tags.Create(name, dataType, logicalAddress ?? string.Empty);
+            }
+            catch (Exception ex)
+            {
+                var pex = new PortalException(PortalErrorCode.ExportFailed, "Create tag failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["tagTablePath"] = tagTablePath;
+                pex.Data["name"] = name;
+                _logger?.LogError(pex, "CreateTag failed for {SoftwarePath} {TagTablePath} {Name}", softwarePath, tagTablePath, name);
+                throw pex;
+            }
+        }
+
+        public void DeleteTag(string softwarePath, string tagTablePath, string tagName)
+        {
+            _logger?.LogInformation($"Deleting tag '{tagName}' from table '{tagTablePath}'");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            var table = GetTagTable(softwarePath, tagTablePath)
+                ?? throw new PortalException(PortalErrorCode.NotFound, $"Tag table not found at '{tagTablePath}'");
+
+            var tag = table.Tags.FirstOrDefault(t => t.Name.Equals(tagName, StringComparison.OrdinalIgnoreCase))
+                ?? throw new PortalException(PortalErrorCode.NotFound, $"Tag '{tagName}' not found in '{tagTablePath}'");
+
+            try
+            {
+                tag.Delete();
+            }
+            catch (Exception ex)
+            {
+                var pex = new PortalException(PortalErrorCode.ExportFailed, "Delete tag failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["tagTablePath"] = tagTablePath;
+                pex.Data["tagName"] = tagName;
+                _logger?.LogError(pex, "DeleteTag failed for {SoftwarePath} {TagTablePath} {TagName}", softwarePath, tagTablePath, tagName);
+                throw pex;
+            }
+        }
+
+        public void SetTagAttribute(string softwarePath, string tagTablePath, string tagName, string attributeName, string value)
+        {
+            _logger?.LogInformation($"Setting tag attribute {attributeName} on '{tagName}' in '{tagTablePath}'");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            var table = GetTagTable(softwarePath, tagTablePath)
+                ?? throw new PortalException(PortalErrorCode.NotFound, $"Tag table not found at '{tagTablePath}'");
+
+            var tag = table.Tags.FirstOrDefault(t => t.Name.Equals(tagName, StringComparison.OrdinalIgnoreCase))
+                ?? throw new PortalException(PortalErrorCode.NotFound, $"Tag '{tagName}' not found in '{tagTablePath}'");
+
+            try
+            {
+                var current = tag.GetAttribute(attributeName);
+                tag.SetAttribute(attributeName, ConvertAttributeValue(current, value));
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Set tag attribute failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["tagTablePath"] = tagTablePath;
+                pex.Data["tagName"] = tagName;
+                pex.Data["attributeName"] = attributeName;
+                _logger?.LogError(pex, "SetTagAttribute failed for {SoftwarePath} {TagTablePath} {TagName} {AttributeName}", softwarePath, tagTablePath, tagName, attributeName);
+                throw pex;
+            }
+        }
+
+        private PlcTagTableGroup? GetPlcTagTableGroupByPath(string softwarePath, string groupPath)
+        {
+            if (_project == null)
+            {
+                return null;
+            }
+
+            var softwareContainer = GetSoftwareContainer(softwarePath);
+            if (softwareContainer?.Software is PlcSoftware plcSoftware)
+            {
+                if (plcSoftware?.TagTableGroup == null)
+                {
+                    return null;
+                }
+
+                var groupNames = (groupPath ?? string.Empty).Split(['/'], StringSplitOptions.RemoveEmptyEntries);
+
+                PlcTagTableGroup? currentGroup = plcSoftware.TagTableGroup;
+
+                foreach (var groupName in groupNames)
+                {
+                    currentGroup = currentGroup.Groups.FirstOrDefault(g => g.Name.Equals(groupName, StringComparison.OrdinalIgnoreCase));
+
+                    if (currentGroup == null)
+                    {
+                        return null;
+                    }
+                }
+
+                return currentGroup;
+            }
+
+            return null;
+        }
+
+        #endregion
+
+        #region block/type write CRUD
+
+        // "Create with real content" is already covered by ImportBlock/ImportType (from XML) and
+        // GenerateBlocksFromSource (from SCL text, any block/type kind) - deliberately not
+        // duplicating that here with PlcBlockComposition.CreateFB/CreateInstanceDB (those make an
+        // empty GUI-oriented block, less useful for a text-driven agent). What's new here: delete,
+        // generic attribute modification (covers rename via the "Name" attribute plus anything
+        // else ReadWrite), and group management.
+
+        public void DeleteBlock(string softwarePath, string blockPath)
+        {
+            _logger?.LogInformation($"Deleting block: {blockPath}");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            var block = GetBlock(softwarePath, blockPath)
+                ?? throw new PortalException(PortalErrorCode.NotFound, "Block not found");
+
+            try
+            {
+                block.Delete();
+            }
+            catch (Exception ex)
+            {
+                var pex = new PortalException(PortalErrorCode.ExportFailed, "Delete failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["blockPath"] = blockPath;
+                _logger?.LogError(pex, "DeleteBlock failed for {SoftwarePath} {BlockPath}", softwarePath, blockPath);
+                throw pex;
+            }
+        }
+
+        public void DeleteType(string softwarePath, string typePath)
+        {
+            _logger?.LogInformation($"Deleting type: {typePath}");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            var type = GetType(softwarePath, typePath)
+                ?? throw new PortalException(PortalErrorCode.NotFound, "Type not found");
+
+            try
+            {
+                type.Delete();
+            }
+            catch (Exception ex)
+            {
+                var pex = new PortalException(PortalErrorCode.ExportFailed, "Delete failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["typePath"] = typePath;
+                _logger?.LogError(pex, "DeleteType failed for {SoftwarePath} {TypePath}", softwarePath, typePath);
+                throw pex;
+            }
+        }
+
+        // Sets any ReadWrite attribute (e.g. "Name" to rename, "Comment", "MemoryLayout", ...) -
+        // converts the given string to match the attribute's current runtime type (bool/int/
+        // uint/double/string) since Openness's SetAttribute takes a typed object, not a string.
+        public void SetBlockAttribute(string softwarePath, string blockPath, string attributeName, string value)
+        {
+            _logger?.LogInformation($"Setting block attribute {attributeName} on: {blockPath}");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            var block = GetBlock(softwarePath, blockPath)
+                ?? throw new PortalException(PortalErrorCode.NotFound, "Block not found");
+
+            try
+            {
+                var current = block.GetAttribute(attributeName);
+                block.SetAttribute(attributeName, ConvertAttributeValue(current, value));
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Set attribute failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["blockPath"] = blockPath;
+                pex.Data["attributeName"] = attributeName;
+                _logger?.LogError(pex, "SetBlockAttribute failed for {SoftwarePath} {BlockPath} {AttributeName}", softwarePath, blockPath, attributeName);
+                throw pex;
+            }
+        }
+
+        public void SetTypeAttribute(string softwarePath, string typePath, string attributeName, string value)
+        {
+            _logger?.LogInformation($"Setting type attribute {attributeName} on: {typePath}");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            var type = GetType(softwarePath, typePath)
+                ?? throw new PortalException(PortalErrorCode.NotFound, "Type not found");
+
+            try
+            {
+                var current = type.GetAttribute(attributeName);
+                type.SetAttribute(attributeName, ConvertAttributeValue(current, value));
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Set attribute failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["typePath"] = typePath;
+                pex.Data["attributeName"] = attributeName;
+                _logger?.LogError(pex, "SetTypeAttribute failed for {SoftwarePath} {TypePath} {AttributeName}", softwarePath, typePath, attributeName);
+                throw pex;
+            }
+        }
+
+        private static object ConvertAttributeValue(object? current, string value)
+        {
+            return current switch
+            {
+                bool => bool.Parse(value),
+                int => int.Parse(value),
+                uint => uint.Parse(value),
+                long => long.Parse(value),
+                double => double.Parse(value),
+                float => float.Parse(value),
+                _ => value
+            };
+        }
+
+        public PlcBlockUserGroup CreateBlockGroup(string softwarePath, string parentGroupPath, string name)
+        {
+            _logger?.LogInformation($"Creating block group '{name}' under '{parentGroupPath}'");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            var parent = GetPlcBlockGroupByPath(softwarePath, parentGroupPath)
+                ?? throw new PortalException(PortalErrorCode.NotFound, $"Block group not found at '{parentGroupPath}'");
+
+            try
+            {
+                return parent.Groups.Create(name);
+            }
+            catch (Exception ex)
+            {
+                var pex = new PortalException(PortalErrorCode.ExportFailed, "Create block group failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["parentGroupPath"] = parentGroupPath;
+                pex.Data["name"] = name;
+                _logger?.LogError(pex, "CreateBlockGroup failed for {SoftwarePath} {ParentGroupPath} {Name}", softwarePath, parentGroupPath, name);
+                throw pex;
+            }
+        }
+
+        public void DeleteBlockGroup(string softwarePath, string groupPath)
+        {
+            _logger?.LogInformation($"Deleting block group: {groupPath}");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            var group = GetPlcBlockGroupByPath(softwarePath, groupPath)
+                ?? throw new PortalException(PortalErrorCode.NotFound, $"Block group not found at '{groupPath}'");
+
+            if (group is not PlcBlockUserGroup userGroup)
+            {
+                throw new PortalException(PortalErrorCode.InvalidParams, "The root block group can't be deleted");
+            }
+
+            try
+            {
+                userGroup.Delete();
+            }
+            catch (Exception ex)
+            {
+                var pex = new PortalException(PortalErrorCode.ExportFailed, "Delete block group failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["groupPath"] = groupPath;
+                _logger?.LogError(pex, "DeleteBlockGroup failed for {SoftwarePath} {GroupPath}", softwarePath, groupPath);
+                throw pex;
+            }
+        }
+
+        public PlcTypeUserGroup CreateTypeGroup(string softwarePath, string parentGroupPath, string name)
+        {
+            _logger?.LogInformation($"Creating type group '{name}' under '{parentGroupPath}'");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            var parent = GetPlcTypeGroupByPath(softwarePath, parentGroupPath)
+                ?? throw new PortalException(PortalErrorCode.NotFound, $"Type group not found at '{parentGroupPath}'");
+
+            try
+            {
+                return parent.Groups.Create(name);
+            }
+            catch (Exception ex)
+            {
+                var pex = new PortalException(PortalErrorCode.ExportFailed, "Create type group failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["parentGroupPath"] = parentGroupPath;
+                pex.Data["name"] = name;
+                _logger?.LogError(pex, "CreateTypeGroup failed for {SoftwarePath} {ParentGroupPath} {Name}", softwarePath, parentGroupPath, name);
+                throw pex;
+            }
+        }
+
+        public void DeleteTypeGroup(string softwarePath, string groupPath)
+        {
+            _logger?.LogInformation($"Deleting type group: {groupPath}");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            var group = GetPlcTypeGroupByPath(softwarePath, groupPath)
+                ?? throw new PortalException(PortalErrorCode.NotFound, $"Type group not found at '{groupPath}'");
+
+            if (group is not PlcTypeUserGroup userGroup)
+            {
+                throw new PortalException(PortalErrorCode.InvalidParams, "The root type group can't be deleted");
+            }
+
+            try
+            {
+                userGroup.Delete();
+            }
+            catch (Exception ex)
+            {
+                var pex = new PortalException(PortalErrorCode.ExportFailed, "Delete type group failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["groupPath"] = groupPath;
+                _logger?.LogError(pex, "DeleteTypeGroup failed for {SoftwarePath} {GroupPath}", softwarePath, groupPath);
+                throw pex;
+            }
+        }
+
+        #endregion
+
         #region external sources (SCL import/export)
 
         // Import: PlcExternalSourceComposition.CreateFromFile(name, path) adds a raw source file

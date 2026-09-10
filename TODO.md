@@ -176,11 +176,25 @@ Priority order for picking pieces up ourselves, each to go through this project'
    is missing enough that TIA can't instantiate the device at all, it won't appear here either;
    an empty `GetDevices`/`GetProject` right after a successful `Connect` remains the stronger
    signal for that failure mode (see the dedicated writeup above).
-5. **Block/type write CRUD** (create/delete/modify, from PR #26) - real value (today we're
-   read+export only) but real risk (mutating a live PLC project's logic, not just reading it).
-   Explicitly hold until 1-4 are done and stable; if pursued, needs its own safety review (e.g.
-   should this require the project to be offline the same way exports do, confirmation prompts,
-   etc.) rather than copying PR #26's approach uncritically.
+5. ~~**Block/type write CRUD**~~ - **Done (2026-09-10).** Scope decision: "create with real
+   content" was already covered by `ImportBlock`/`ImportType` (XML) and `GenerateBlocksFromSource`
+   (SCL, item 6 below) - skipped `PlcBlockComposition.CreateFB`/`CreateInstanceDB` (empty
+   GUI-oriented block creation, low value for a text-driven agent). What was actually missing:
+   delete, attribute modification (covers rename via "Name"), and group management. New tools:
+   `DeleteBlock`/`DeleteType`, `SetBlockAttribute`/`SetTypeAttribute` (generic - converts the
+   given string to match the attribute's current runtime type automatically),
+   `CreateBlockGroup`/`DeleteBlockGroup`, `CreateTypeGroup`/`DeleteTypeGroup` (root/System groups
+   can't be deleted, rejected with a clear error). Found and fixed a real bug along the way:
+   `SetBlockAttribute`/`SetTypeAttribute` were swallowing the actual failure reason behind a
+   generic "Set attribute failed" message - fixed to surface `InnerException.Message` like
+   `ExportBlock` already did. Safety approach per user's explicit instruction (2026-09-10): build
+   create/delete/modify freely, just say what's about to be tested before running it live - user
+   set up a disposable clone of a real project ("Tia for Claude") specifically for this. **Live
+   end-to-end verified** against it: create group → generate block/type via SCL → modify
+   attributes → verify → delete → delete group → final empty-check, for both blocks and types.
+   The attribute-set tests also validated the error-surfacing fix: setting a nonexistent attribute
+   ("Comment" on an FB) and setting a blocked one (`Number` while `AutoNumber` is on) both came
+   back with the real TIA-side reason instead of a generic failure.
 6. ~~**External source (SCL) import/export**~~ - **Done (2026-09-10).** New
    `GetExternalSources`/`ImportExternalSource`/`GenerateBlocksFromSource`/`DeleteExternalSource`/
    `ExportSourceFromBlocks`. `PlcExternalSource` itself has no export method (verified via
@@ -222,6 +236,32 @@ Priority order for picking pieces up ourselves, each to go through this project'
 8. **HTTP transport** (PR #30) - not needed today, stdio covers the actual clients in use (Claude
    Desktop, VS Code). See the existing "Transports (HTTP / TCP)" section below for why Streamable
    HTTP specifically isn't reachable from this net48-pinned project anyway.
+9. ~~**PLC tag write CRUD**~~ - **Done (2026-09-10).** Natural follow-on to block/type CRUD.
+   Actually read PR #26's tag/watch-table commit diff before building this one (unlike the others,
+   which were only scoped from commit titles) - its error-handling style matched ours (same
+   upstream base, not PR #26 being well-written), but had heavy tag/watch-table duplication and no
+   sign of live testing, so only the method-signature/API-shape ideas were kept, not the code
+   itself; reflection was used to independently confirm the real API before writing anything.
+   New: `CreateTagTable`/`DeleteTagTable` (`PlcTagTableComposition.Create`/`PlcTagTable.Delete`),
+   `CreateTag`/`DeleteTag`/`SetTagAttribute` (`PlcTagComposition.Create(name, dataType, address)`,
+   `PlcTag.Delete`, generic attribute setter reusing the same `ConvertAttributeValue` helper as
+   block/type CRUD). Unlike blocks/types, tags have no SCL-generation creation route, so a
+   dedicated `CreateTag` was actually necessary here (not redundant with anything else). Live
+   end-to-end verified against "Tia for Claude": create table → create tag → verify → rename via
+   `SetTagAttribute` → verify → delete tag → delete table → final empty-check, all passed in one
+   run.
+10. **Network/hardware topology** (idea, not started, 2026-09-10) - user asked to investigate next.
+    Confirmed by reflection that real Openness types exist: `Siemens.Engineering.HW.Subnet`/
+    `SubnetComposition`, `Siemens.Engineering.HW.IoSystem`, `Siemens.Engineering.HW.Features.
+    NetworkInterface` (read), and `DeviceComposition.Create`/`CreateWithItem`/`CreateFrom` (device
+    creation - write). PR #26 also attempted this (`GetSubnets`/`GetNetworkInterfaces`/
+    `SetIpAddress`/`ConnectToSubnet`/`CreateDevice`/`DeleteDevice`/`GetModules`/`GetAddresses`/
+    `ImportGsdFile`, per its commit message - not yet read the actual diff for this one). Bigger
+    scope than tag CRUD: read side (subnet/IO-system topology, IP addressing) is probably safe and
+    valuable on its own; write side (creating/deleting devices, rewiring network topology) is a
+    different risk shape than block/tag CRUD - could affect how the project reads on real hardware
+    in a way that's harder to eyeball-verify than a block/tag diff. Suggest scoping read-only
+    topology first, deciding on write scope separately once read is verified.
 
 ## Documentation
 - [ ] Add a "CLI Options" section to `README.md` documenting `--tia-major-version <int>` and `--logging <1|2|3>` with defaults and effect (1=stderr, 2=Debug, 3=Event Log). Cross-link to samples.

@@ -87,6 +87,9 @@ project (never reaches actual PLC hardware - see the "Safety" note at the end).
 | `ImportBlock` | **Destructive** | `softwarePath`, `groupPath`, `importPath` (XML file) | Overwrites an existing block of the same name. |
 | `ExportBlocks` | **Destructive**, async w/ progress | `softwarePath`, `exportPath`, `regexName` (optional), `preservePath` (optional) | Bulk export. Skips inconsistent blocks and reports them separately in `Inconsistent`; compile first if you need them included. |
 | `GetBlockCrossReferences` | RO | `softwarePath`, `blockPath` | Compiler-backed "where is this block used" - e.g. an FB used as an instance type: which blocks declare a Static instance of it (`access: "Multiinstance"`), or an FC/OB and who calls it (`access: "Call"`). Only returns `UsedBy` locations for the block's own entry (its internal `Uses` - what it calls/reads - is filtered out; see `CHANGES.md` 2026-09-09). |
+| `DeleteBlock` | **Destructive** | `softwarePath`, `blockPath` | Irreversible except via TIA's own undo/project backup. Confirm with the user before using against a real (non-disposable) project. |
+| `SetBlockAttribute` | **Destructive** | `softwarePath`, `blockPath`, `attributeName`, `value` (string) | Generic attribute setter - set `Name` to rename. `value` is auto-converted to match the attribute's current type. Attribute names/writability vary by block type - check `GetBlockInfo` first. Errors surface the real TIA-side reason (e.g. "attribute not supported by this block type", "can't set Number while AutoNumber is on"). |
+| `CreateBlockGroup` / `DeleteBlockGroup` | Create: idempotent-ish / Delete: **Destructive** | `softwarePath`, `parentGroupPath`/`groupPath`, `name` (create only) | Deleting a group deletes every block inside it. Root/System group can't be deleted. |
 
 ## Types (PLC data types)
 
@@ -98,6 +101,9 @@ project (never reaches actual PLC hardware - see the "Safety" note at the end).
 | `ImportType` | **Destructive** | `softwarePath`, `groupPath`, `importPath` (XML file) | |
 | `ExportTypes` | **Destructive**, async w/ progress | `softwarePath`, `exportPath`, `regexName` (optional), `preservePath` (optional) | Bulk export, same inconsistent-item handling as `ExportBlocks`. |
 | `GetTypeCrossReferences` | RO | `softwarePath`, `typePath` | Same as `GetBlockCrossReferences` but for a PLC data type (UDT). Note: an FB used as an instance type is a *block*, not a type - use `GetBlockCrossReferences` for those (e.g. `Main_Tracking_Data`). |
+| `DeleteType` | **Destructive** | `softwarePath`, `typePath` | Check `GetTypeCrossReferences` first - deleting a type still used by blocks will break them. |
+| `SetTypeAttribute` | **Destructive** | `softwarePath`, `typePath`, `attributeName`, `value` (string) | Generic attribute setter, same conversion/error-surfacing behavior as `SetBlockAttribute`. |
+| `CreateTypeGroup` / `DeleteTypeGroup` | Create: idempotent-ish / Delete: **Destructive** | `softwarePath`, `parentGroupPath`/`groupPath`, `name` (create only) | Deleting a group deletes every type inside it. Root/System group can't be deleted. |
 
 ## External sources (SCL/AWL/GRAPH import, SCL export)
 
@@ -130,6 +136,10 @@ SIMATIC SD document format, mainly useful for round-tripping SCL logic through t
 | `GetTagTables` | RO | `softwarePath`, `regexName` (optional) | |
 | `GetTags` | RO | `softwarePath`, `tagTablePath`, `regexName` (optional) | |
 | `ExportTagTable` | **Destructive** | `softwarePath`, `tagTablePath`, `exportPath`, `preservePath` (optional) | |
+| `CreateTagTable` / `DeleteTagTable` | Create: idempotent-ish / Delete: **Destructive** | `softwarePath`, `groupPath`/`tagTablePath`, `name` (create only) | Deleting a table deletes every tag inside it. |
+| `CreateTag` | **Destructive**, writes to project | `softwarePath`, `tagTablePath`, `name`, `dataType`, `logicalAddress` (optional - omit to auto-assign) | Tags have no SCL-generation route (unlike blocks/types), so this is the direct way to create one. |
+| `DeleteTag` | **Destructive** | `softwarePath`, `tagTablePath`, `tagName` | |
+| `SetTagAttribute` | **Destructive** | `softwarePath`, `tagTablePath`, `tagName`, `attributeName`, `value` (string) | Generic attribute setter - set `Name` to rename. Same type-conversion/error-surfacing behavior as `SetBlockAttribute`. |
 
 ## HMI tag tables (Unified Comfort/Advanced Panels only)
 

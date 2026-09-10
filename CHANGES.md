@@ -5,6 +5,79 @@
 
 ---
 
+## [2026-09-10] PLC 태그 쓰기 CRUD (`CreateTagTable`/`CreateTag`/`SetTagAttribute`/`DeleteTag`/`DeleteTagTable`)
+
+블록/타입 CRUD에 이어서 나온 자연스러운 다음 단계. Upstream PR #26이 태그/워치테이블 CRUD를
+시도했었길래 그 diff를 실제로 읽어봄 - 에러 핸들링 스타일은 우리 코드랑 같았지만(같은 upstream
+base에서 갈라져서 그런 것으로 추정, PR #26이 잘 짜서가 아님) 중복이 심하고 라이브 테스트 흔적이
+없어서 코드는 안 가져오고 **메서드 시그니처/어떤 Openness API를 쓰는지만 참고**, 실제 구현은 직접
+리플렉션으로 재확인 후 우리 스타일대로 새로 작성.
+
+- 블록/타입과 달리 태그는 SCL로 생성하는 경로가 없어서(`GenerateBlocksFromSource`가 안 통함),
+  전용 `CreateTag` 툴이 진짜 필요했음 - `PlcTagComposition.Create(name, dataType, address)`.
+- `CreateTagTable`(`PlcTagTableComposition.Create(name)`), `DeleteTagTable`/`DeleteTag`
+  (`.Delete()`), `SetTagAttribute`(범용 속성 설정, 블록/타입과 동일한
+  `ConvertAttributeValue` 재사용 - rename도 "Name" 속성으로 처리).
+- **라이브 검증(Tia for Claude, PID 41948, `PLC_1`)**: `ClaudeTagTableTest` 테이블 생성 →
+  `tTestTag`(Bool) 태그 생성 → `GetTags`로 확인 → `SetTagAttribute`로 `tTestTagRenamed`로
+  이름 변경 → `GetTags`로 변경 확인 → `DeleteTag` → `DeleteTagTable` → 최종 `GetTagTables`
+  조회로 완전히 정리됐음 확인. 전체 라이프사이클 한 번에 성공.
+
+---
+
+## [2026-09-10] 블록/타입 쓰기 CRUD (삭제/속성 수정/그룹 생성·삭제)
+
+Upstream 로드맵 5번(블록/타입 쓰기 CRUD, PR #26 - 가장 리스크 높다고 표시해뒀던 항목). 사용자가
+"Tia for Claude" 디스포저블 프로젝트를 명시적으로 만들어준 덕에 실제 쓰기 작업까지 전부 라이브로
+검증.
+
+### 범위 결정
+- "진짜 내용이 있는 블록/타입 생성"은 이미 있는 `ImportBlock`/`ImportType`(XML)과
+  `GenerateBlocksFromSource`(SCL, 2026-09-10 오전 구현)로 충분히 커버됨 - `PlcBlockComposition`이
+  제공하는 `CreateFB`/`CreateInstanceDB`(빈 GUI용 블록 생성)는 텍스트 기반 에이전트 워크플로우엔
+  가치가 낮다고 판단해 스킵.
+- 실제로 빠져있던 건: **삭제**, **속성 수정**(rename 포함), **그룹 생성/삭제** - 이 세 가지만
+  추가.
+
+### 새 툴 6개
+- `DeleteBlock`/`DeleteType` - `PlcBlock.Delete()`/`PlcType.Delete()`.
+- `SetBlockAttribute`/`SetTypeAttribute` - 범용 속성 설정(`SetAttribute(name, value)`). 값은
+  문자열로 받아서 그 속성의 현재 런타임 타입(bool/int/uint/long/double/float)에 맞춰 자동
+  변환 - "Name"에 새 이름을 주면 rename으로도 동작.
+- `CreateBlockGroup`/`DeleteBlockGroup`, `CreateTypeGroup`/`DeleteTypeGroup` -
+  `PlcBlockUserGroupComposition.Create(name)`류. 루트(System)그룹은 삭제 못 하게 막음(캐스트
+  실패 시 `InvalidParams`로 명확히 거부).
+
+### 에러 메시지 버그 발견 및 수정
+- 처음 테스트에서 `SetBlockAttribute`가 "Set attribute failed"라는 의미 없는 메시지만 던져서
+  원인 파악이 안 됐음 - `ExportBlock`이 이미 쓰던 "InnerException 이유를 메시지에 붙이는" 패턴이
+  `SetBlockAttribute`/`SetTypeAttribute`엔 빠져있던 게 원인. McpServer.cs 수정해서 두 툴 다
+  `pex.InnerException?.Message`를 붙이도록 통일 - 이후 재테스트에서 진짜 이유(아래)가 그대로
+  노출됨.
+
+### 라이브 검증 (Tia for Claude, PID 41948, `PLC_1`)
+전체 라이프사이클: 그룹 생성 → SCL로 블록/타입 생성 → 속성 수정 → 조회로 확인 → 삭제 → 그룹 삭제
+→ 최종 조회로 완전히 비었는지 확인, 블록/타입 둘 다 성공.
+- `CreateBlockGroup("ClaudeTestGroup")` → 성공.
+- `GenerateBlocksFromSource`로 `FB_ClaudeTest` 생성(오전 SCL 테스트 재사용).
+- `SetBlockAttribute(..., "Comment", "test")` → 에러 메시지 버그 수정 전엔 원인 불명 실패,
+  수정 후 재시도하니 정확한 이유 노출: `"'Comment' is not supported by type
+  'Siemens.Engineering.SW.Blocks.FB'."` - 툴 버그가 아니라 애초에 FB엔 Comment 속성이 없다는
+  TIA 쪽 정상 동작이었음(테스트 케이스 실수) - 문서/description에서 "Comment를 예시로 든 것"도
+  같이 정정.
+- `SetBlockAttribute(..., "Number", "77")` → 역시 명확한 TIA 쪽 제약 노출:
+  `"When automatic numbering is enabled, you cannot assign the 'Number' attribute manually."`
+  (AutoNumber가 켜진 블록이라 당연한 거부) - 에러 서페이싱이 제대로 동작함을 보여주는 좋은
+  사례.
+- `SetBlockAttribute(..., "Name", "FB_ClaudeTestRenamed")` → 성공, `GetBlocks`로 이름 변경
+  확인.
+- `DeleteBlock`/`DeleteBlockGroup` → 성공, `GetBlocks` 재조회로 완전히 사라짐 확인.
+- 타입 쪽도 동일 라이프사이클: `CreateTypeGroup` → `UDT_ClaudeTest.scl` import+generate →
+  `SetTypeAttribute(..., "Name", ...)`로 rename → `DeleteType` → `DeleteTypeGroup` → 전부
+  성공, `GetBlocks`/`GetTypes` 최종 조회로 프로젝트가 완전히 깨끗한 상태로 복귀했음을 확인.
+
+---
+
 ## [2026-09-10] SCL 외부 소스 import/export + HMI 화면/알람/텍스트리스트 조회
 
 Upstream 로드맵 6번(외부 소스 import/export, PR #26 + 이슈 #22)과 7번(HMI 화면/알람/텍스트리스트,

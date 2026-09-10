@@ -2102,6 +2102,224 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #endregion
 
+        #region block/type write CRUD
+
+        [McpServerTool(Name = "DeleteBlock", Title = "Delete block", Destructive = true, Idempotent = true, OpenWorld = false), Description("Delete a block from plc software. Irreversible except via TIA Portal's own undo (if still available) or project backup - confirm with the user before calling this against a real (non-disposable) project.")]
+        public static ResponseDeleteBlock DeleteBlock(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("blockPath: full path to the block, e.g. 'Group/Subgroup/Name'")] string blockPath)
+        {
+            try
+            {
+                Portal.DeleteBlock(softwarePath, blockPath);
+
+                return new ResponseDeleteBlock
+                {
+                    Message = $"Block '{blockPath}' deleted",
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error deleting block '{blockPath}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "DeleteType", Title = "Delete type", Destructive = true, Idempotent = true, OpenWorld = false), Description("Delete a PLC data type (UDT) from plc software. Irreversible except via TIA Portal's own undo (if still available) or project backup - confirm with the user before calling this against a real (non-disposable) project. Check GetTypeCrossReferences first - deleting a type still used by blocks will break them.")]
+        public static ResponseDeleteType DeleteType(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("typePath: full path to the type, e.g. 'Group/Subgroup/Name'")] string typePath)
+        {
+            try
+            {
+                Portal.DeleteType(softwarePath, typePath);
+
+                return new ResponseDeleteType
+                {
+                    Message = $"Type '{typePath}' deleted",
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error deleting type '{typePath}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "SetBlockAttribute", Title = "Set block attribute", Destructive = true, Idempotent = true, OpenWorld = false), Description("Set a ReadWrite attribute on a block - e.g. set 'Name' to rename it, or 'MemoryLayout', 'Number', etc. Use GetBlockInfo first to see which attributes actually exist on this block and their accessMode - attribute names vary by block type (e.g. plain FBs have no 'Comment' attribute). Confirm with the user before calling this against a real (non-disposable) project.")]
+        public static ResponseSetBlockAttribute SetBlockAttribute(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("blockPath: full path to the block, e.g. 'Group/Subgroup/Name'")] string blockPath,
+            [Description("attributeName: name of the attribute to set - check GetBlockInfo's attributes list for this block first, names vary by block type")] string attributeName,
+            [Description("value: new value as a string - converted to match the attribute's current type (bool/int/etc.) automatically")] string value)
+        {
+            try
+            {
+                Portal.SetBlockAttribute(softwarePath, blockPath, attributeName, value);
+
+                return new ResponseSetBlockAttribute
+                {
+                    Message = $"Block '{blockPath}' attribute '{attributeName}' set to '{value}'",
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                var reason = pex.InnerException?.Message?.Trim();
+                var msg = pex.Message;
+                if (!string.IsNullOrEmpty(reason)) msg += $" Reason: {reason}";
+                throw new McpException(msg, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error setting attribute '{attributeName}' on block '{blockPath}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "SetTypeAttribute", Title = "Set type attribute", Destructive = true, Idempotent = true, OpenWorld = false), Description("Set a ReadWrite attribute on a PLC data type (UDT) - e.g. set 'Name' to rename it. Use GetTypeInfo first to see which attributes actually exist on this type and their accessMode. Confirm with the user before calling this against a real (non-disposable) project.")]
+        public static ResponseSetTypeAttribute SetTypeAttribute(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("typePath: full path to the type, e.g. 'Group/Subgroup/Name'")] string typePath,
+            [Description("attributeName: name of the attribute to set - check GetTypeInfo's attributes list for this type first")] string attributeName,
+            [Description("value: new value as a string - converted to match the attribute's current type (bool/int/etc.) automatically")] string value)
+        {
+            try
+            {
+                Portal.SetTypeAttribute(softwarePath, typePath, attributeName, value);
+
+                return new ResponseSetTypeAttribute
+                {
+                    Message = $"Type '{typePath}' attribute '{attributeName}' set to '{value}'",
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                var reason = pex.InnerException?.Message?.Trim();
+                var msg = pex.Message;
+                if (!string.IsNullOrEmpty(reason)) msg += $" Reason: {reason}";
+                throw new McpException(msg, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error setting attribute '{attributeName}' on type '{typePath}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "CreateBlockGroup", Title = "Create block group", Destructive = false, Idempotent = false, OpenWorld = false), Description("Create a new block group (folder) in plc software, for organizing blocks.")]
+        public static ResponseCreateBlockGroup CreateBlockGroup(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("parentGroupPath: path to the parent group to create the new group under, e.g. 'Group/Subgroup' (empty for the root group)")] string parentGroupPath,
+            [Description("name: name for the new group")] string name)
+        {
+            try
+            {
+                var group = Portal.CreateBlockGroup(softwarePath, parentGroupPath, name);
+
+                return new ResponseCreateBlockGroup
+                {
+                    Message = $"Block group '{group.Name}' created under '{parentGroupPath}'",
+                    Name = group.Name,
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error creating block group '{name}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "DeleteBlockGroup", Title = "Delete block group", Destructive = true, Idempotent = true, OpenWorld = false), Description("Delete a block group (folder) from plc software - also deletes every block inside it. Confirm with the user before calling this against a real (non-disposable) project.")]
+        public static ResponseDeleteBlockGroup DeleteBlockGroup(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("groupPath: full path to the group, e.g. 'Group/Subgroup'")] string groupPath)
+        {
+            try
+            {
+                Portal.DeleteBlockGroup(softwarePath, groupPath);
+
+                return new ResponseDeleteBlockGroup
+                {
+                    Message = $"Block group '{groupPath}' deleted",
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error deleting block group '{groupPath}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "CreateTypeGroup", Title = "Create type group", Destructive = false, Idempotent = false, OpenWorld = false), Description("Create a new type group (folder) in plc software, for organizing PLC data types (UDTs).")]
+        public static ResponseCreateTypeGroup CreateTypeGroup(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("parentGroupPath: path to the parent group to create the new group under, e.g. 'Group/Subgroup' (empty for the root group)")] string parentGroupPath,
+            [Description("name: name for the new group")] string name)
+        {
+            try
+            {
+                var group = Portal.CreateTypeGroup(softwarePath, parentGroupPath, name);
+
+                return new ResponseCreateTypeGroup
+                {
+                    Message = $"Type group '{group.Name}' created under '{parentGroupPath}'",
+                    Name = group.Name,
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error creating type group '{name}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "DeleteTypeGroup", Title = "Delete type group", Destructive = true, Idempotent = true, OpenWorld = false), Description("Delete a type group (folder) from plc software - also deletes every type inside it. Confirm with the user before calling this against a real (non-disposable) project.")]
+        public static ResponseDeleteTypeGroup DeleteTypeGroup(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("groupPath: full path to the group, e.g. 'Group/Subgroup'")] string groupPath)
+        {
+            try
+            {
+                Portal.DeleteTypeGroup(softwarePath, groupPath);
+
+                return new ResponseDeleteTypeGroup
+                {
+                    Message = $"Type group '{groupPath}' deleted",
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error deleting type group '{groupPath}': {ex.Message}", ex);
+            }
+        }
+
+        #endregion
+
         #region external sources (SCL import/export)
 
         [McpServerTool(Name = "GetExternalSources"), Description("Get a list of external sources (imported SCL/AWL/GRAPH source files) in plc software")]
@@ -2396,6 +2614,147 @@ namespace TiaMcpServer.ModelContextProtocol
             catch (Exception ex) when (ex is not McpException)
             {
                 throw new McpException($"Unexpected error exporting tag table '{tagTablePath}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "CreateTagTable", Title = "Create tag table", Destructive = false, Idempotent = false, OpenWorld = false), Description("Create a new PLC tag table in plc software.")]
+        public static ResponseCreateTagTable CreateTagTable(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("groupPath: path to the group to create the new tag table under, e.g. 'Group/Subgroup' (empty for the root group)")] string groupPath,
+            [Description("name: name for the new tag table")] string name)
+        {
+            try
+            {
+                var table = Portal.CreateTagTable(softwarePath, groupPath, name);
+
+                return new ResponseCreateTagTable
+                {
+                    Message = $"Tag table '{table.Name}' created under '{groupPath}'",
+                    Name = table.Name,
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error creating tag table '{name}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "DeleteTagTable", Title = "Delete tag table", Destructive = true, Idempotent = true, OpenWorld = false), Description("Delete a PLC tag table - also deletes every tag inside it. Confirm with the user before calling this against a real (non-disposable) project.")]
+        public static ResponseDeleteTagTable DeleteTagTable(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("tagTablePath: full path to the tag table, e.g. 'Group/Subgroup/Name'")] string tagTablePath)
+        {
+            try
+            {
+                Portal.DeleteTagTable(softwarePath, tagTablePath);
+
+                return new ResponseDeleteTagTable
+                {
+                    Message = $"Tag table '{tagTablePath}' deleted",
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error deleting tag table '{tagTablePath}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "CreateTag", Title = "Create tag", Destructive = false, Idempotent = false, OpenWorld = false), Description("Create a new PLC tag in a tag table. Unlike blocks/types, tags have no SCL-generation route, so this is the only way to create one directly (besides XML import).")]
+        public static ResponseCreateTag CreateTag(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("tagTablePath: full path to the tag table, e.g. 'Group/Subgroup/Name'")] string tagTablePath,
+            [Description("name: name for the new tag")] string name,
+            [Description("dataType: PLC data type for the tag, e.g. 'Bool', 'Int', 'Real'")] string dataType,
+            [Description("logicalAddress: e.g. '%M0.0' - omit to let TIA auto-assign the next free address")] string? logicalAddress = null)
+        {
+            try
+            {
+                var tag = Portal.CreateTag(softwarePath, tagTablePath, name, dataType, logicalAddress);
+
+                return new ResponseCreateTag
+                {
+                    Message = $"Tag '{tag.Name}' created in '{tagTablePath}'",
+                    Name = tag.Name,
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                var reason = pex.InnerException?.Message?.Trim();
+                var msg = pex.Message;
+                if (!string.IsNullOrEmpty(reason)) msg += $" Reason: {reason}";
+                throw new McpException(msg, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error creating tag '{name}' in '{tagTablePath}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "DeleteTag", Title = "Delete tag", Destructive = true, Idempotent = true, OpenWorld = false), Description("Delete a PLC tag from a tag table. Confirm with the user before calling this against a real (non-disposable) project.")]
+        public static ResponseDeleteTag DeleteTag(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("tagTablePath: full path to the tag table, e.g. 'Group/Subgroup/Name'")] string tagTablePath,
+            [Description("tagName: name of the tag to delete")] string tagName)
+        {
+            try
+            {
+                Portal.DeleteTag(softwarePath, tagTablePath, tagName);
+
+                return new ResponseDeleteTag
+                {
+                    Message = $"Tag '{tagName}' deleted from '{tagTablePath}'",
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error deleting tag '{tagName}' from '{tagTablePath}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "SetTagAttribute", Title = "Set tag attribute", Destructive = true, Idempotent = true, OpenWorld = false), Description("Set a ReadWrite attribute on a PLC tag - e.g. set 'Name' to rename it, or 'LogicalAddress', 'Comment'. Use GetTags first to see which attributes exist. Confirm with the user before calling this against a real (non-disposable) project.")]
+        public static ResponseSetTagAttribute SetTagAttribute(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("tagTablePath: full path to the tag table, e.g. 'Group/Subgroup/Name'")] string tagTablePath,
+            [Description("tagName: name of the tag to modify")] string tagName,
+            [Description("attributeName: name of the attribute to set")] string attributeName,
+            [Description("value: new value as a string - converted to match the attribute's current type (bool/int/etc.) automatically")] string value)
+        {
+            try
+            {
+                Portal.SetTagAttribute(softwarePath, tagTablePath, tagName, attributeName, value);
+
+                return new ResponseSetTagAttribute
+                {
+                    Message = $"Tag '{tagName}' attribute '{attributeName}' set to '{value}'",
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                var reason = pex.InnerException?.Message?.Trim();
+                var msg = pex.Message;
+                if (!string.IsNullOrEmpty(reason)) msg += $" Reason: {reason}";
+                throw new McpException(msg, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error setting attribute '{attributeName}' on tag '{tagName}': {ex.Message}", ex);
             }
         }
 
