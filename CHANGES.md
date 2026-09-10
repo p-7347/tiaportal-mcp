@@ -5,6 +5,30 @@
 
 ---
 
+## [2026-09-10] GetOnlineState/GoOnline/GoOffline 실제 PLCSIM으로 검증 + 안전 문서화
+
+### 검증
+- 사용자가 TIA Portal에서 PLCSIM Advanced로 실제 다운로드+온라인 연결한 상태에서
+  `GetOnlineState("PLC_1")` → `"Online"` 정확히 읽음.
+- `GoOffline` → 실제로 연결 끊김 (TIA 화면에서도 사용자가 직접 확인), 다시
+  `GoOnline` → `"Online"` 복원까지 왕복 완전 검증.
+
+### 문서화: "왜 갑자기 오프라인이 됐지?" 방지
+- `GoOffline`이 툴로 생기면서, 에이전트가 `ExportBlock`류가 "온라인이라 실패"할 때
+  스스로 판단해서 `GoOffline`을 불러버릴 수 있는 위험이 생김 — 이건 이 MCP 서버
+  내부 상태가 아니라 **TIA Portal 엔지니어링 스테이션의 실제 온라인 연결** 이라서,
+  사람이 TIA 창을 보고 있으면 아무 경고 없이 연결이 뚝 끊기는 걸 실시간으로 보게 됨.
+- `ExportBlock`/`ExportType`/`ExportBlocks`/`ExportTypes`(고전 XML export,
+  `block.Export()` 경로)와 `GoOffline` 자체의 MCP `Description`에 "실패하면 사용자한테
+  알리고, 알아서 GoOffline 부르지 말 것"이라고 직접 명시 — 이게 에이전트가 실제로
+  `tools/list`에서 읽는 텍스트라 `docs/TOOLS.md`보다 더 직접적으로 먹힘.
+  `docs/TOOLS.md`에도 같은 내용의 콜아웃 추가.
+- `ExportAsDocuments`/`ExportBlocksAsDocuments`(.s7dcl/.s7res 경로)는 어제 실제로
+  온라인 상태에서 성공한 걸 로그로 확인했으므로 이 경고 대상에서 제외 — 오프라인
+  요구사항은 고전 XML export 경로에만 있음.
+
+---
+
 ## [2026-09-10] GetOnlineState/GoOnline/GoOffline 추가
 
 ### 배경
