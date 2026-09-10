@@ -250,18 +250,38 @@ Priority order for picking pieces up ourselves, each to go through this project'
    end-to-end verified against "Tia for Claude": create table → create tag → verify → rename via
    `SetTagAttribute` → verify → delete tag → delete table → final empty-check, all passed in one
    run.
-10. **Network/hardware topology** (idea, not started, 2026-09-10) - user asked to investigate next.
-    Confirmed by reflection that real Openness types exist: `Siemens.Engineering.HW.Subnet`/
-    `SubnetComposition`, `Siemens.Engineering.HW.IoSystem`, `Siemens.Engineering.HW.Features.
-    NetworkInterface` (read), and `DeviceComposition.Create`/`CreateWithItem`/`CreateFrom` (device
-    creation - write). PR #26 also attempted this (`GetSubnets`/`GetNetworkInterfaces`/
-    `SetIpAddress`/`ConnectToSubnet`/`CreateDevice`/`DeleteDevice`/`GetModules`/`GetAddresses`/
-    `ImportGsdFile`, per its commit message - not yet read the actual diff for this one). Bigger
-    scope than tag CRUD: read side (subnet/IO-system topology, IP addressing) is probably safe and
-    valuable on its own; write side (creating/deleting devices, rewiring network topology) is a
-    different risk shape than block/tag CRUD - could affect how the project reads on real hardware
-    in a way that's harder to eyeball-verify than a block/tag diff. Suggest scoping read-only
-    topology first, deciding on write scope separately once read is verified.
+10. ~~**Network/hardware topology - read side**~~ - **Done (2026-09-10).** New `GetSubnets`/
+    `GetNetworkInterfaceInfo`. Read PR #26's actual diff for this one too (not just the commit
+    message) - same pattern as before: consistent error-handling style (shared upstream base) but
+    a real quality issue found (`GetNetworkInterfaces`' node-collecting helper swallows exceptions
+    broadly with a comment like "some nodes may not have IP attributes", which could mask genuine
+    errors) - not carried over, only the method-signature ideas were kept.
+    - **Confirmed via reflection**: `Subnets` lives on `Project`, not `ProjectBase` - returns
+      empty (not an error) when attached to a multiuser local session (`.als`). `Subnet.Nodes`/
+      `.IoSystems` give the connected-device and PROFINET/PROFIBUS IO-system lists.
+      `NetworkInterface` (via `GetService<NetworkInterface>()` on a DeviceItem) exposes `.Nodes`/
+      `.Ports`/`.IoControllers`/`.IoConnectors`. `Node` has no dedicated IP-address property -
+      reused the existing generic `Helper.GetAttributeList` (same as everywhere else attribute
+      names weren't worth guessing) instead of hardcoding attribute names.
+    - **New helper**: `FindDeviceItemByFullPath` - a proper recursive DeviceItem path resolver,
+      needed because a network interface is typically nested *inside* a CPU/module (e.g.
+      `PLC_1/PROFINET interface_1`), one level deeper than `GetDeviceItemByPath` (used by the
+      existing `devicePath`/`deviceItemPath` tools) was built to reach. Also handles device names
+      that themselves contain `/` by trying the longest prefix first, same idea as
+      `FindDeviceByFullName`.
+    - **Live-verified** against "Tia for Claude": `GetSubnets` returned 2 real subnets (`PN/IE_1`
+      default, `PN/IE_2`), both correctly linked to `PROFINET IO-System`.
+      `GetNetworkInterfaceInfo` on the PLC's interface returned real IP `192.168.0.1`/mask
+      `255.255.255.0`, correctly identified as the IO Controller; on the HMI's interface, real IP
+      `192.168.1.201`, correctly *not* flagged as a controller. Both 3-level nested paths resolved
+      correctly by the new recursive helper.
+    - **Write side deliberately not pursued yet** (device creation/deletion, IP/subnet
+      reassignment, `ImportGsdFile`) - different risk shape than block/tag CRUD, since it can
+      affect how the project matches physical hardware in a way that's harder to eyeball-verify
+      than a block/tag diff. Revisit only if a concrete need shows up; would need its own scoping
+      pass (PR #26's method list for this: `CreateDevice`/`DeleteDevice`/`CreateDeviceGroup`/
+      `GetModules`/`GetModuleInfo`/`GetAddresses`/`SetIpAddress`/`ConnectToSubnet`/
+      `ImportGsdFile` - not yet independently verified against the real API).
 
 ## Documentation
 - [ ] Add a "CLI Options" section to `README.md` documenting `--tia-major-version <int>` and `--logging <1|2|3>` with defaults and effect (1=stderr, 2=Debug, 3=Event Log). Cross-link to samples.

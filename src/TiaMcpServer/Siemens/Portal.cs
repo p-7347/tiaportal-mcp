@@ -788,6 +788,48 @@ namespace TiaMcpServer.Siemens
             }
         }
 
+        // Read-only network topology. Subnets live on Project, not ProjectBase - this returns
+        // empty for a local multiuser session (.als) rather than throwing, since that's a real
+        // Openness limitation, not a bug (verified via reflection: Project.Subnets exists,
+        // ProjectBase does not).
+        public List<Subnet> GetSubnets()
+        {
+            _logger?.LogInformation("Getting subnets...");
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            var list = new List<Subnet>();
+
+            if (_project is Project project && project.Subnets != null)
+            {
+                foreach (var subnet in project.Subnets)
+                {
+                    list.Add(subnet);
+                }
+            }
+
+            return list;
+        }
+
+        // path: full nested path to the interface DeviceItem, e.g.
+        // "S7-1500/ET200MP station_1/PLC_1/PROFINET interface_1" - use GetProjectTree to find it
+        // (look for a DeviceItem whose name matches the interface shown under a CPU/module).
+        public NetworkInterface? GetNetworkInterfaceInfo(string path)
+        {
+            _logger?.LogInformation($"Getting network interface info for: {path}");
+
+            if (IsProjectNull())
+            {
+                return null;
+            }
+
+            var deviceItem = FindDeviceItemByFullPath(path);
+            return deviceItem?.GetService<NetworkInterface>();
+        }
+
         /// <summary>
         /// Resolves the OnlineProvider service for a device or device item path - tries a Device
         /// first (e.g. a whole station like 'S7-1500/ET200MP station_1'), then a DeviceItem (e.g.
@@ -2656,6 +2698,62 @@ namespace TiaMcpServer.Siemens
                 if (group == null)
                 {
                     break;
+                }
+            }
+
+            return null;
+        }
+
+        // Resolves a nested DeviceItem path of arbitrary depth (e.g. a network interface tucked
+        // inside a CPU's DeviceItems, like "S7-1500/ET200MP station_1/PLC_1/PROFINET interface_1")
+        // - unlike GetDeviceItemByPath, which only reaches one level below the device. Tries the
+        // longest possible prefix as the device name first (device names can themselves contain
+        // '/', and devices can live inside nested device groups), then walks every remaining
+        // segment through nested .DeviceItems.
+        private DeviceItem? FindDeviceItemByFullPath(string path)
+        {
+            if (_project == null || string.IsNullOrWhiteSpace(path))
+            {
+                return null;
+            }
+
+            var segments = path.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+            if (segments.Length < 2)
+            {
+                return null;
+            }
+
+            for (int deviceLen = segments.Length - 1; deviceLen >= 1; deviceLen--)
+            {
+                var candidatePath = string.Join("/", segments.Take(deviceLen));
+                var device = FindDeviceByFullName(candidatePath) ?? GetDeviceByPath(candidatePath);
+                if (device == null)
+                {
+                    continue;
+                }
+
+                DeviceItem? current = null;
+                DeviceItemComposition? items = device.DeviceItems;
+                for (int i = deviceLen; i < segments.Length; i++)
+                {
+                    if (items == null)
+                    {
+                        current = null;
+                        break;
+                    }
+
+                    current = items.FirstOrDefault(x => x.Name.Equals(segments[i], StringComparison.OrdinalIgnoreCase));
+                    if (current == null)
+                    {
+                        break;
+                    }
+
+                    items = current.DeviceItems;
+                }
+
+                if (current != null)
+                {
+                    return current;
                 }
             }
 

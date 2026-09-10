@@ -5,6 +5,45 @@
 
 ---
 
+## [2026-09-10] 네트워크 토폴로지 읽기 전용 조회 (`GetSubnets`/`GetNetworkInterfaceInfo`)
+
+태그 CRUD 다음으로 사용자가 요청한 네트워크 토폴로지/디바이스 구성 조사의 첫 단계 - 읽기 전용만
+우선 구현(쓰기, 즉 디바이스 생성/삭제/IP 변경은 리스크 성격이 달라서 범위 밖으로 명시적으로
+분리해둠, TODO.md 참고).
+
+### PR #26 참고 (역시 코드는 안 가져옴)
+- `GetSubnets`/`GetNetworkInterfaces` 커밋의 실제 diff를 읽어봄 - 에러 핸들링 패턴은 일관되지만
+  `GetNetworkInterfaces`쪽 헬퍼가 "일부 노드엔 IP 속성이 없을 수 있음"이라며 예외를 통째로
+  삼키는 코드가 있어서 진짜 오류를 숨길 위험이 있었음. `(_project as Project)?.Subnets`처럼
+  캐스팅하는 것도 그대로였는데, 이건 실제로 맞는 이유가 있었음(아래) - 메서드 시그니처만 참고,
+  실제 구현은 리플렉션으로 재확인 후 새로 작성.
+
+### 구조 (리플렉션으로 확인)
+- **`Subnets`는 `ProjectBase`가 아니라 `Project`에만 있음** - 멀티유저 로컬 세션(.als)에 붙었을
+  때는 빈 배열 반환(에러 아님, Openness 자체의 한계로 확인).
+- `Subnet` → `.Nodes`(연결된 디바이스 노드들), `.IoSystems`(PROFINET/PROFIBUS IO 시스템).
+- 네트워크 인터페이스는 디바이스 자체가 아니라 **CPU/모듈 안에 중첩된 DeviceItem**에 있음(예:
+  `PLC_1` 안의 `PROFINET interface_1`) - 기존 `GetDeviceItemByPath`는 딱 1단계만 내려가서 이
+  깊이까지 못 감. 새 재귀 헬퍼 `FindDeviceItemByFullPath` 추가 - 디바이스 이름 자체에 '/'가
+  들어있는 경우까지 고려해서 가장 긴 접두사부터 디바이스로 시도, 나머지를 중첩
+  DeviceItem으로 재귀 탐색.
+- `NetworkInterface`(`GetService<NetworkInterface>()`) → `.Nodes`, `.Ports`, `.IoControllers`/
+  `.IoConnectors`(PROFINET IO 컨트롤러/디바이스 역할). `Node`엔 IP 관련 전용 프로퍼티가 없고
+  다른 것들처럼 `GetAttribute`로만 접근 가능 - `Helper.GetAttributeList`를 그대로 재사용해서
+  속성 이름을 추측할 필요 없이 전부 노출.
+
+### 라이브 검증 (Tia for Claude, PID 41948)
+- `GetSubnets()`: 실제 서브넷 2개(`PN/IE_1` 기본, `PN/IE_2`) 정상 조회, 둘 다 `PROFINET
+  IO-System` 연결 확인.
+- `GetNetworkInterfaceInfo("S7-1500/ET200MP station_1/PLC_1/PROFINET interface_1")`: 실제 IP
+  `192.168.0.1`, 서브넷마스크 `255.255.255.0`, `PN/IE_1` 연결, IO Controller 역할 정확히 인식
+  (`ioControllerOfIoSystem: "PROFINET IO-System"`).
+- `GetNetworkInterfaceInfo("HMI_1/HMI_1.IE_CP_1/PROFINET Interface_1")`: 실제 IP
+  `192.168.1.201`, `PN/IE_2` 연결, IO Controller 아님(정상 - HMI는 컨트롤러 역할이 아님).
+  3단계 중첩 경로(재귀 헬퍼) 둘 다 정확히 해석됨.
+
+---
+
 ## [2026-09-10] PLC 태그 쓰기 CRUD (`CreateTagTable`/`CreateTag`/`SetTagAttribute`/`DeleteTag`/`DeleteTagTable`)
 
 블록/타입 CRUD에 이어서 나온 자연스러운 다음 단계. Upstream PR #26이 태그/워치테이블 CRUD를

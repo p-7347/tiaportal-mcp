@@ -691,6 +691,72 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
+        [McpServerTool(Name = "GetSubnets", Title = "Get subnets", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("List every subnet in the project (network topology) with its type and the devices/IO systems connected to it. Only works when attached to a full project - subnets aren't exposed for a multiuser local session (.als), returns an empty list there rather than erroring.")]
+        public static ResponseSubnets GetSubnets()
+        {
+            try
+            {
+                var list = Portal.GetSubnets();
+
+                var responseList = list.Select(subnet => new ResponseSubnetInfo
+                {
+                    Name = subnet.Name,
+                    NetType = subnet.NetType.ToString(),
+                    TypeIdentifier = subnet.TypeIdentifier,
+                    NodeNames = subnet.Nodes.Select(n => n.Name).ToList(),
+                    IoSystemNames = subnet.IoSystems.Select(s => s.Name).ToList(),
+                    Attributes = Helper.GetAttributeList(subnet)
+                }).ToList();
+
+                return new ResponseSubnets
+                {
+                    Message = $"Found {responseList.Count} subnet(s)",
+                    Items = responseList,
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving subnets: {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "GetNetworkInterfaceInfo", Title = "Get network interface info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get network topology info (nodes, connected subnet, IO controller/connector role, port count) for a device's network interface. The interface is usually a DeviceItem nested inside a CPU/module - use GetProjectTree to find its exact name and path (e.g. 'S7-1500/ET200MP station_1/PLC_1/PROFINET interface_1'), it's not the same path as softwarePath.")]
+        public static ResponseNetworkInterfaceInfo GetNetworkInterfaceInfo(
+            [Description("path: full nested path to the network interface DeviceItem, e.g. 'S7-1500/ET200MP station_1/PLC_1/PROFINET interface_1'")] string path)
+        {
+            try
+            {
+                var iface = Portal.GetNetworkInterfaceInfo(path);
+                if (iface == null)
+                {
+                    throw new McpException($"Network interface not found at '{path}', or it has no network interface service");
+                }
+
+                var nodes = iface.Nodes.Select(n => new ResponseNetworkNodeInfo
+                {
+                    Name = n.Name,
+                    ConnectedSubnetName = n.ConnectedSubnet?.Name,
+                    Attributes = Helper.GetAttributeList(n)
+                }).ToList();
+
+                return new ResponseNetworkInterfaceInfo
+                {
+                    Message = $"Network interface info retrieved for '{path}'",
+                    InterfaceType = iface.InterfaceType.ToString(),
+                    Nodes = nodes,
+                    PortCount = iface.Ports.Count(),
+                    IoControllerOfIoSystem = iface.IoControllers.FirstOrDefault()?.IoSystem?.Name,
+                    IoConnectorOfIoSystem = iface.IoConnectors.FirstOrDefault()?.ConnectedToIoSystem?.Name,
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving network interface info for '{path}': {ex.Message}", ex);
+            }
+        }
+
         [McpServerTool(Name = "GetOnlineState", Title = "Get online state", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get the engineering station's online connection state (Offline/Connecting/Online/...) for a device or device item. This is just the connection used for diagnostics/monitoring - it never starts, stops, or otherwise commands the PLC.")]
         public static ResponseOnlineState GetOnlineState(
             [Description("path: defines the path in the project structure to the device or device item")] string path)
