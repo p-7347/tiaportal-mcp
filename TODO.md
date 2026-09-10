@@ -2,7 +2,7 @@
 
 Centralized list of actionable improvements gathered from initial repo review. Use this to track, prioritize, and reference across PRs. See file paths in backticks.
 
-## ~~Open bug: Attach succeeds but Projects/LocalSessions empty for a specific TIA instance~~ - Resolved, not a code bug
+## ~~Open bug: Attach succeeds but Projects/LocalSessions empty for a specific TIA instance~~ - Resolved, root cause confirmed: missing GSD files
 
 Found while verifying multi-instance `Connect(processId)` (see `CHANGES.md` 2026-09-10, full
 writeup). One specific project file (received via KakaoTalk) always showed an empty
@@ -10,11 +10,13 @@ writeup). One specific project file (received via KakaoTalk) always showed an em
 out one by one (elevation, Multiuser/`ProjectServers`, how the file was opened, timing/race, a
 blocking modal, another instance's online state, instance launch order - tested standalone too).
 Opening a *different* project (unrelated file) attached and enumerated correctly on the first try,
-isolating the cause to something specific to that one `.ap20` file (likely needed migration or
-picked up some odd state from whoever originally authored it) - not a bug in `Connect`/
+isolating the cause to something specific to that one `.ap20` file - not a bug in `Connect`/
 `ListTiaPortalInstances` or this server's attach logic, which was in fact repeatedly confirmed
-correct throughout the investigation. No further action planned; low priority given it needs that
-specific file to reproduce.
+correct throughout the investigation. **Root cause confirmed**: the project referenced hardware
+modules from optional GSD files not installed on this machine - TIA's UI opened the project anyway
+(with warnings), but the underlying hardware objects never fully instantiated, so Openness
+enumeration came back empty. After installing the missing GSD files, reconnecting to the same file
+returned fully populated `GetProject`/`GetDevices`/`GetState` data with no code changes. Closed.
 
 ## Multi-instance selection + cross-project compare (2026-09-10 idea, not started)
 

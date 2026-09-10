@@ -5,7 +5,7 @@
 
 ---
 
-## [2026-09-10] 특정 프로젝트 파일 하나에서만 Attach 후 Projects/LocalSessions가 비어 보임 (해결 — 파일 한정 문제로 확인)
+## [2026-09-10] 특정 프로젝트 파일 하나에서만 Attach 후 Projects/LocalSessions가 비어 보임 (해결 — 원인은 GSD 파일 미설치)
 
 ### 증상
 - 다중 인스턴스 선택(`ListTiaPortalInstances`/`Connect(processId)`) 기능을 실제로
@@ -48,6 +48,24 @@
   전체 과정에서 한 번도 틀리지 않고 정확한 PID에 Attach함** — 이 조사로 오히려
   기능이 매우 탄탄하게 검증됨.
 - 실제 작업 프로젝트(Mahindra)는 전체 조사 기간 내내 영향 없음.
+
+### 추가 확인 (같은 날, 사용자 재검증 요청으로 진행)
+- 새 마힌드라 프로젝트(`Mahindra_CPU01_V20_260910_k1`)와 BMA(`CTe_BMA_PLC1_V20`)를
+  동시에 띄운 상태에서 `Connect(processId)` → `GetState` → `GetDevices`까지 각각
+  실행 — 두 인스턴스 모두 프로젝트명/디바이스 트리 정상 조회됨. 문제의 부대설비
+  파일은 이번엔 준비되어 있지 않아 재현 시도는 못 했음.
+- 사용자 판단: 그 특정 파일 내부의 근본 원인을 더 파고드는 건 비용 대비 효과가
+  낮다고 보고 여기서 조사 종료하기로 결정. 코드 문제가 아님은 충분히 확인됨.
+- **근본 원인 확정: GSD(Generic Station Description) 미설치.** 이 프로젝트는
+  옵션 GSD 파일 일부가 이 PC에 설치되어 있지 않았음. TIA UI는 경고만 띄우고
+  일단 프로젝트를 "열린" 상태로 보여주지만, 해당 하드웨어 모듈의 Openness 객체
+  모델이 제대로 인스턴스화되지 못해 `GetProject`/`GetDevices`가 빈 목록을
+  반환한 것.
+  사용자가 필요한 GSD를 설치한 뒤 같은 파일(`add_on_eqp_ver4.0`, 새 PID 22652)로
+  재접속해 재검증 — `GetState.project`가 `"-"` 대신 `"add_on_eqp_ver4.0"`으로,
+  `GetDevices`/`GetProject`도 `S7-1500/ET200MP station_1` 등 실제 데이터로 정상
+  반환됨을 확인. **코드 수정 없이 GSD 설치만으로 완전히 해결됨** — MCP 서버/
+  Connect 로직에는 애초에 버그가 없었음이 최종 확정.
 
 ---
 
