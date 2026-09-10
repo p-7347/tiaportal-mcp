@@ -7,6 +7,7 @@ using Siemens.Engineering.HmiUnified;
 using Siemens.Engineering.HW;
 using Siemens.Engineering.HW.Features;
 using Siemens.Engineering.Multiuser;
+using Siemens.Engineering.Online;
 using Siemens.Engineering.Safety;
 using Siemens.Engineering.SW;
 using Siemens.Engineering.SW.Blocks;
@@ -589,6 +590,57 @@ namespace TiaMcpServer.Siemens
             // Retrieve the device by its path
             return GetDeviceItemByPath(deviceItemPath);
 
+        }
+
+        /// <summary>
+        /// Resolves the OnlineProvider service for a device or device item path - tries a Device
+        /// first (e.g. a whole station like 'S7-1500/ET200MP station_1'), then a DeviceItem (e.g.
+        /// the CPU module within it), mirroring how GetDevice/GetDeviceItem are both supported.
+        /// This only establishes/reads the engineering station's online *connection* - it never
+        /// starts, stops, or otherwise commands the PLC itself.
+        /// </summary>
+        private OnlineProvider? GetOnlineProvider(string path)
+        {
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            var device = GetDeviceByPath(path);
+            var provider = device?.GetService<OnlineProvider>();
+            if (provider != null)
+            {
+                return provider;
+            }
+
+            var deviceItem = GetDeviceItemByPath(path);
+            return deviceItem?.GetService<OnlineProvider>();
+        }
+
+        public OnlineState? GetOnlineState(string path)
+        {
+            _logger?.LogInformation($"Getting online state: {path}");
+            return GetOnlineProvider(path)?.State;
+        }
+
+        public OnlineState GoOnline(string path)
+        {
+            _logger?.LogInformation($"Going online: {path}");
+
+            var provider = GetOnlineProvider(path)
+                ?? throw new PortalException(PortalErrorCode.NotFound, $"Device or device item not found, or has no online connection, at '{path}'");
+
+            return provider.GoOnline();
+        }
+
+        public void GoOffline(string path)
+        {
+            _logger?.LogInformation($"Going offline: {path}");
+
+            var provider = GetOnlineProvider(path)
+                ?? throw new PortalException(PortalErrorCode.NotFound, $"Device or device item not found, or has no online connection, at '{path}'");
+
+            provider.GoOffline();
         }
 
         #endregion

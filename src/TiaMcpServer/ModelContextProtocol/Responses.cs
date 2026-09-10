@@ -145,7 +145,16 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         public IEnumerable<ResponseDeviceInfo>? Items { get; set; }
     }
-    
+
+    public class ResponseOnlineState : ResponseMessage
+    {
+        public string? State { get; set; }
+    }
+
+    public class ResponseGoOffline : ResponseMessage
+    {
+    }
+
     public class ResponseCompileSoftware : ResponseMessage
     {
     }
