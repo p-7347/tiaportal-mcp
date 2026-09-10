@@ -643,7 +643,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GoOffline", Title = "Go offline", Destructive = false, Idempotent = true, OpenWorld = false), Description("Disconnect the engineering station's online connection to a device or device item. Does not stop the PLC - the PLC keeps running regardless of this connection.")]
+        [McpServerTool(Name = "GoOffline", Title = "Go offline", Destructive = false, Idempotent = true, OpenWorld = false), Description("Disconnect the engineering station's online connection to a device or device item. Does not stop the PLC - the PLC keeps running regardless of this connection. Caution: if a human has TIA Portal's own window open, they see this disconnect happen live with no warning - don't call this to unblock an export that fails due to online mode without telling the user first, since they may be relying on that connection (e.g. watching live values).")]
         public static ResponseGoOffline GoOffline(
             [Description("path: defines the path in the project structure to the device or device item")] string path)
         {
@@ -976,7 +976,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
 
-        [McpServerTool(Name = "ExportBlock", Title = "Export block to XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export a block from plc software to file")]
+        [McpServerTool(Name = "ExportBlock", Title = "Export block to XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export a block from plc software to file. Requires the project to be offline - fails if it's online/monitoring. If it fails for that reason, tell the user rather than calling GoOffline yourself; going offline disconnects TIA Portal's live view for anyone watching it, with no warning.")]
         public static ResponseExportBlock ExportBlock(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("blockPath: full path to the block in the project structure, e.g. 'Group/Subgroup/Name' (single names are ambiguous)")] string blockPath,
@@ -1145,7 +1145,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "ExportBlocks", Title = "Export blocks to XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export all blocks from the plc software to path")]
+        [McpServerTool(Name = "ExportBlocks", Title = "Export blocks to XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export all blocks from the plc software to path. Same offline-mode requirement as ExportBlock - if it fails because the project is online, tell the user instead of calling GoOffline yourself.")]
         public static async Task<ResponseExportBlocks> ExportBlocks(
             IProgress<ProgressNotificationValue> progress,
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
@@ -1387,7 +1387,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "ExportType", Title = "Export type to XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export a type from the plc software")]
+        [McpServerTool(Name = "ExportType", Title = "Export type to XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export a type from the plc software. Same offline-mode requirement as ExportBlock - if it fails because the project is online, tell the user instead of calling GoOffline yourself.")]
         public static ResponseExportType ExportType(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("exportPath: defines the path where export the type")] string exportPath,
@@ -1472,7 +1472,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "ExportTypes", Title = "Export types to XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export types from the plc software to path")]
+        [McpServerTool(Name = "ExportTypes", Title = "Export types to XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export types from the plc software to path. Same offline-mode requirement as ExportBlock - if it fails because the project is online, tell the user instead of calling GoOffline yourself.")]
         public static async Task<ResponseExportTypes> ExportTypes(
             IProgress<ProgressNotificationValue> progress,
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
