@@ -22,7 +22,8 @@ project (never reaches actual PLC hardware - see the "Safety" note at the end).
 
 | Tool | Flags | Parameters | Notes |
 |---|---|---|---|
-| `Connect` | idempotent | - | Connects to a running TIA Portal instance. Call this first. |
+| `ListTiaPortalInstances` | RO | - | Lists every running TIA Portal process (id, open project path, mode) without attaching to any of them. Check this first if more than one might be open. |
+| `Connect` | idempotent | `processId` (optional) | Connects to a running TIA Portal instance. Call this first. With exactly one TIA Portal process running, `processId` can be omitted. With two or more, `Connect` refuses to guess and asks for a `processId` from `ListTiaPortalInstances` instead - it never silently picks one for you. |
 | `Disconnect` | idempotent | - | Disconnects from TIA Portal. |
 | `GetState` | RO | - | Returns `isConnected`, open `project`/`session` name. |
 | `Doctor` | RO | - | Environment diagnostics: connection state, active/installed TIA versions, Openness user group membership. Never connects or changes anything. Installed-version scan only reports V21+ (a working V20 install won't show up there - see `CHANGES.md`). |

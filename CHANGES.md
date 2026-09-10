@@ -5,6 +5,36 @@
 
 ---
 
+## [2026-09-10] TIA Portal 여러 개 떠있을 때 선택 연결 (ListTiaPortalInstances/Connect processId)
+
+### 배경
+- 기존 `ConnectPortal()`이 `TiaPortal.GetProcesses()`로 실행 중인 TIA Portal 프로세스를
+  전부 가져온 뒤 **무조건 `.First()`**에 붙었음 — 2개 이상 떠있으면 어느 게 잡힐지
+  우리가 선택할 수 없고, 어떤 걸 골랐는지 알려주지도 않았음.
+
+### 조치
+- `Portal.GetTiaPortalProcesses()` 추가: `TiaPortal.GetProcesses()`가 이미 `Id`(PID)와
+  `ProjectPath`를 붙지 않고도 노출해줘서, 새로 뭘 검색할 필요 없이 그대로 매핑.
+- `ConnectPortal(int? processId = null)`로 변경: 인스턴스가 1개면 기존과 동일하게 동작
+  (processId 생략 가능). **2개 이상인데 processId를 안 주면 이제 예외를 던짐** —
+  "`ListTiaPortalInstances`로 목록 보고 processId 지정해라"고 명확히 안내.
+- 새 툴 `ListTiaPortalInstances`(RO), `Connect`에 `processId` 선택 파라미터 추가.
+
+### 검증
+- 실제로 서로 다른 프로젝트를 연 TIA Portal 인스턴스 2개를 띄운 상태에서:
+  - `ListTiaPortalInstances` → 두 프로세스와 각각의 프로젝트 경로 정확히 나열.
+  - `Connect()`(processId 없이) → 예상대로 거부됨.
+  - `Connect(processId: <특정 PID>)` → 정확히 그 인스턴스의 프로젝트에 붙음
+    (`GetProject`로 프로젝트 이름 일치 확인).
+
+### 남은 것
+- 이미 연결된 상태에서 다른 인스턴스로 **핫스왑**하는 전용 기능은 아직 없음 —
+  다른 `processId`로 `Connect`를 다시 부르면 되긴 하지만, 필요하면 나중에 별도 검토.
+- `TODO.md`의 "프로젝트 간 비교" 아이디어는 이 기능(여러 인스턴스 동시 인지) 위에서
+  더 자연스럽게 만들 수 있을 것 — 아직 미착수.
+
+---
+
 ## [2026-09-10] GetOnlineState/GoOnline/GoOffline 실제 PLCSIM으로 검증 + 안전 문서화
 
 ### 검증

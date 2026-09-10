@@ -6,13 +6,15 @@ Centralized list of actionable improvements gathered from initial repo review. U
 
 Not needed right now - noted for later.
 
-1. **Let the user pick which running TIA Portal instance to attach to, and switch later.**
-   `Connect` (`Portal.ConnectPortal`, `src/TiaMcpServer/Siemens/Portal.cs`) currently calls
-   `TiaPortal.GetProcesses()` and always attaches to `.First()` with no way to choose - if two
-   instances are open, which one gets used is arbitrary and silent. `TiaPortal.GetProcesses()`
-   already returns all of them, so a `ListTiaPortalInstances` tool (PID + open project/session
-   name per instance) plus an optional selector on `Connect` (by PID or a project-name substring)
-   is straightforward - no new Openness API surface to research, just wiring.
+1. ~~**Let the user pick which running TIA Portal instance to attach to.**~~ - **Done
+   (2026-09-10).** `ListTiaPortalInstances` lists every running process (id, open project path,
+   mode) without attaching; `Connect(processId)` attaches to a specific one. With 2+ instances
+   running and no `processId`, `Connect` now refuses to guess instead of silently taking
+   `TiaPortal.GetProcesses().First()`. Verified live with two real TIA Portal instances (two
+   different projects) open at once.
+   - Not done: switching which instance you're attached to *without* a fresh `Connect` call
+     (i.e. hot-swapping mid-session) - `Connect` again with a different `processId` works fine
+     today, this is just about whether a dedicated "switch" affordance is worth adding later.
 
 2. **Cross-project/program compare.** TIA Portal's own compare only works between components
    *within a single open instance* and mostly just says "different", not much more - not
