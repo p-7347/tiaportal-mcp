@@ -126,6 +126,69 @@ the way (path-prefix stripping, device-name-with-'/' fix, attribute JSON-seriali
    for this kind of hardware, which needs to be worked out on its own rather than folded into
    the logic-bug-hunting tools above.
 
+## Upstream PR/issue review (2026-09-10) - items 1-4 done, 5-8 not started
+
+Reviewed the upstream repo's open issues/PRs for ideas worth building ourselves (not merging
+wholesale - see reasoning per item). Two open PRs looked at: #26 (hemangjoshi37a, "Lots of
+improvements", 15 commits incl. two just "ok") and #30 (mortenfj, HTTP transport/Tag tools/
+defensive guards, 10 commits, live-tested against V20 Update 5 with numbers in the PR description).
+
+**Verdict on the PRs themselves**: don't pull either wholesale. #26 crams 80+ methods across every
+Openness domain (tag/watch tables, block/type CRUD, HW/network config incl. GSD support, HMI
+engineering, technology objects/safety) into the same 3 files with no domain split and ends on two
+"ok" commits - too large to verify without the live-testing rigor this project has used throughout
+(see CHANGES.md 2026-09-10 entries). #30 is much better disciplined and worth borrowing pieces
+from directly (see below). User's take (2026-09-10): #26's *scope* is valuable if built and
+stabilized properly - treat it as an idea list, not a source to merge from.
+
+Priority order for picking pieces up ourselves, each to go through this project's usual "implement
++ live-verify against a real running TIA instance before calling it done" cycle:
+
+1. ~~**Export path security (issue #18)**~~ - **Done (2026-09-10).** New
+   `Siemens/OutputPathPolicy.cs` centralizes every `exportPath` (`ExportBlock`/`ExportBlocks`/
+   `ExportType`/`ExportTypes`/`ExportAsDocuments`/`ExportBlocksAsDocuments`/`ExportTagTable`) -
+   only a relative subfolder name under a managed root (`TiaMcpExportRoot` env var, default
+   `%TEMP%\tiaportal-mcp-exports`) is accepted; absolute paths, drive letters, UNC, and `..`
+   traversal are all rejected with a clear message. `Doctor`'s response now includes `exportRoot`
+   so an agent can see where exports land. Live-verified against Mahindra
+   (`Mahindra_CPU01_V20_260910_k1`, PID 41948): absolute path rejected, relative subfolder
+   succeeded and the file was confirmed on disk at
+   `%TEMP%\tiaportal-mcp-exports\security-test-ok\DiagnosticErrorInterrupt.xml`, `../../` traversal
+   rejected, and confirmed nothing was created outside the managed root for either rejected case.
+2. ~~**`GetProject`/`GetProjects` naming split**~~ - **Done (2026-09-10).** The list-returning
+   implementation (was misleadingly named `GetProject`) is now `GetProjects`; a new `GetProject`
+   returns just the single currently-attached project/session, backed by new
+   `Portal.GetActiveProject()`. Live-verified against Mahindra: both return correct, distinct
+   data (singular object with attributes vs. `items` array).
+3. ~~**Tag table read tools**~~ - **Already done**, turned out to be already implemented
+   (`GetTagTables`/`GetTags`/`ExportTagTable` in `Portal.cs`/`McpServer.cs`) before this review -
+   no work needed, just confirmed on 2026-09-10.
+4. ~~**GSD file visibility**~~ - **Done (2026-09-10).** New `GetGsdDependencies(devicePath?)` walks
+   a project's devices/device items (or one device if scoped) and reports any backed by
+   `Siemens.Engineering.HW.Features.GsdDevice`/`GsdDeviceItem` (GsdId/GsdName/GsdType/
+   Profibus·Profinet), found via reflection against the installed V20 `Siemens.Engineering.dll`.
+   Live-verified against Mahindra (all-native-Siemens hardware): correctly reports "No GSD-based
+   devices found". Direct verification against the add_on_eqp project's actual GSD device was
+   attempted but that TIA instance (PID 22652) stopped responding to `Connect` mid-session
+   (30s+ timeout while a sibling instance connected fine at the same moment) - not a code issue,
+   see CHANGES.md 2026-09-10 note; re-verify against a GSD device directly if/when convenient.
+   **Known limitation, by design**: only sees devices TIA already loaded successfully - if a GSD
+   is missing enough that TIA can't instantiate the device at all, it won't appear here either;
+   an empty `GetDevices`/`GetProject` right after a successful `Connect` remains the stronger
+   signal for that failure mode (see the dedicated writeup above).
+5. **Block/type write CRUD** (create/delete/modify, from PR #26) - real value (today we're
+   read+export only) but real risk (mutating a live PLC project's logic, not just reading it).
+   Explicitly hold until 1-4 are done and stable; if pursued, needs its own safety review (e.g.
+   should this require the project to be offline the same way exports do, confirmation prompts,
+   etc.) rather than copying PR #26's approach uncritically.
+6. **External source (SCL) import/export** (PR #26, overlaps issue #22's feature request) - noted,
+   not prioritized yet; revisit once 1-3 are done.
+7. **HMI engineering, technology objects, safety programming** (PR #26) - outside this project's
+   current PLC-logic-focused usage; not pursued unless a concrete need shows up.
+8. **HTTP transport** (PR #30) - not needed today, stdio covers the actual clients in use (Claude
+   Desktop, VS Code). See the existing "Transports (HTTP / TCP)" section below for why Streamable
+   HTTP specifically isn't reachable from this net48-pinned project anyway.
+
 ## Documentation
 - [ ] Add a "CLI Options" section to `README.md` documenting `--tia-major-version <int>` and `--logging <1|2|3>` with defaults and effect (1=stderr, 2=Debug, 3=Event Log). Cross-link to samples.
 - [ ] Add a "Build and Run" section to `README.md` showing `dotnet build`, `dotnet run --project src/TiaMcpServer/TiaMcpServer.csproj`, and running compiled `TiaMcpServer.exe`.

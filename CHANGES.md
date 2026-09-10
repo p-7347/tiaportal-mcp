@@ -5,6 +5,62 @@
 
 ---
 
+## [2026-09-10] Upstream 이슈/PR 리뷰에서 나온 4가지 개선 구현 (export 경로 보안, GetProject/GetProjects 분리, GSD 의존성 조회)
+
+Upstream 저장소의 open issue(#18 export 경로 보안, #29 -32603 크래시)와 open PR(#26, #30 - "Lots of
+improvements", HTTP transport/Tag tools/defensive guards)을 리뷰하고 나온 로드맵 중 우선순위
+1~4번을 구현. 태그 테이블(3번)은 이미 구현되어 있어 확인만 했음.
+
+### 1. Export 경로 보안 (`src/TiaMcpServer/Siemens/OutputPathPolicy.cs`, 신규)
+- 기존엔 `ExportBlock`/`ExportBlocks`/`ExportType`/`ExportTypes`/`ExportAsDocuments`/
+  `ExportBlocksAsDocuments`/`ExportTagTable` 전부가 `exportPath`를 전체 경로 그대로 받아서
+  path traversal/실수로 덮어쓰기/데이터 유출 위험이 있었음 (upstream issue #18과 동일한 문제).
+- `OutputPathPolicy.ResolveDirectory()`를 만들어 위 7개 메서드 전부에 적용 — 이제 `exportPath`는
+  서버가 관리하는 export 루트(`TiaMcpExportRoot` 환경변수, 기본값
+  `%TEMP%\tiaportal-mcp-exports`) 아래의 **상대 하위 폴더명만** 허용. 절대경로/드라이브
+  루트/UNC/`..` 트래버설은 명확한 에러 메시지와 함께 거부.
+- `Doctor` 툴 응답에 `exportRoot` 필드 추가 — 에이전트가 지금 export가 어디에 쌓이는지 바로
+  확인 가능.
+- **라이브 검증** (Mahindra `Mahindra_CPU01_V20_260910_k1`, PID 41948, 블록
+  `DiagnosticErrorInterrupt`): 절대경로(`C:\Users\USER\Desktop\security-test-should-fail`) →
+  거부 확인, 상대경로(`security-test-ok`) → `%TEMP%\tiaportal-mcp-exports\security-test-ok\
+  DiagnosticErrorInterrupt.xml`에 실제 생성 확인, 트래버설(`../../escape-attempt`) → 거부
+  확인. 두 거부 케이스 모두 디스크에 아무 것도 안 생겼음을 직접 확인.
+
+### 2. `GetProject`/`GetProjects` 네이밍 분리 (upstream PR #30에서 착안)
+- 기존엔 MCP 툴 이름이 `GetProject`(단수)인데 실제로는 `Portal.GetProjects()`가 반환하는
+  **리스트**를 돌려주는 네이밍 혼란이 있었음(upstream도 동일 문제).
+- 리스트를 반환하던 기존 구현은 `GetProjects`로 이름 변경, 현재 붙어있는 프로젝트 하나만
+  반환하는 새 `GetProject`를 추가 (`Portal.GetActiveProject()` 신규 - `GetState()`와 동일한
+  LocalSessions-우선-then-Projects 조회 로직 재사용).
+- **라이브 검증**: Mahindra에서 `GetProject`(단일 객체, attributes 포함)와 `GetProjects`(items
+  배열) 둘 다 정상 반환 확인.
+
+### 4. GSD 의존성 조회 툴 `GetGsdDependencies` (PR #26 아이디어 + 오늘 GSD 조사 후속)
+- 프로젝트의 하드웨어 구성에서 서드파티(GSD 기반) 디바이스/디바이스아이템을 찾아 GsdId/
+  GsdName/GsdType/Profibus·Profinet 여부를 반환 (`Siemens.Engineering.HW.Features.GsdDevice`/
+  `GsdDeviceItem` 서비스, 리플렉션으로 API 확인 후 구현).
+- 오늘 낮에 몇 시간 걸렸던 GSD 조사(이 파일 상단 항목 참고)의 재발 방지용 - 프로젝트를 다른
+  PC로 옮기기 전에 이 툴로 어떤 GSD가 필요한지 미리 확인 가능. 단, 이미 정상 로드된 디바이스만
+  보이는 한계는 있음 (GSD가 없어서 TIA가 아예 인스턴스화를 못 하면 이 툴에도 안 잡힘 - 그 경우는
+  `Connect` 성공 직후 `GetDevices`/`GetProject`가 비어있는 쪽이 더 강한 신호).
+- **라이브 검증**: Mahindra(네이티브 지멘스 장치만 있음)에서 "No GSD-based devices found"로 정상
+  응답 확인. (add_on_eqp 쪽 GSD 장치로 직접 검증은 그 인스턴스가 테스트 도중 일시적으로
+  응답 없어져서 못 함 - 아래 참고.)
+
+### 3. Tag table 조회 (이미 구현되어 있었음, 확인만)
+- `GetTagTables`/`GetTags`/`ExportTagTable`이 이미 `Portal.cs`/`McpServer.cs`에 구현되어 있었음
+  (PR #30이 제안한 것과 동일한 모양). 추가 작업 없음.
+
+### 참고: addon_eqp(PID 22652) 응답 없음
+- 이번 검증 도중 addon_eqp TIA 창(PID 22652)에 대한 `Connect` 호출이 30초 넘게 응답 없이
+  멈추는 현상 발견 - 같은 시점에 다른 프로세스(Mahindra, PID 41948)에 대한 `Connect`는 정상.
+  즉 서버 코드 문제가 아니라 그 TIA 창이 당시 뭔가에 막혀 있었던 것으로 보임(다이얼로그 등,
+  과거 조사에서 기각했던 가설이지만 조건은 매번 바뀔 수 있음) - 새로운 버그는 아님, 별도
+  조치 없이 기록만.
+
+---
+
 ## [2026-09-10] 특정 프로젝트 파일 하나에서만 Attach 후 Projects/LocalSessions가 비어 보임 (해결 — 원인은 GSD 파일 미설치)
 
 ### 증상

@@ -33,6 +33,19 @@ namespace TiaMcpServer.Siemens
         public string? Mode { get; set; }
     }
 
+    // A single third-party (GSD-based) device or device item found in a project's hardware
+    // config, with the catalog identity needed to install the matching GSD file elsewhere.
+    public class GsdReference
+    {
+        public string Path { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string? GsdId { get; set; }
+        public string? GsdName { get; set; }
+        public string? GsdType { get; set; }
+        public bool IsProfibus { get; set; }
+        public bool IsProfinet { get; set; }
+    }
+
     public class Portal
     {
         // closing parantheses for regex characters ommitted, because they are not relevant for regex detection
@@ -279,6 +292,28 @@ namespace TiaMcpServer.Siemens
                 Project = _project != null ? _project.Name : "-",
                 Session = _session != null ? _session.Project.Name : "-"
             };
+        }
+
+        // Refreshes and returns the single currently-active project/session (or null if none is
+        // open), using the same LocalSessions-first-then-Projects lookup as GetState().
+        public ProjectBase? GetActiveProject()
+        {
+            _logger?.LogInformation("Getting active project...");
+
+            if (_portal != null)
+            {
+                if (_portal.LocalSessions.Any())
+                {
+                    _session = _portal.LocalSessions.First();
+                    _project = _session.Project;
+                }
+                else if (_portal.Projects.Any())
+                {
+                    _project = _portal.Projects.First();
+                }
+            }
+
+            return _project;
         }
 
         #endregion
@@ -649,6 +684,102 @@ namespace TiaMcpServer.Siemens
             // Retrieve the device by its path
             return GetDeviceItemByPath(deviceItemPath);
 
+        }
+
+        /// <summary>
+        /// Lists every third-party (GSD-based) device/device item referenced by this project's
+        /// hardware config - e.g. non-Siemens PROFINET/PROFIBUS IO devices - along with the
+        /// GSD identity (GsdId/GsdName) needed to pre-install the same GSD file on another
+        /// machine before opening this project there. Scoped to one device if devicePath is
+        /// given, otherwise scans every device in the project.
+        /// Note: this only sees devices that TIA already loaded successfully. If a device's GSD
+        /// is missing on *this* machine, TIA's hardware object model may fail to instantiate it
+        /// at all (see CHANGES.md 2026-09-10 "empty Projects/LocalSessions" writeup) - so this
+        /// tool can't proactively flag a currently-missing GSD, only inventory the ones a
+        /// working project already depends on, as a preventive check before moving it elsewhere.
+        /// </summary>
+        public List<GsdReference> GetGsdDependencies(string? devicePath = null)
+        {
+            _logger?.LogInformation("Scanning for GSD-based device dependencies...");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            var devices = new List<Device>();
+            if (string.IsNullOrEmpty(devicePath))
+            {
+                devices.AddRange(GetDevices());
+            }
+            else
+            {
+                var device = GetDeviceByPath(devicePath)
+                    ?? throw new PortalException(PortalErrorCode.NotFound, $"Device not found at '{devicePath}'");
+                devices.Add(device);
+            }
+
+            var results = new List<GsdReference>();
+            foreach (var device in devices)
+            {
+                CollectGsdInfo(device, results);
+            }
+
+            return results;
+        }
+
+        private void CollectGsdInfo(Device device, List<GsdReference> results)
+        {
+            var gsdDevice = device.GetService<GsdDevice>();
+            if (gsdDevice != null)
+            {
+                results.Add(new GsdReference
+                {
+                    Path = device.Name,
+                    Name = device.Name,
+                    GsdId = gsdDevice.GsdId,
+                    GsdName = gsdDevice.GsdName,
+                    GsdType = gsdDevice.GsdType,
+                    IsProfibus = gsdDevice.IsProfibus,
+                    IsProfinet = gsdDevice.IsProfinet
+                });
+            }
+
+            if (device.DeviceItems != null)
+            {
+                foreach (var item in device.DeviceItems)
+                {
+                    CollectGsdInfoFromDeviceItem(item, device.Name, results);
+                }
+            }
+        }
+
+        private void CollectGsdInfoFromDeviceItem(DeviceItem deviceItem, string parentPath, List<GsdReference> results)
+        {
+            var path = $"{parentPath}/{deviceItem.Name}";
+
+            var gsdItem = deviceItem.GetService<GsdDeviceItem>();
+            if (gsdItem != null)
+            {
+                results.Add(new GsdReference
+                {
+                    Path = path,
+                    Name = deviceItem.Name,
+                    GsdId = gsdItem.GsdId,
+                    GsdName = gsdItem.GsdName,
+                    GsdType = gsdItem.GsdType,
+                    IsProfibus = gsdItem.IsProfibus,
+                    IsProfinet = gsdItem.IsProfinet
+                });
+            }
+
+            if (deviceItem.DeviceItems != null)
+            {
+                foreach (var child in deviceItem.DeviceItems)
+                {
+                    CollectGsdInfoFromDeviceItem(child, path, results);
+                }
+            }
         }
 
         /// <summary>
@@ -1028,6 +1159,8 @@ namespace TiaMcpServer.Siemens
 
             try
             {
+                exportPath = OutputPathPolicy.ResolveDirectory(exportPath);
+
                 if (IsProjectNull())
                 {
                     throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
@@ -1090,6 +1223,8 @@ namespace TiaMcpServer.Siemens
 
             try
             {
+                exportPath = OutputPathPolicy.ResolveDirectory(exportPath);
+
                 if (IsProjectNull())
                 {
                     throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
@@ -1243,6 +1378,8 @@ namespace TiaMcpServer.Siemens
         {
             _logger?.LogInformation("Exporting blocks...");
 
+            exportPath = OutputPathPolicy.ResolveDirectory(exportPath);
+
             if (IsProjectNull())
             {
                 return null;
@@ -1365,6 +1502,8 @@ namespace TiaMcpServer.Siemens
         {
             _logger?.LogInformation("Exporting types...");
 
+            exportPath = OutputPathPolicy.ResolveDirectory(exportPath);
+
             if (IsProjectNull())
             {
                 return null;
@@ -1473,6 +1612,8 @@ namespace TiaMcpServer.Siemens
             var success = false;
             try
             {
+                exportPath = OutputPathPolicy.ResolveDirectory(exportPath);
+
                 if (IsProjectNull())
                 {
                     throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
@@ -1570,6 +1711,8 @@ namespace TiaMcpServer.Siemens
         public IEnumerable<PlcBlock>? ExportBlocksAsDocuments(string softwarePath, string exportPath, string regexName = "", bool preservePath = false)
         {
             _logger?.LogInformation("Exporting blocks as documents...");
+
+            exportPath = OutputPathPolicy.ResolveDirectory(exportPath);
 
             if (IsProjectNull())
             {
@@ -3070,6 +3213,8 @@ namespace TiaMcpServer.Siemens
 
             try
             {
+                exportPath = OutputPathPolicy.ResolveDirectory(exportPath);
+
                 if (IsProjectNull())
                 {
                     throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");

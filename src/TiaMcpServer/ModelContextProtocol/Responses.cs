@@ -91,6 +91,22 @@ namespace TiaMcpServer.ModelContextProtocol
     {
     }
 
+    public class ResponseGsdReference
+    {
+        public string? Path { get; set; }
+        public string? Name { get; set; }
+        public string? GsdId { get; set; }
+        public string? GsdName { get; set; }
+        public string? GsdType { get; set; }
+        public bool IsProfibus { get; set; }
+        public bool IsProfinet { get; set; }
+    }
+
+    public class ResponseGsdDependencies : ResponseMessage
+    {
+        public IEnumerable<ResponseGsdReference>? Items { get; set; }
+    }
+
     public class ResponseState : ResponseMessage
     {
         public bool? IsConnected { get; set; }
@@ -115,6 +131,7 @@ namespace TiaMcpServer.ModelContextProtocol
         public string? ProjectPath { get; set; }
         public bool? IsUserInGroup { get; set; }
         public IEnumerable<ResponseTiaInstallation>? Installations { get; set; }
+        public string? ExportRoot { get; set; }
     }
 
     public class ResponseGetProjects : ResponseMessage

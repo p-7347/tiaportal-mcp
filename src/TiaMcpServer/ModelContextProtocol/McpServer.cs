@@ -186,7 +186,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "Doctor", Title = "Diagnose the TIA Portal environment", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Diagnose the TIA-Portal environment: connection, open project, active and installed TIA-Portal versions, Openness user group membership")]
+        [McpServerTool(Name = "Doctor", Title = "Diagnose the TIA Portal environment", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Diagnose the TIA-Portal environment: connection, open project, active and installed TIA-Portal versions, Openness user group membership, and the managed export root folder (all Export* tools write inside it)")]
         public static ResponseDoctor Doctor()
         {
             Logger?.LogInformation("Running TIA Portal diagnostics...");
@@ -205,6 +205,7 @@ namespace TiaMcpServer.ModelContextProtocol
                     ProjectName = report.ProjectName,
                     ProjectPath = report.ProjectPath,
                     IsUserInGroup = report.IsUserInGroup,
+                    ExportRoot = TiaMcpServer.Siemens.OutputPathPolicy.Root,
                     Installations = report.Installations
                         .Select(i => new ResponseTiaInstallation
                         {
@@ -231,7 +232,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region project/session
 
-        [McpServerTool(Name = "GetProject", Title = "Get open project", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get open local project/session")]
+        [McpServerTool(Name = "GetProjects", Title = "List open projects", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("List every open local project/session in this TIA Portal instance. Use GetProject for just the single currently-active one.")]
         public static ResponseGetProjects GetProjects()
         {
             try
@@ -269,6 +270,38 @@ namespace TiaMcpServer.ModelContextProtocol
             catch (Exception ex) when (ex is not McpException)
             {
                 throw new McpException($"Unexpected error retrieving open projects: {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "GetProject", Title = "Get active project", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get the single currently-active project/session this server is attached to. Use GetProjects to list every open project/session instead.")]
+        public static ResponseProjectInfo GetProject()
+        {
+            try
+            {
+                var project = Portal.GetActiveProject();
+
+                if (project == null)
+                {
+                    throw new McpException("No project is open in TIA Portal");
+                }
+
+                var attributes = Helper.GetAttributeList(project);
+
+                return new ResponseProjectInfo
+                {
+                    Name = project.Name,
+                    Attributes = attributes,
+                    Message = "Active project retrieved",
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving active project: {ex.Message}", ex);
             }
         }
 
@@ -616,6 +649,44 @@ namespace TiaMcpServer.ModelContextProtocol
             catch (Exception ex) when (ex is not McpException)
             {
                 throw new McpException($"Unexpected error retrieving devices: {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "GetGsdDependencies", Title = "Get GSD device dependencies", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("List every third-party (GSD-based) device/device item in the project's hardware config, with its GSD identity (GsdId/GsdName/GsdType, Profibus/Profinet) - e.g. before moving a project to another machine, check this list against what's installed there. Only sees devices TIA already loaded successfully; a missing GSD can make TIA fail to instantiate the device at all, in which case it won't show up here either - if GetDevices/GetProject come back empty right after a successful Connect, that's a stronger sign of a missing GSD than an empty result from this tool.")]
+        public static ResponseGsdDependencies GetGsdDependencies(
+            [Description("devicePath: optional - scope the scan to a single device (its name, e.g. 'S7-1500/ET200MP station_1'); omit to scan every device in the project")] string? devicePath = null)
+        {
+            try
+            {
+                var list = Portal.GetGsdDependencies(devicePath);
+
+                var responseList = list.Select(g => new ResponseGsdReference
+                {
+                    Path = g.Path,
+                    Name = g.Name,
+                    GsdId = g.GsdId,
+                    GsdName = g.GsdName,
+                    GsdType = g.GsdType,
+                    IsProfibus = g.IsProfibus,
+                    IsProfinet = g.IsProfinet
+                }).ToList();
+
+                return new ResponseGsdDependencies
+                {
+                    Message = responseList.Count > 0
+                        ? $"Found {responseList.Count} GSD-based device(s)"
+                        : "No GSD-based devices found - every device in scope is a native Siemens catalog device",
+                    Items = responseList,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error scanning for GSD dependencies: {ex.Message}", ex);
             }
         }
 
@@ -1010,7 +1081,7 @@ namespace TiaMcpServer.ModelContextProtocol
         public static ResponseExportBlock ExportBlock(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("blockPath: full path to the block in the project structure, e.g. 'Group/Subgroup/Name' (single names are ambiguous)")] string blockPath,
-            [Description("exportPath: defines the path where to export the block")] string exportPath,
+            [Description("exportPath: relative subfolder name (or omit) under the server-managed export folder (see Doctor's exportRoot) - NOT a full/absolute path")] string exportPath,
             [Description("preservePath: preserves the path/structure of the plc software")] bool preservePath = false)
         {
             try
@@ -1179,7 +1250,7 @@ namespace TiaMcpServer.ModelContextProtocol
         public static async Task<ResponseExportBlocks> ExportBlocks(
             IProgress<ProgressNotificationValue> progress,
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
-            [Description("exportPath: defines the path where to export the blocks")] string exportPath,
+            [Description("exportPath: relative subfolder name (or omit) under the server-managed export folder (see Doctor's exportRoot) - NOT a full/absolute path")] string exportPath,
             [Description("regexName: defines the name or regular expression to find the block. Use empty string (default) to find all")] string regexName = "",
             [Description("preservePath: preserves the path/structure of the plc software")] bool preservePath = false)
         {
@@ -1420,7 +1491,7 @@ namespace TiaMcpServer.ModelContextProtocol
         [McpServerTool(Name = "ExportType", Title = "Export type to XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export a type from the plc software. Same offline-mode requirement as ExportBlock - if it fails because the project is online, tell the user instead of calling GoOffline yourself.")]
         public static ResponseExportType ExportType(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
-            [Description("exportPath: defines the path where export the type")] string exportPath,
+            [Description("exportPath: relative subfolder name (or omit) under the server-managed export folder (see Doctor's exportRoot) - NOT a full/absolute path")] string exportPath,
             [Description("typePath: defines the path in the project structure to the type")] string typePath,
             [Description("preservePath: preserves the path/structure of the plc software")] bool preservePath = false)
         {
@@ -1506,7 +1577,7 @@ namespace TiaMcpServer.ModelContextProtocol
         public static async Task<ResponseExportTypes> ExportTypes(
             IProgress<ProgressNotificationValue> progress,
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
-            [Description("exportPath: defines the path where to export the types")] string exportPath,
+            [Description("exportPath: relative subfolder name (or omit) under the server-managed export folder (see Doctor's exportRoot) - NOT a full/absolute path")] string exportPath,
             [Description("regexName: defines the name or regular expression to find the block. Use empty string (default) to find all")] string regexName = "",
             [Description("preservePath: preserves the path/structure of the plc software")] bool preservePath = false)
         {
@@ -1647,7 +1718,7 @@ namespace TiaMcpServer.ModelContextProtocol
         public static ResponseExportAsDocuments ExportAsDocuments(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("blockPath: defines the path in the project structure to the block")] string blockPath,
-            [Description("exportPath: defines the path where to export the documents")] string exportPath,
+            [Description("exportPath: relative subfolder name (or omit) under the server-managed export folder (see Doctor's exportRoot) - NOT a full/absolute path")] string exportPath,
             [Description("preservePath: preserves the path/structure of the plc software")] bool preservePath = false)
         {
             try
@@ -1683,7 +1754,7 @@ namespace TiaMcpServer.ModelContextProtocol
         public static async Task<ResponseExportBlocksAsDocuments> ExportBlocksAsDocuments(
             IProgress<ProgressNotificationValue> progress,
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
-            [Description("exportPath: defines the path where to export the documents")] string exportPath,
+            [Description("exportPath: relative subfolder name (or omit) under the server-managed export folder (see Doctor's exportRoot) - NOT a full/absolute path")] string exportPath,
             [Description("regexName: defines the name or regular expression to find the block. Use empty string (default) to find all")] string regexName = "",
             [Description("preservePath: preserves the path/structure of the plc software")] bool preservePath = false)
         {
@@ -2121,7 +2192,7 @@ namespace TiaMcpServer.ModelContextProtocol
         public static ResponseExportTagTable ExportTagTable(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("tagTablePath: full path to the tag table, e.g. 'Group/Subgroup/Name'")] string tagTablePath,
-            [Description("exportPath: defines the folder where to export the tag table")] string exportPath,
+            [Description("exportPath: relative subfolder name (or omit) under the server-managed export folder (see Doctor's exportRoot) - NOT a full/absolute path")] string exportPath,
             [Description("preservePath: preserves the tag-table folder structure under exportPath")] bool preservePath = false)
         {
             try

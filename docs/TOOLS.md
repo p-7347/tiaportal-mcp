@@ -16,6 +16,13 @@ work fine either with or without the leading label (see `CHANGES.md`, 2026-09-09
 Legend: **RO** = read-only, **Destructive** = can overwrite/delete something on disk or in the open
 project (never reaches actual PLC hardware - see the "Safety" note at the end).
 
+> **`exportPath` gotcha:** every `Export*` tool writes under a single server-managed export root
+> (`TiaMcpExportRoot` env var, default `%TEMP%\tiaportal-mcp-exports` - see `Doctor`'s `exportRoot`
+> field for the live value). `exportPath` must be a relative subfolder name under that root (or
+> omitted); an absolute path, a different drive, a UNC path, or `..` traversal is rejected with a
+> clear error instead of being written anywhere (see `CHANGES.md` 2026-09-10, closes the same risk
+> as upstream issue #18).
+
 ---
 
 ## Connection
@@ -32,7 +39,8 @@ project (never reaches actual PLC hardware - see the "Safety" note at the end).
 
 | Tool | Flags | Parameters | Notes |
 |---|---|---|---|
-| `GetProject` | RO | - | Lists currently open local projects/sessions with their attributes. |
+| `GetProject` | RO | - | The single currently-attached project/session, with its attributes. Errors if none is open. |
+| `GetProjects` | RO | - | Lists *every* open local project/session in this TIA Portal instance with their attributes. |
 | `OpenProject` | idempotent | `path` - absolute `.apXX` (project) or `.alsXX` (session) path | Closes whatever's open first. `XX` = TIA version, e.g. `.ap20`. |
 | `SaveProject` | **Destructive** | - | Saves the open project, or the local session if one is open. |
 | `SaveAsProject` | **Destructive** | `newProjectPath` | Only valid for projects, not local sessions. |
@@ -46,6 +54,7 @@ project (never reaches actual PLC hardware - see the "Safety" note at the end).
 | `GetDevices` | RO | - | Lists all devices in the project with their attributes. |
 | `GetDeviceInfo` | RO | `devicePath` | Path from `GetProjectTree`/`GetDevices`. Handles device names that themselves contain `/` (e.g. `S7-1500/ET200MP station_1`, see `CHANGES.md` 2026-09-09). |
 | `GetDeviceItemInfo` | RO | `deviceItemPath` | For sub-items of a device (modules, submodules). |
+| `GetGsdDependencies` | RO | `devicePath` (optional - omit to scan the whole project) | Lists third-party (GSD-based) devices/device items with their GsdId/GsdName/GsdType/Profibus·Profinet - check this before moving a project to another machine to see what GSD files need installing there. Only sees devices TIA already loaded successfully - if a missing GSD stops TIA from instantiating a device at all, it won't show up here either; an empty `GetDevices`/`GetProject` right after a successful `Connect` is the stronger signal for that (see `CHANGES.md` 2026-09-10, the "Projects/LocalSessions empty" writeup). |
 | `GetOnlineState` | RO | `path` (device or device item) | Reads the engineering station's own online/diagnostic connection state (`Offline`/`Connecting`/`Online`/...) - unrelated to whether the PLC itself is Run/Stop. Tries a Device first, then a DeviceItem (e.g. the CPU module, like `PLC_1`) at the same path. |
 | `GoOnline` | idempotent | `path` (device or device item) | Establishes that connection. Fails with TIA's own error if the target isn't reachable/configured (e.g. PLCSIM Advanced instance not running) - a real Openness error, not a bug in this tool. |
 | `GoOffline` | idempotent | `path` (device or device item) | Disconnects it; a no-op if already offline. |
