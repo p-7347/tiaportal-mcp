@@ -113,6 +113,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
     public class ResponseNetworkInterfaceInfo : ResponseMessage
     {
+        public string? ResolvedPath { get; set; }
         public string? InterfaceType { get; set; }
         public IEnumerable<ResponseNetworkNodeInfo>? Nodes { get; set; }
         public int? PortCount { get; set; }

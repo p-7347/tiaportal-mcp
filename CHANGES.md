@@ -5,6 +5,39 @@
 
 ---
 
+## [2026-09-10] `GetNetworkInterfaceInfo` 경로 자동 탐색 (실사용 테스트에서 발견된 버그 수정)
+
+오늘 오후 만든 네트워크 토폴로지 기능을 실제 Claude Desktop 세션(원격 환경)에서 실사용
+테스트하던 중 발견 - HMI 쪽 네트워크 인터페이스 경로를 6번 연속 잘못 추측하다가(`HMI_1/
+HMI_1.IE_CP_1`, `HMI_1/HMI_1/HMI_1.IE_CP_1` 등) 결국 실패하고, 6만자짜리 `GetProjectTree`
+전체를 불러서(토큰 초과로 파일로 빠짐) 겨우 경로를 알아내는 걸 실측으로 확인함. PLC는
+`PLC_1/PROFINET interface_1`처럼 1단계만 내려가면 되는데 HMI는 `HMI_1/HMI_1.IE_CP_1/PROFINET
+Interface_1`처럼 2단계를 내려가야 해서, 디바이스 종류마다 깊이가 달라 정확한 이름을 몰랐다면
+그냥 못 맞히는 구조였음.
+
+### 수정
+- `GetNetworkInterfaceInfo`가 이제 정확한 인터페이스 DeviceItem 경로가 아니어도 됨 - 디바이스나
+  상위 DeviceItem 경로만 줘도 그 밑을 재귀적으로 탐색해서 `NetworkInterface` 서비스가 있는
+  DeviceItem을 자동으로 찾음.
+  - 후보가 정확히 1개면 자동으로 그걸 사용(응답의 `resolvedPath`에 실제 사용된 경로 표시).
+  - 후보가 여러 개면(예: 디바이스에 인터페이스 카드가 2개) 전부 나열한 에러로 거부 - `Connect`가
+    여러 TIA 인스턴스일 때 모호하면 목록 던지고 거부하던 것과 같은 패턴.
+  - 정확한 경로를 그대로 주면 기존과 동일하게 즉시 동작(빠른 경로 유지).
+- 기존 함수 시그니처를 `(NetworkInterface, string ResolvedPath)` 튜플로 변경, McpServer.cs도
+  같이 정리.
+
+### 라이브 검증 (Tia for Claude, PID 41948)
+- `GetNetworkInterfaceInfo("HMI_1")`(최상위 디바이스명만) → 모호성 정확히 감지, 실제 후보 2개
+  나열: `HMI_1/HMI_1.IE_CP_1/PROFINET Interface_1`, `HMI_1/HMI_1.IE_CP_2/PROFINET Interface_GBit`.
+- `GetNetworkInterfaceInfo("HMI_1/HMI_1.IE_CP_1")`(한 단계 부족한 경로, 원래 세션에서 실패했던
+  바로 그 경로) → 자동으로 `.../PROFINET Interface_1`까지 찾아서 실제 IP `192.168.1.201` 정상
+  반환. 예전엔 6번 시도 다 실패했던 걸 이제 한 번에 성공.
+- `GetNetworkInterfaceInfo("S7-1500/ET200MP station_1/PLC_1")` → 모호성 감지, 미처 몰랐던 3번째
+  인터페이스(`PROFINET interface GBIT_3`)까지 자동 탐색으로 발견해서 후보 3개 나열.
+- 기존 정확 경로(`.../PROFINET interface_1`) 그대로 입력 → 회귀 없이 여전히 정상 동작 확인.
+
+---
+
 ## [2026-09-10] 네트워크 토폴로지 읽기 전용 조회 (`GetSubnets`/`GetNetworkInterfaceInfo`)
 
 태그 CRUD 다음으로 사용자가 요청한 네트워크 토폴로지/디바이스 구성 조사의 첫 단계 - 읽기 전용만

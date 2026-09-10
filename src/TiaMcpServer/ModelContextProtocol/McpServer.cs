@@ -721,17 +721,13 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GetNetworkInterfaceInfo", Title = "Get network interface info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get network topology info (nodes, connected subnet, IO controller/connector role, port count) for a device's network interface. The interface is usually a DeviceItem nested inside a CPU/module - use GetProjectTree to find its exact name and path (e.g. 'S7-1500/ET200MP station_1/PLC_1/PROFINET interface_1'), it's not the same path as softwarePath.")]
+        [McpServerTool(Name = "GetNetworkInterfaceInfo", Title = "Get network interface info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get network topology info (nodes, connected subnet, IO controller/connector role, port count) for a device's network interface. path doesn't need to be the exact interface DeviceItem - give a device or device item path (e.g. just the device name, or 'PLC_1') and it auto-searches nested DeviceItems for the interface, since the interface sits at a different depth depending on device type. Check resolvedPath in the response to see what was actually used. Errors list every interface found if the given path is ambiguous (multiple interfaces underneath it).")]
         public static ResponseNetworkInterfaceInfo GetNetworkInterfaceInfo(
-            [Description("path: full nested path to the network interface DeviceItem, e.g. 'S7-1500/ET200MP station_1/PLC_1/PROFINET interface_1'")] string path)
+            [Description("path: a device or device item path, e.g. 'S7-1500/ET200MP station_1/PLC_1' or just 'HMI_1' - doesn't need to be the exact interface DeviceItem")] string path)
         {
             try
             {
-                var iface = Portal.GetNetworkInterfaceInfo(path);
-                if (iface == null)
-                {
-                    throw new McpException($"Network interface not found at '{path}', or it has no network interface service");
-                }
+                var (iface, resolvedPath) = Portal.GetNetworkInterfaceInfo(path);
 
                 var nodes = iface.Nodes.Select(n => new ResponseNetworkNodeInfo
                 {
@@ -742,7 +738,10 @@ namespace TiaMcpServer.ModelContextProtocol
 
                 return new ResponseNetworkInterfaceInfo
                 {
-                    Message = $"Network interface info retrieved for '{path}'",
+                    Message = resolvedPath == path
+                        ? $"Network interface info retrieved for '{path}'"
+                        : $"Network interface info retrieved - resolved '{path}' to '{resolvedPath}'",
+                    ResolvedPath = resolvedPath,
                     InterfaceType = iface.InterfaceType.ToString(),
                     Nodes = nodes,
                     PortCount = iface.Ports.Count(),
@@ -750,6 +749,10 @@ namespace TiaMcpServer.ModelContextProtocol
                     IoConnectorOfIoSystem = iface.IoConnectors.FirstOrDefault()?.ConnectedToIoSystem?.Name,
                     Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
                 };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {

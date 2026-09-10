@@ -814,20 +814,86 @@ namespace TiaMcpServer.Siemens
             return list;
         }
 
-        // path: full nested path to the interface DeviceItem, e.g.
-        // "S7-1500/ET200MP station_1/PLC_1/PROFINET interface_1" - use GetProjectTree to find it
-        // (look for a DeviceItem whose name matches the interface shown under a CPU/module).
-        public NetworkInterface? GetNetworkInterfaceInfo(string path)
+        // path: a device or device item path - doesn't need to be the exact interface DeviceItem.
+        // The network interface sits at an inconsistent depth depending on device type (e.g. one
+        // level under a PLC's CPU DeviceItem, two levels under an HMI's communication-processor
+        // DeviceItem) - live testing showed an agent burning several failed guesses and a full
+        // GetProjectTree call trying to find the exact nested name by hand. So: try path as an
+        // exact match first (fast path for a name copied straight out of GetProjectTree), and if
+        // that doesn't itself carry a NetworkInterface, search every DeviceItem nested under it
+        // and auto-resolve if exactly one is found. Returns the resolved path alongside the
+        // interface so the caller can see what was actually used when it wasn't an exact match.
+        public (NetworkInterface Interface, string ResolvedPath) GetNetworkInterfaceInfo(string path)
         {
             _logger?.LogInformation($"Getting network interface info for: {path}");
 
             if (IsProjectNull())
             {
-                return null;
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
             }
 
-            var deviceItem = FindDeviceItemByFullPath(path);
-            return deviceItem?.GetService<NetworkInterface>();
+            var itemRoot = FindDeviceItemByFullPath(path);
+            Device? deviceRoot = null;
+
+            if (itemRoot != null)
+            {
+                var directIface = itemRoot.GetService<NetworkInterface>();
+                if (directIface != null)
+                {
+                    return (directIface, path);
+                }
+            }
+            else
+            {
+                deviceRoot = FindDeviceByFullName(path) ?? GetDeviceByPath(path);
+            }
+
+            if (itemRoot == null && deviceRoot == null)
+            {
+                throw new PortalException(PortalErrorCode.NotFound, $"Device or device item not found at '{path}'");
+            }
+
+            var childItems = itemRoot?.DeviceItems ?? deviceRoot?.DeviceItems;
+            var candidates = new List<(DeviceItem Item, string Path)>();
+            if (childItems != null)
+            {
+                foreach (var child in childItems)
+                {
+                    CollectNetworkInterfaceDeviceItems(child, path, candidates);
+                }
+            }
+
+            if (candidates.Count == 0)
+            {
+                throw new PortalException(PortalErrorCode.NotFound, $"No network interface found at or under '{path}' - try GetProjectTree to locate the exact DeviceItem");
+            }
+
+            if (candidates.Count > 1)
+            {
+                var list = string.Join("; ", candidates.Select(c => c.Path));
+                throw new PortalException(PortalErrorCode.InvalidParams, $"Multiple network interfaces found under '{path}' - pass one of these as path: {list}");
+            }
+
+            var (foundItem, resolvedPath) = candidates[0];
+            return (foundItem.GetService<NetworkInterface>()!, resolvedPath);
+        }
+
+        private void CollectNetworkInterfaceDeviceItems(DeviceItem item, string parentPath, List<(DeviceItem Item, string Path)> results)
+        {
+            var path = $"{parentPath}/{item.Name}";
+
+            if (item.GetService<NetworkInterface>() != null)
+            {
+                results.Add((item, path));
+            }
+
+            if (item.DeviceItems != null)
+            {
+                foreach (var child in item.DeviceItems)
+                {
+                    CollectNetworkInterfaceDeviceItems(child, path, results);
+                }
+            }
         }
 
         /// <summary>

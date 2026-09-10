@@ -275,13 +275,31 @@ Priority order for picking pieces up ourselves, each to go through this project'
       `255.255.255.0`, correctly identified as the IO Controller; on the HMI's interface, real IP
       `192.168.1.201`, correctly *not* flagged as a controller. Both 3-level nested paths resolved
       correctly by the new recursive helper.
+    - **Follow-up fix (2026-09-10, same day)**: real Claude Desktop usage testing found that an
+      agent given a natural request had to guess the exact interface DeviceItem path and failed
+      6 times in a row for an HMI (interfaces sit 1 level deep under a PLC's CPU DeviceItem but 2
+      levels deep under an HMI's communication-processor DeviceItem, so a name guessed from the
+      PLC pattern doesn't generalize), before falling back to a 61k-character `GetProjectTree`
+      call that blew past the client's token limit. Fixed by making `GetNetworkInterfaceInfo`
+      accept *any* device/device-item path and auto-search nested DeviceItems for the interface:
+      exactly one candidate found → auto-resolves (response's `resolvedPath` shows what was
+      actually used); multiple found → rejected with every candidate's full path listed (same
+      "list candidates, don't guess" pattern as `Connect`'s multi-instance handling). Live-verified
+      the exact previously-failing path (`HMI_1/HMI_1.IE_CP_1`) now auto-resolves in one call, a
+      bare device name (`HMI_1`) correctly reports ambiguity with real candidate paths, and the
+      old exact-path behavior still works unchanged (regression check).
     - **Write side deliberately not pursued yet** (device creation/deletion, IP/subnet
       reassignment, `ImportGsdFile`) - different risk shape than block/tag CRUD, since it can
       affect how the project matches physical hardware in a way that's harder to eyeball-verify
-      than a block/tag diff. Revisit only if a concrete need shows up; would need its own scoping
-      pass (PR #26's method list for this: `CreateDevice`/`DeleteDevice`/`CreateDeviceGroup`/
-      `GetModules`/`GetModuleInfo`/`GetAddresses`/`SetIpAddress`/`ConnectToSubnet`/
-      `ImportGsdFile` - not yet independently verified against the real API).
+      than a block/tag diff. Did read PR #26's actual diff for these (not just the commit
+      message/method list) - `SetIpAddress` calls `node.SetAttribute("Address"/"SubnetMask"/
+      "RouterAddress", ...)` on every node under the target interface, `ConnectToSubnet` calls a
+      `node.ConnectToSubnet(subnet)` method (not previously found by our own reflection pass -
+      worth confirming it's real before relying on it), `DeleteDevice` is just `device.Delete()`,
+      `ImportGsdFile` calls `((Project)_project).InstallGsdFile(new FileInfo(path))`,
+      `CreateDeviceGroup` mirrors the block/type/tag group-creation pattern already used
+      elsewhere. None of this has been independently reflection-verified or implemented yet -
+      revisit only if a concrete need shows up.
 
 ## Documentation
 - [ ] Add a "CLI Options" section to `README.md` documenting `--tia-major-version <int>` and `--logging <1|2|3>` with defaults and effect (1=stderr, 2=Debug, 3=Event Log). Cross-link to samples.
