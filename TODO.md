@@ -2,6 +2,17 @@
 
 Centralized list of actionable improvements gathered from initial repo review. Use this to track, prioritize, and reference across PRs. See file paths in backticks.
 
+## Open bug: Attach succeeds but Projects/LocalSessions empty for a specific TIA instance
+
+Found while verifying multi-instance `Connect(processId)` (see `CHANGES.md` 2026-09-10). One of
+two open TIA Portal instances (a project opened from a `카카오톡 받은 파일` folder) attaches fine
+but `_portal.Projects`/`_portal.LocalSessions` both report empty even though that TIA window
+visibly has the project and a block editor open. 5 hypotheses ruled out (elevation, Multiuser/
+`ProjectServers`, how the file was opened, timing/race, a blocking modal) - see `CHANGES.md` for
+detail and the reproduction. Unsolved; needs either a second real-world repro to compare against,
+or visibility into TIA Portal's own internal state that isn't available through this codebase's
+current tools.
+
 ## Multi-instance selection + cross-project compare (2026-09-10 idea, not started)
 
 Not needed right now - noted for later.

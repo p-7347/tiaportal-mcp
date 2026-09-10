@@ -5,6 +5,52 @@
 
 ---
 
+## [2026-09-10] 알려진 한계: 특정 TIA 인스턴스에서 Attach는 되는데 Projects/LocalSessions가 비어 보임 (미해결)
+
+### 증상
+- 방금 만든 다중 인스턴스 선택(`ListTiaPortalInstances`/`Connect(processId)`) 기능을
+  실제로 TIA Portal 2개(서로 다른 프로젝트) 띄워놓고 검증하던 중 발견.
+- `id=15676` (Mahindra_CPU01_V20_260909_k1_002) → `Connect`/`GetProject`/`GetState`
+  전부 정상.
+- `id=46056` (부대설비_Ver4.0.ap20, `Documents\카카오톡 받은 파일\...`) → `Connect`
+  자체는 성공(`isConnected: true`)하는데, `GetProject`/`GetState`가 계속
+  `items: []` / `project: "-"` — **실제로는 그 TIA 창에 프로젝트가 정상적으로 열려
+  있고 펑션블록 에디터까지 열려 있는 상태**였음(사용자가 스크린샷으로 직접 확인,
+  하단 상태바에 "Project '부대설비_Ver4.0' opened" 표시됨).
+
+### 원인 조사 — 5가지 가설 전부 기각됨
+1. **권한/관리자 레벨 차이** — 두 프로세스 다 `NotElevated`, 같은 사용자 소유. 기각.
+2. **Multiuser(`ProjectServers`)** — 두 인스턴스 다 동일하게 `ProjectServers=1`
+   ("Local Project Server", `net.tcp://localhost/:9237`)이 떠있고, 이건
+   `GetCompositionInfos()`가 빈 목록을 반환하고 `GetComposition("LocalSessions")`도
+   "지원 안 됨" 에러 — 실제 프로젝트와 무관한 TIA의 백그라운드 서비스로 확인. 기각.
+3. **여는 방식(탐색기 더블클릭 vs TIA 내부 File > Open)** — 사용자가 TIA 안에서
+   Close Project 후 File > Open으로 재현했으나 동일하게 재현됨. 기각.
+4. **타이밍/레이스 컨디션** — 연결 직후, 2초 후, 재연결 후 3번 모두 동일하게
+   `items: []`. 기각.
+5. **모달 대화상자가 막고 있음** — 사용자가 확인, 막고 있는 대화상자 없음. 기각.
+
+### 결론
+- 원인 불명 — Openness API 자체의 엣지 케이스로 보이나, 이 리포지토리의 도구만으로는
+  더 깊이 들어가기 어려움 (TIA Portal 내부 상태/로그에 대한 가시성이 없음).
+- **다중 인스턴스 선택 기능 자체(`ListTiaPortalInstances`/`Connect(processId)`)는
+  정상 작동 확인됨** — 정확한 PID에 Attach되는 것까지는 매번 성공. 이건 그 위에서
+  우연히 발견된, 특정 TIA 인스턴스에 한정된 별개의 문제.
+- 재현 조건: 두 번째로 띄운 TIA Portal 인스턴스, `카카오톡 받은 파일` 폴더에서 받은
+  `.ap20` 파일. 최초 원본 인스턴스(Mahindra)는 항상 정상.
+
+### 다음에 다시 파볼 때 참고할 것
+- 임시 진단 코드(`_portal.LocalSessions.Count`/`Projects.Count`/`ProjectServers.Count`
+  로깅, `ProjectServer`의 컴포지션 탐색)를 넣었다 뺐음 — 재현 시 같은 코드를
+  `ConnectPortal()`의 `Attach()` 직후에 다시 넣으면 빠르게 재현 가능.
+  Git 이력에는 없음(커밋 전에 되돌림) — 이 항목의 진단 로그가 필요하면 이 설명을
+  참고해서 다시 작성할 것.
+- 다음에 볼만한 것: TIA Portal 자체의 이벤트 뷰어/로그, 혹은 그 프로젝트 파일이
+  원래 다른 TIA 버전에서 만들어져 처음 열 때 마이그레이션이 필요했는지 여부
+  (아직 확인 안 함).
+
+---
+
 ## [2026-09-10] TIA Portal 여러 개 떠있을 때 선택 연결 (ListTiaPortalInstances/Connect processId)
 
 ### 배경
