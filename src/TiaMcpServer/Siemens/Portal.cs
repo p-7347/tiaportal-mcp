@@ -157,6 +157,13 @@ namespace TiaMcpServer.Siemens
                 .ToList();
         }
 
+        /// <summary>Human-readable "Id=X (path)" list, embedded directly in Connect's rejection
+        /// messages so a bad/ambiguous processId is self-explanatory without a second call.</summary>
+        private static string DescribeProcesses(IEnumerable<TiaPortalProcess> processes)
+        {
+            return string.Join("; ", processes.Select(p => $"Id={p.Id} ({p.ProjectPath?.FullName ?? "no project open"})"));
+        }
+
         public bool ConnectPortal(int? processId = null)
         {
             _logger?.LogInformation(processId.HasValue
@@ -175,17 +182,20 @@ namespace TiaMcpServer.Siemens
                 if (processId.HasValue)
                 {
                     targetProcess = processes.FirstOrDefault(p => p.Id == processId.Value)
-                        ?? throw new PortalException(PortalErrorCode.NotFound, $"No running TIA Portal process with Id {processId.Value}");
+                        ?? throw new PortalException(PortalErrorCode.NotFound,
+                            $"No running TIA Portal process with Id {processId.Value}. Running processes: {DescribeProcesses(processes)}");
                 }
                 else
                 {
                     // No selection given and more than one instance is running - which one we'd
                     // silently attach to is arbitrary, so make the caller choose explicitly via
-                    // GetTiaPortalProcesses()/processId instead of guessing.
+                    // processId instead of guessing. Include the list right here so a human/agent
+                    // doesn't need a second round trip through GetTiaPortalProcesses() just to see
+                    // why this was rejected.
                     if (processes.Count() > 1)
                     {
                         throw new PortalException(PortalErrorCode.InvalidParams,
-                            "Multiple TIA Portal processes are running - call GetTiaPortalProcesses() to list them, then Connect with a specific processId.");
+                            $"Multiple TIA Portal processes are running - pass one of these as processId to Connect: {DescribeProcesses(processes)}");
                     }
 
                     targetProcess = processes.First();
