@@ -99,6 +99,19 @@ project (never reaches actual PLC hardware - see the "Safety" note at the end).
 | `ExportTypes` | **Destructive**, async w/ progress | `softwarePath`, `exportPath`, `regexName` (optional), `preservePath` (optional) | Bulk export, same inconsistent-item handling as `ExportBlocks`. |
 | `GetTypeCrossReferences` | RO | `softwarePath`, `typePath` | Same as `GetBlockCrossReferences` but for a PLC data type (UDT). Note: an FB used as an instance type is a *block*, not a type - use `GetBlockCrossReferences` for those (e.g. `Main_Tracking_Data`). |
 
+## External sources (SCL/AWL/GRAPH import, SCL export)
+
+`PlcExternalSource` (the imported source object) has no export method itself - export goes
+through existing blocks/types instead, see `ExportSourceFromBlocks`.
+
+| Tool | Flags | Parameters | Notes |
+|---|---|---|---|
+| `GetExternalSources` | RO | `softwarePath`, `regexName` (optional) | |
+| `ImportExternalSource` | **Destructive**, writes to project | `softwarePath`, `groupPath`, `importPath` (local file), `sourceName` (optional) | Adds a source object only - does not create/change any blocks by itself. |
+| `GenerateBlocksFromSource` | **Destructive**, writes to project | `softwarePath`, `sourcePath`, `keepOnError` (optional) | The real write step - compiles the source into real blocks/types, which can create new ones or **overwrite existing ones of the same name**. Highest-risk tool in this group; confirm with the user before using it against a real (non-disposable) project. |
+| `DeleteExternalSource` | **Destructive** | `softwarePath`, `sourcePath` | Removes the source object only - blocks already generated from it are unaffected. |
+| `ExportSourceFromBlocks` | **Destructive** (writes to disk only, doesn't touch the project) | `softwarePath`, `exportPath`, `fileName`, `blockPaths` (optional), `typePaths` (optional), `withDependencies` (optional) | Exports existing blocks/types as combined SCL text. Give at least one of `blockPaths`/`typePaths`. |
+
 ## Documents (.s7dcl/.s7res) - **requires TIA Portal V20+**
 
 SIMATIC SD document format, mainly useful for round-tripping SCL logic through text-based tools.
@@ -133,6 +146,17 @@ Classic WinCC Comfort/Basic panels use a different Openness API and aren't cover
 > exact DeviceItem name under the HMI device (look for `HmiSoftware: ... [HMI Program]` in the
 > tree). Also **no export tool** - `HmiTagTable` has no `Export()` method in this Openness version
 > (unlike `PlcTagTable`), verified via reflection - not just missing, unsupported here.
+
+## HMI screens/alarms/text lists (Unified Comfort/Advanced Panels only)
+
+Same `softwarePath` rule as HMI tag tables (e.g. `"HMI_1/HMI_RT_1"`). All read-only.
+
+| Tool | Flags | Parameters | Notes |
+|---|---|---|---|
+| `GetHmiScreens` | RO | `softwarePath`, `regexName` (optional) | Name, display name, screen number, width/height. |
+| `GetHmiDiscreteAlarms` | RO | `softwarePath`, `regexName` (optional) | Bit-triggered alarms: event/info text, alarm class, area, priority, trigger bit address. |
+| `GetHmiAnalogAlarms` | RO | `softwarePath`, `regexName` (optional) | Limit-triggered alarms: same fields plus `condition` (the comparison type) and a plain trigger address. |
+| `GetHmiTextLists` | RO | `softwarePath`, `regexName` (optional) | **Names only** - this Openness version has no type for individual text list entries/values (verified by enumerating every type in the installed DLL), so entry contents aren't reachable at all. |
 
 ---
 

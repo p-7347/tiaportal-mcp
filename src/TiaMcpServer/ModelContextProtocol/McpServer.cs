@@ -5,6 +5,7 @@ using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using Siemens.Engineering.SW;
 using Siemens.Engineering.SW.Blocks;
+using Siemens.Engineering.SW.Types;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -2101,6 +2102,174 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #endregion
 
+        #region external sources (SCL import/export)
+
+        [McpServerTool(Name = "GetExternalSources"), Description("Get a list of external sources (imported SCL/AWL/GRAPH source files) in plc software")]
+        public static ResponseExternalSources GetExternalSources(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("regexName: defines the name or regular expression to find the external source. Use empty string (default) to find all")] string regexName = "")
+        {
+            try
+            {
+                var list = Portal.GetExternalSources(softwarePath, regexName);
+
+                var responseList = list
+                    .Where(source => source != null)
+                    .Select(source => new ResponseExternalSourceInfo
+                    {
+                        Name = source.Name,
+                        Attributes = Helper.GetAttributeList(source)
+                    })
+                    .ToList();
+
+                return new ResponseExternalSources
+                {
+                    Message = $"External sources with regex '{regexName}' retrieved from '{softwarePath}'",
+                    Items = responseList,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving external sources with regex '{regexName}' in '{softwarePath}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "ImportExternalSource", Title = "Import external source", Destructive = false, Idempotent = false, OpenWorld = false), Description("Import a local SCL/AWL/GRAPH source file into the project as a named external source. This only adds the source object - it does not create or change any blocks by itself; call GenerateBlocksFromSource afterward to compile it. Writing/mutating tool - confirm with the user before calling this against a real project, not just a disposable test one.")]
+        public static ResponseImportExternalSource ImportExternalSource(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("groupPath: path to the external source group to import into, e.g. 'Group/Subgroup' (empty for the root group)")] string groupPath,
+            [Description("importPath: full path to the local source file (.scl/.awl/.gr7/...)")] string importPath,
+            [Description("sourceName: name for the created external source; defaults to the import file's name without extension")] string? sourceName = null)
+        {
+            try
+            {
+                var source = Portal.ImportExternalSource(softwarePath, groupPath, importPath, sourceName);
+
+                return new ResponseImportExternalSource
+                {
+                    Message = $"External source '{source.Name}' imported from '{importPath}'",
+                    Name = source.Name,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error importing external source from '{importPath}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "GenerateBlocksFromSource", Title = "Generate blocks from source", Destructive = true, Idempotent = false, OpenWorld = false), Description("Compile an already-imported external source into real PLC blocks/types - this can create NEW blocks/types or OVERWRITE existing ones of the same name. Writing/mutating tool with real risk to the project's logic - confirm with the user and get an explicit go-ahead against a disposable/test project before calling this for the first time, not a real production project.")]
+        public static ResponseGenerateBlocksFromSource GenerateBlocksFromSource(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("sourcePath: full path to the external source, e.g. 'Group/Subgroup/Name'")] string sourcePath,
+            [Description("keepOnError: if true, keep whatever blocks were generated even if some failed; if false (default) roll back all generated blocks on any error")] bool keepOnError = false)
+        {
+            try
+            {
+                var generated = Portal.GenerateBlocksFromSource(softwarePath, sourcePath, keepOnError);
+
+                var names = generated
+                    .Select(o => (o as PlcBlock)?.Name ?? (o as PlcType)?.Name ?? o.ToString() ?? "?")
+                    .ToList();
+
+                return new ResponseGenerateBlocksFromSource
+                {
+                    Message = $"Generated {names.Count} object(s) from source '{sourcePath}'",
+                    GeneratedObjectNames = names,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error generating blocks from source '{sourcePath}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "DeleteExternalSource", Title = "Delete external source", Destructive = true, Idempotent = true, OpenWorld = false), Description("Delete an external source object from the project (the source object only - does not affect blocks already generated from it). Writing/mutating tool - confirm with the user before calling this against a real project.")]
+        public static ResponseDeleteExternalSource DeleteExternalSource(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("sourcePath: full path to the external source, e.g. 'Group/Subgroup/Name'")] string sourcePath)
+        {
+            try
+            {
+                Portal.DeleteExternalSource(softwarePath, sourcePath);
+
+                return new ResponseDeleteExternalSource
+                {
+                    Message = $"External source '{sourcePath}' deleted",
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error deleting external source '{sourcePath}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "ExportSourceFromBlocks", Title = "Export blocks/types as SCL source", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export existing blocks and/or types as combined SCL source text to a file - the real 'export SCL' path, since external source objects themselves can't be exported. Give at least one of blockPaths/typePaths.")]
+        public static ResponseExportSourceFromBlocks ExportSourceFromBlocks(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("exportPath: relative subfolder name (or omit) under the server-managed export folder (see Doctor's exportRoot) - NOT a full/absolute path")] string exportPath,
+            [Description("fileName: name for the generated .scl file, without extension")] string fileName,
+            [Description("blockPaths: full paths of blocks to include, e.g. 'Group/Subgroup/Name' (optional if typePaths is given)")] string[]? blockPaths = null,
+            [Description("typePaths: full paths of types to include (optional if blockPaths is given)")] string[]? typePaths = null,
+            [Description("withDependencies: also include each object's dependencies in the generated source")] bool withDependencies = false)
+        {
+            try
+            {
+                Portal.ExportSourceFromBlocks(softwarePath, blockPaths ?? [], typePaths ?? [], exportPath, fileName, withDependencies);
+
+                return new ResponseExportSourceFromBlocks
+                {
+                    Message = $"Source exported to '{exportPath}/{fileName}.scl'",
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error exporting source from '{softwarePath}': {ex.Message}", ex);
+            }
+        }
+
+        #endregion
+
         #region tag tables
 
         [McpServerTool(Name = "GetTagTables"), Description("Get a list of tag tables in plc software")]
@@ -2308,6 +2477,160 @@ namespace TiaMcpServer.ModelContextProtocol
             catch (Exception ex) when (ex is not McpException)
             {
                 throw new McpException($"Unexpected error retrieving HMI tags from '{tagTablePath}' in '{softwarePath}': {ex.Message}", ex);
+            }
+        }
+
+        #endregion
+
+        #region hmi screens/alarms/text lists
+
+        [McpServerTool(Name = "GetHmiScreens"), Description("Get a list of screens in a device's HMI software (Unified Comfort/Advanced Panels only)")]
+        public static ResponseHmiScreens GetHmiScreens(
+            [Description("softwarePath: defines the path in the project structure to the HMI device/device item, e.g. 'HMI_1/HMI_RT_1'")] string softwarePath,
+            [Description("regexName: defines the name or regular expression to find the screen. Use empty string (default) to find all")] string regexName = "")
+        {
+            try
+            {
+                var list = Portal.GetHmiScreens(softwarePath, regexName);
+
+                var responseList = list
+                    .Where(screen => screen != null)
+                    .Select(screen => new ResponseHmiScreenInfo
+                    {
+                        Name = screen.Name,
+                        DisplayName = Helper.MultilingualTextToString(screen.DisplayName),
+                        ScreenNumber = screen.ScreenNumber,
+                        Width = screen.Width,
+                        Height = screen.Height
+                    })
+                    .ToList();
+
+                return new ResponseHmiScreens
+                {
+                    Message = $"HMI screens with regex '{regexName}' retrieved from '{softwarePath}'",
+                    Items = responseList,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving HMI screens with regex '{regexName}' in '{softwarePath}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "GetHmiDiscreteAlarms"), Description("Get a list of discrete (bit-triggered) alarms from a device's HMI software (Unified Comfort/Advanced Panels only)")]
+        public static ResponseHmiAlarms GetHmiDiscreteAlarms(
+            [Description("softwarePath: defines the path in the project structure to the HMI device/device item, e.g. 'HMI_1/HMI_RT_1'")] string softwarePath,
+            [Description("regexName: defines the name or regular expression to find the alarm. Use empty string (default) to find all")] string regexName = "")
+        {
+            try
+            {
+                var list = Portal.GetHmiDiscreteAlarms(softwarePath, regexName);
+
+                var responseList = list
+                    .Where(alarm => alarm != null)
+                    .Select(alarm => new ResponseHmiAlarmInfo
+                    {
+                        Name = alarm.Name,
+                        EventText = Helper.MultilingualTextToString(alarm.EventText),
+                        InfoText = Helper.MultilingualTextToString(alarm.InfoText),
+                        AlarmClass = alarm.AlarmClass,
+                        Area = alarm.Area,
+                        Priority = alarm.Priority,
+                        TriggerAddress = alarm.TriggerBitAddress
+                    })
+                    .ToList();
+
+                return new ResponseHmiAlarms
+                {
+                    Message = $"HMI discrete alarms with regex '{regexName}' retrieved from '{softwarePath}'",
+                    Items = responseList,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving HMI discrete alarms with regex '{regexName}' in '{softwarePath}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "GetHmiAnalogAlarms"), Description("Get a list of analog (limit-triggered) alarms from a device's HMI software (Unified Comfort/Advanced Panels only)")]
+        public static ResponseHmiAlarms GetHmiAnalogAlarms(
+            [Description("softwarePath: defines the path in the project structure to the HMI device/device item, e.g. 'HMI_1/HMI_RT_1'")] string softwarePath,
+            [Description("regexName: defines the name or regular expression to find the alarm. Use empty string (default) to find all")] string regexName = "")
+        {
+            try
+            {
+                var list = Portal.GetHmiAnalogAlarms(softwarePath, regexName);
+
+                var responseList = list
+                    .Where(alarm => alarm != null)
+                    .Select(alarm => new ResponseHmiAlarmInfo
+                    {
+                        Name = alarm.Name,
+                        EventText = Helper.MultilingualTextToString(alarm.EventText),
+                        InfoText = Helper.MultilingualTextToString(alarm.InfoText),
+                        AlarmClass = alarm.AlarmClass,
+                        Area = alarm.Area,
+                        Priority = alarm.Priority,
+                        TriggerAddress = alarm.TriggerAddress,
+                        Condition = alarm.Condition.ToString()
+                    })
+                    .ToList();
+
+                return new ResponseHmiAlarms
+                {
+                    Message = $"HMI analog alarms with regex '{regexName}' retrieved from '{softwarePath}'",
+                    Items = responseList,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving HMI analog alarms with regex '{regexName}' in '{softwarePath}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "GetHmiTextLists"), Description("Get a list of text list names from a device's HMI software (Unified Comfort/Advanced Panels only). Names only - this Openness version has no way to read individual text list entries/values.")]
+        public static ResponseHmiTextLists GetHmiTextLists(
+            [Description("softwarePath: defines the path in the project structure to the HMI device/device item, e.g. 'HMI_1/HMI_RT_1'")] string softwarePath,
+            [Description("regexName: defines the name or regular expression to find the text list. Use empty string (default) to find all")] string regexName = "")
+        {
+            try
+            {
+                var list = Portal.GetHmiTextLists(softwarePath, regexName);
+
+                var responseList = list
+                    .Where(textList => textList != null)
+                    .Select(textList => new ResponseHmiTextListInfo { Name = textList.Name })
+                    .ToList();
+
+                return new ResponseHmiTextLists
+                {
+                    Message = $"HMI text lists with regex '{regexName}' retrieved from '{softwarePath}'",
+                    Items = responseList,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving HMI text lists with regex '{regexName}' in '{softwarePath}': {ex.Message}", ex);
             }
         }
 

@@ -5,6 +5,46 @@
 
 ---
 
+## [2026-09-10] SCL 외부 소스 import/export + HMI 화면/알람/텍스트리스트 조회
+
+Upstream 로드맵 6번(외부 소스 import/export, PR #26 + 이슈 #22)과 7번(HMI 화면/알람/텍스트리스트,
+PR #26) 구현. 사용자가 실제로 "Tia for Claude"라는 이름으로 Mahindra 프로젝트를 복제한 테스트용
+사본을 띄워줘서, 쓰기 작업(외부 소스 import + 블록 생성)까지 실제 프로젝트에 영향 없이 라이브로
+검증함.
+
+### SCL 외부 소스 (`Siemens.Engineering.SW.ExternalSources`)
+- `GetExternalSources`/`ImportExternalSource`/`GenerateBlocksFromSource`/`DeleteExternalSource`/
+  `ExportSourceFromBlocks` 5개 툴 추가.
+- **구조**: `PlcExternalSource`(→ `PlcExternalSourceComposition.CreateFromFile(name, path)`로
+  로컬 .scl 파일을 프로젝트에 소스 객체로 추가)는 그 자체론 export 메서드가 없음(리플렉션으로
+  확인) - 실제 export는 `PlcExternalSourceSystemGroup.GenerateSource(blocks, FileInfo[,
+  GenerateOptions])`을 통해, 이미 프로젝트에 있는 `PlcBlock`/`PlcType`(둘 다 `IGenerateSource`
+  구현)을 합쳐서 SCL 텍스트로 뽑아내는 방식 - 즉 "소스 export"는 외부소스 객체가 아니라 블록/타입
+  쪽에서 나감.
+- `GenerateBlocksFromSource`가 진짜 쓰기 단계 - 소스를 컴파일해서 실제 블록/타입을 새로
+  만들거나 같은 이름 걸 덮어씀. `ImportExternalSource`(소스 객체만 추가, 블록엔 영향 없음)보다
+  리스크 높음. Export(`ExportSourceFromBlocks`)는 프로젝트 상태를 안 건드리고 디스크에만 쓰기라
+  기존 Export* 툴들과 같은 리스크 등급.
+- **라이브 검증(Tia for Claude, PID 41948, `PLC_1`)**: `FB_ClaudeTest.scl`(간단한 FB, Bool
+  입출력 통과 로직) import → `GenerateBlocksFromSource` → `GetBlocks`로 실제
+  `FB_ClaudeTest`(FB, SCL, Optimized) 블록 생성 확인 → `ExportSourceFromBlocks`로 그 블록을 다시
+  SCL로 export → 디스크에서 원본과 로직이 정확히 일치하는 것까지 확인(공백 포맷팅만 TIA가 정리) →
+  `DeleteExternalSource`로 소스 객체 정리, `GetExternalSources`로 목록에서 사라진 것 확인. 완전한
+  import→generate→export 라운드트립 성공.
+
+### HMI 화면/알람/텍스트리스트 (Unified Comfort/Advanced 패널만, 전부 읽기 전용)
+- `GetHmiScreens`/`GetHmiDiscreteAlarms`/`GetHmiAnalogAlarms`/`GetHmiTextLists` 추가 - HMI 태그
+  테이블과 같은 `softwarePath` 규칙(`HMI_1/HMI_RT_1`처럼 중첩 DeviceItem까지).
+- **텍스트리스트 항목(개별 텍스트 값)은 조회 불가로 확인** - 이 Openness 버전엔
+  `HmiTextListEntry`류 타입이 아예 없음(리플렉션으로 타입 목록 전체 확인) - `GetHmiTextLists`는
+  리스트 이름만 반환, 항목 내용까진 API가 원천적으로 노출 안 함.
+- **라이브 검증(Mahindra/Tia for Claude, `HMI_1/HMI_RT_1`)**: 화면 4개(1 Login Screen, 2 Main
+  Screen, 3/4 Unit Status, 각각 1280x600) 정상 조회, 이산 알람 다수(`MainError_Alarm{0}_0` 등,
+  alarmClass="Warning", triggerAddress 포함) 정상 조회, 아날로그 알람은 0개(에러 아님, 실제로 안
+  씀), 텍스트리스트 다수 이름 정상 조회.
+
+---
+
 ## [2026-09-10] HMI 태그 테이블 조회 (`GetHmiTagTables`/`GetHmiTags`) - Unified Comfort/Advanced 패널
 
 Upstream PR #26 아이디어 목록에 있던 HMI 기능 중 사용자가 가장 필요하다고 한 "HMI 태그 테이블

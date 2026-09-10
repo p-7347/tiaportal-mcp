@@ -275,6 +275,34 @@ namespace TiaMcpServer.ModelContextProtocol
     {
     }
 
+    public class ResponseExternalSourceInfo : ResponseAttributes
+    {
+        public string? Name { get; set; }
+    }
+
+    public class ResponseExternalSources : ResponseMessage
+    {
+        public IEnumerable<ResponseExternalSourceInfo>? Items { get; set; }
+    }
+
+    public class ResponseImportExternalSource : ResponseMessage
+    {
+        public string? Name { get; set; }
+    }
+
+    public class ResponseGenerateBlocksFromSource : ResponseMessage
+    {
+        public IEnumerable<string>? GeneratedObjectNames { get; set; }
+    }
+
+    public class ResponseDeleteExternalSource : ResponseMessage
+    {
+    }
+
+    public class ResponseExportSourceFromBlocks : ResponseMessage
+    {
+    }
+
     public class ResponseHmiTagTableInfo
     {
         public string? Name { get; set; }
@@ -304,6 +332,47 @@ namespace TiaMcpServer.ModelContextProtocol
     public class ResponseHmiTags : ResponseMessage
     {
         public IEnumerable<ResponseHmiTagInfo>? Items { get; set; }
+    }
+
+    public class ResponseHmiScreenInfo
+    {
+        public string? Name { get; set; }
+        public string? DisplayName { get; set; }
+        public int? ScreenNumber { get; set; }
+        public uint? Width { get; set; }
+        public uint? Height { get; set; }
+    }
+
+    public class ResponseHmiScreens : ResponseMessage
+    {
+        public IEnumerable<ResponseHmiScreenInfo>? Items { get; set; }
+    }
+
+    public class ResponseHmiAlarmInfo
+    {
+        public string? Name { get; set; }
+        public string? EventText { get; set; }
+        public string? InfoText { get; set; }
+        public string? AlarmClass { get; set; }
+        public string? Area { get; set; }
+        public byte? Priority { get; set; }
+        public string? TriggerAddress { get; set; }
+        public string? Condition { get; set; }
+    }
+
+    public class ResponseHmiAlarms : ResponseMessage
+    {
+        public IEnumerable<ResponseHmiAlarmInfo>? Items { get; set; }
+    }
+
+    public class ResponseHmiTextListInfo
+    {
+        public string? Name { get; set; }
+    }
+
+    public class ResponseHmiTextLists : ResponseMessage
+    {
+        public IEnumerable<ResponseHmiTextListInfo>? Items { get; set; }
     }
 
     public class ResponseCrossReferenceLocation

@@ -4,7 +4,11 @@ using Siemens.Engineering.Compiler;
 using Siemens.Engineering.CrossReference;
 using Siemens.Engineering.Hmi;
 using Siemens.Engineering.HmiUnified;
+using Siemens.Engineering.HmiUnified.HmiAlarm;
 using Siemens.Engineering.HmiUnified.HmiTags;
+using Siemens.Engineering.HmiUnified.TextGraphicList;
+using Siemens.Engineering.HmiUnified.UI.ScreenGroup;
+using Siemens.Engineering.HmiUnified.UI.Screens;
 using Siemens.Engineering.HW;
 using Siemens.Engineering.HW.Features;
 using Siemens.Engineering.Multiuser;
@@ -12,6 +16,7 @@ using Siemens.Engineering.Online;
 using Siemens.Engineering.Safety;
 using Siemens.Engineering.SW;
 using Siemens.Engineering.SW.Blocks;
+using Siemens.Engineering.SW.ExternalSources;
 using Siemens.Engineering.SW.Blocks.Interface;
 using Siemens.Engineering.SW.Tags;
 using Siemens.Engineering.SW.Types;
@@ -3343,6 +3348,355 @@ namespace TiaMcpServer.Siemens
 
         #endregion
 
+        #region external sources (SCL import/export)
+
+        // Import: PlcExternalSourceComposition.CreateFromFile(name, path) adds a raw source file
+        // (.scl/.awl/...) into the project as a PlcExternalSource; GenerateBlocksFromSource then
+        // compiles it into real blocks/types - this is the write step, it can create or overwrite
+        // project blocks, same risk class as block/type write CRUD.
+        // Export: PlcExternalSource itself has no Export() method (verified via reflection) - the
+        // real export path is PlcExternalSourceSystemGroup.GenerateSource(blocks, FileInfo[,
+        // GenerateOptions]), which takes existing PlcBlock/PlcType objects (both implement
+        // IGenerateSource) and writes them out as combined SCL text - i.e. export goes through
+        // blocks/types you already have, not through PlcExternalSource.
+
+        public List<PlcExternalSource> GetExternalSources(string softwarePath, string regexName = "")
+        {
+            _logger?.LogInformation("Getting external sources...");
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            var list = new List<PlcExternalSource>();
+
+            try
+            {
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is PlcSoftware plcSoftware)
+                {
+                    var rootGroup = plcSoftware?.ExternalSourceGroup;
+
+                    if (rootGroup != null)
+                    {
+                        CollectExternalSourcesFromComposition(rootGroup.ExternalSources, list, regexName);
+
+                        foreach (var subgroup in rootGroup.Groups)
+                        {
+                            GetExternalSourcesRecursive(subgroup, list, regexName);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "GetExternalSources failed for {SoftwarePath}", softwarePath);
+                throw;
+            }
+
+            return list;
+        }
+
+        public PlcExternalSource? GetExternalSource(string softwarePath, string sourcePath)
+        {
+            _logger?.LogInformation($"Getting external source by path: {sourcePath}");
+
+            if (IsProjectNull())
+            {
+                return null;
+            }
+
+            if (string.IsNullOrWhiteSpace(sourcePath))
+            {
+                return null;
+            }
+
+            var softwareContainer = GetSoftwareContainer(softwarePath);
+            if (softwareContainer?.Software is PlcSoftware plcSoftware)
+            {
+                var rootGroup = plcSoftware?.ExternalSourceGroup;
+                if (rootGroup == null)
+                {
+                    return null;
+                }
+
+                var parts = sourcePath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 0)
+                {
+                    return null;
+                }
+
+                var sourceName = parts[parts.Length - 1];
+
+                if (parts.Length == 1)
+                {
+                    var found = rootGroup.ExternalSources.FirstOrDefault(s => s.Name.Equals(sourceName, StringComparison.OrdinalIgnoreCase));
+                    if (found != null) return found;
+                    return FindExternalSourceRecursive(rootGroup.Groups, sourceName);
+                }
+                else
+                {
+                    PlcExternalSourceUserGroup? current = rootGroup.Groups.FirstOrDefault(g => g.Name.Equals(parts[0], StringComparison.OrdinalIgnoreCase));
+                    for (int i = 1; i < parts.Length - 1 && current != null; i++)
+                    {
+                        current = current.Groups.FirstOrDefault(g => g.Name.Equals(parts[i], StringComparison.OrdinalIgnoreCase));
+                    }
+
+                    if (current == null)
+                    {
+                        return null;
+                    }
+
+                    return current.ExternalSources.FirstOrDefault(s => s.Name.Equals(sourceName, StringComparison.OrdinalIgnoreCase));
+                }
+            }
+
+            return null;
+        }
+
+        // Adds a local .scl/.awl/.gr7 file into the project as a named external source. Does not
+        // touch any existing blocks/types by itself - GenerateBlocksFromSource is the step that does.
+        public PlcExternalSource ImportExternalSource(string softwarePath, string groupPath, string importPath, string? sourceName = null)
+        {
+            _logger?.LogInformation($"Importing external source from: {importPath}");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            var softwareContainer = GetSoftwareContainer(softwarePath);
+            if (softwareContainer?.Software is not PlcSoftware plcSoftware)
+            {
+                throw new PortalException(PortalErrorCode.NotFound, $"PLC software not found at '{softwarePath}'");
+            }
+
+            var group = GetPlcExternalSourceGroupByPath(softwarePath, groupPath);
+            if (group == null)
+            {
+                throw new PortalException(PortalErrorCode.NotFound, $"External source group not found at '{groupPath}'");
+            }
+
+            var fileInfo = new FileInfo(importPath);
+            if (!fileInfo.Exists)
+            {
+                throw new PortalException(PortalErrorCode.NotFound, $"Import file not found at '{importPath}'");
+            }
+
+            var name = string.IsNullOrWhiteSpace(sourceName) ? Path.GetFileNameWithoutExtension(importPath) : sourceName;
+
+            try
+            {
+                return group.ExternalSources.CreateFromFile(name, importPath);
+            }
+            catch (Exception ex)
+            {
+                var pex = new PortalException(PortalErrorCode.ExportFailed, "Import failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["groupPath"] = groupPath;
+                pex.Data["importPath"] = importPath;
+                _logger?.LogError(pex, "ImportExternalSource failed for {SoftwarePath} {GroupPath} -> {ImportPath}", softwarePath, groupPath, importPath);
+                throw pex;
+            }
+        }
+
+        // The write step: compiles an already-imported external source into real project blocks/
+        // types. keepOnError=true keeps whatever got generated even if some of it errored; the
+        // default (false) rolls back (deletes generated blocks) on any generation error.
+        public List<IEngineeringObject> GenerateBlocksFromSource(string softwarePath, string sourcePath, bool keepOnError = false)
+        {
+            _logger?.LogInformation($"Generating blocks from source: {sourcePath}");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            var source = GetExternalSource(softwarePath, sourcePath)
+                ?? throw new PortalException(PortalErrorCode.NotFound, $"External source not found at '{sourcePath}' in '{softwarePath}'");
+
+            try
+            {
+                var option = keepOnError ? GenerateBlockOption.KeepOnError : GenerateBlockOption.None;
+                return source.GenerateBlocksFromSource(option).ToList();
+            }
+            catch (Exception ex)
+            {
+                var pex = new PortalException(PortalErrorCode.ExportFailed, "Block generation from source failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["sourcePath"] = sourcePath;
+                _logger?.LogError(pex, "GenerateBlocksFromSource failed for {SoftwarePath} {SourcePath}", softwarePath, sourcePath);
+                throw pex;
+            }
+        }
+
+        public void DeleteExternalSource(string softwarePath, string sourcePath)
+        {
+            _logger?.LogInformation($"Deleting external source: {sourcePath}");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            var source = GetExternalSource(softwarePath, sourcePath)
+                ?? throw new PortalException(PortalErrorCode.NotFound, $"External source not found at '{sourcePath}' in '{softwarePath}'");
+
+            try
+            {
+                source.Delete();
+            }
+            catch (Exception ex)
+            {
+                var pex = new PortalException(PortalErrorCode.ExportFailed, "Delete failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["sourcePath"] = sourcePath;
+                _logger?.LogError(pex, "DeleteExternalSource failed for {SoftwarePath} {SourcePath}", softwarePath, sourcePath);
+                throw pex;
+            }
+        }
+
+        // Exports existing blocks/types (already in the project) as combined SCL source text -
+        // the real "export SCL" path, since PlcExternalSource itself can't export.
+        public void ExportSourceFromBlocks(string softwarePath, IEnumerable<string> blockPaths, IEnumerable<string> typePaths, string exportPath, string fileName, bool withDependencies = false)
+        {
+            _logger?.LogInformation($"Exporting source from {blockPaths?.Count() ?? 0} block(s)/{typePaths?.Count() ?? 0} type(s)...");
+
+            try
+            {
+                exportPath = OutputPathPolicy.ResolveDirectory(exportPath);
+
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is not PlcSoftware plcSoftware || plcSoftware.ExternalSourceGroup == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"PLC software not found at '{softwarePath}'");
+                }
+
+                var objects = new List<IGenerateSource>();
+
+                foreach (var blockPath in blockPaths ?? [])
+                {
+                    var block = GetBlock(softwarePath, blockPath)
+                        ?? throw new PortalException(PortalErrorCode.NotFound, $"Block not found at '{blockPath}'");
+                    objects.Add(block);
+                }
+
+                foreach (var typePath in typePaths ?? [])
+                {
+                    var type = GetType(softwarePath, typePath)
+                        ?? throw new PortalException(PortalErrorCode.NotFound, $"Type not found at '{typePath}'");
+                    objects.Add(type);
+                }
+
+                if (objects.Count == 0)
+                {
+                    throw new PortalException(PortalErrorCode.InvalidParams, "No blocks or types given to export as source");
+                }
+
+                var resolvedFile = Path.Combine(exportPath, $"{SanitizeFileName(fileName)}.scl");
+                if (File.Exists(resolvedFile))
+                {
+                    File.Delete(resolvedFile);
+                }
+
+                var options = withDependencies ? GenerateOptions.WithDependencies : GenerateOptions.None;
+                plcSoftware.ExternalSourceGroup.GenerateSource(objects, new FileInfo(resolvedFile), options);
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Export failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["exportPath"] = exportPath;
+                _logger?.LogError(pex, "ExportSourceFromBlocks failed for {SoftwarePath} -> {ExportPath}", softwarePath, exportPath);
+                throw pex;
+            }
+        }
+
+        private PlcExternalSourceGroup? GetPlcExternalSourceGroupByPath(string softwarePath, string groupPath)
+        {
+            if (_project == null)
+            {
+                return null;
+            }
+
+            var softwareContainer = GetSoftwareContainer(softwarePath);
+            if (softwareContainer?.Software is PlcSoftware plcSoftware)
+            {
+                if (plcSoftware?.ExternalSourceGroup == null)
+                {
+                    return null;
+                }
+
+                var groupNames = (groupPath ?? string.Empty).Split(['/'], StringSplitOptions.RemoveEmptyEntries);
+
+                PlcExternalSourceGroup? currentGroup = plcSoftware.ExternalSourceGroup;
+
+                foreach (var groupName in groupNames)
+                {
+                    currentGroup = currentGroup.Groups.FirstOrDefault(g => g.Name.Equals(groupName, StringComparison.OrdinalIgnoreCase));
+
+                    if (currentGroup == null)
+                    {
+                        return null;
+                    }
+                }
+
+                return currentGroup;
+            }
+
+            return null;
+        }
+
+        private PlcExternalSource? FindExternalSourceRecursive(PlcExternalSourceUserGroupComposition groups, string sourceName)
+        {
+            foreach (var group in groups)
+            {
+                var found = group.ExternalSources.FirstOrDefault(s => s.Name.Equals(sourceName, StringComparison.OrdinalIgnoreCase));
+                if (found != null) return found;
+                found = FindExternalSourceRecursive(group.Groups, sourceName);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        private void CollectExternalSourcesFromComposition(PlcExternalSourceComposition sources, List<PlcExternalSource> list, string regexName)
+        {
+            foreach (var source in sources)
+            {
+                try
+                {
+                    if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(source.Name, regexName, RegexOptions.IgnoreCase))
+                    {
+                        continue;
+                    }
+                }
+                catch (Exception)
+                {
+                    continue;
+                }
+
+                list.Add(source);
+            }
+        }
+
+        private void GetExternalSourcesRecursive(PlcExternalSourceUserGroup group, List<PlcExternalSource> list, string regexName = "")
+        {
+            CollectExternalSourcesFromComposition(group.ExternalSources, list, regexName);
+
+            foreach (var subgroup in group.Groups)
+            {
+                GetExternalSourcesRecursive(subgroup, list, regexName);
+            }
+        }
+
+        #endregion
+
         #region hmi tag tables
 
         // Unified Comfort/Advanced Panels only (Siemens.Engineering.HmiUnified.HmiTags) - classic
@@ -3518,6 +3872,209 @@ namespace TiaMcpServer.Siemens
             {
                 GetHmiTagTablesRecursive(subgroup, list, regexName);
             }
+        }
+
+        #endregion
+
+        #region hmi screens/alarms/text lists (Unified Comfort/Advanced Panels only)
+
+        // Same Unified-only scope as the hmi tag tables region above. All read-only - no write
+        // API found for any of these (not investigated as deeply as tag tables since there's no
+        // stated need for it yet).
+
+        public List<HmiScreen> GetHmiScreens(string softwarePath, string regexName = "")
+        {
+            _logger?.LogInformation("Getting HMI screens...");
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            var list = new List<HmiScreen>();
+
+            try
+            {
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is HmiSoftware hmiSoftware)
+                {
+                    CollectHmiScreensFromComposition(hmiSoftware.Screens, list, regexName);
+
+                    foreach (var subgroup in hmiSoftware.ScreenGroups)
+                    {
+                        GetHmiScreensRecursive(subgroup, list, regexName);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "GetHmiScreens failed for {SoftwarePath}", softwarePath);
+                throw;
+            }
+
+            return list;
+        }
+
+        private void CollectHmiScreensFromComposition(HmiScreenComposition screens, List<HmiScreen> list, string regexName)
+        {
+            foreach (var screen in screens)
+            {
+                try
+                {
+                    if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(screen.Name, regexName, RegexOptions.IgnoreCase))
+                    {
+                        continue;
+                    }
+                }
+                catch (Exception)
+                {
+                    continue;
+                }
+
+                list.Add(screen);
+            }
+        }
+
+        private void GetHmiScreensRecursive(HmiScreenGroup group, List<HmiScreen> list, string regexName = "")
+        {
+            CollectHmiScreensFromComposition(group.Screens, list, regexName);
+
+            foreach (var subgroup in group.Groups)
+            {
+                GetHmiScreensRecursive(subgroup, list, regexName);
+            }
+        }
+
+        public List<HmiDiscreteAlarm> GetHmiDiscreteAlarms(string softwarePath, string regexName = "")
+        {
+            _logger?.LogInformation("Getting HMI discrete alarms...");
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            var list = new List<HmiDiscreteAlarm>();
+
+            try
+            {
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is HmiSoftware hmiSoftware)
+                {
+                    foreach (var alarm in hmiSoftware.DiscreteAlarms)
+                    {
+                        try
+                        {
+                            if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(alarm.Name, regexName, RegexOptions.IgnoreCase))
+                            {
+                                continue;
+                            }
+                        }
+                        catch (Exception)
+                        {
+                            continue;
+                        }
+
+                        list.Add(alarm);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "GetHmiDiscreteAlarms failed for {SoftwarePath}", softwarePath);
+                throw;
+            }
+
+            return list;
+        }
+
+        public List<HmiAnalogAlarm> GetHmiAnalogAlarms(string softwarePath, string regexName = "")
+        {
+            _logger?.LogInformation("Getting HMI analog alarms...");
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            var list = new List<HmiAnalogAlarm>();
+
+            try
+            {
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is HmiSoftware hmiSoftware)
+                {
+                    foreach (var alarm in hmiSoftware.AnalogAlarms)
+                    {
+                        try
+                        {
+                            if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(alarm.Name, regexName, RegexOptions.IgnoreCase))
+                            {
+                                continue;
+                            }
+                        }
+                        catch (Exception)
+                        {
+                            continue;
+                        }
+
+                        list.Add(alarm);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "GetHmiAnalogAlarms failed for {SoftwarePath}", softwarePath);
+                throw;
+            }
+
+            return list;
+        }
+
+        // Lists text list names only - Openness in this version has no type exposing individual
+        // text list entries/values (verified: no HmiTextListEntry-shaped type exists in the
+        // installed Siemens.Engineering.dll), so entry contents aren't reachable via this tool.
+        public List<HmiTextList> GetHmiTextLists(string softwarePath, string regexName = "")
+        {
+            _logger?.LogInformation("Getting HMI text lists...");
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            var list = new List<HmiTextList>();
+
+            try
+            {
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is HmiSoftware hmiSoftware)
+                {
+                    foreach (var textList in hmiSoftware.HmiTextLists)
+                    {
+                        try
+                        {
+                            if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(textList.Name, regexName, RegexOptions.IgnoreCase))
+                            {
+                                continue;
+                            }
+                        }
+                        catch (Exception)
+                        {
+                            continue;
+                        }
+
+                        list.Add(textList);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "GetHmiTextLists failed for {SoftwarePath}", softwarePath);
+                throw;
+            }
+
+            return list;
         }
 
         #endregion

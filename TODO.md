@@ -181,8 +181,20 @@ Priority order for picking pieces up ourselves, each to go through this project'
    Explicitly hold until 1-4 are done and stable; if pursued, needs its own safety review (e.g.
    should this require the project to be offline the same way exports do, confirmation prompts,
    etc.) rather than copying PR #26's approach uncritically.
-6. **External source (SCL) import/export** (PR #26, overlaps issue #22's feature request) - noted,
-   not prioritized yet; revisit once 1-3 are done.
+6. ~~**External source (SCL) import/export**~~ - **Done (2026-09-10).** New
+   `GetExternalSources`/`ImportExternalSource`/`GenerateBlocksFromSource`/`DeleteExternalSource`/
+   `ExportSourceFromBlocks`. `PlcExternalSource` itself has no export method (verified via
+   reflection) - real export goes through `PlcExternalSourceSystemGroup.GenerateSource(blocks,
+   FileInfo[, GenerateOptions])`, which takes existing `PlcBlock`/`PlcType` objects (both
+   implement `IGenerateSource`) and writes them out as combined SCL text - so
+   `ExportSourceFromBlocks` exports from blocks/types you already have, not from the external
+   source object. `GenerateBlocksFromSource` is the real write risk (creates/overwrites project
+   blocks); `ImportExternalSource` only adds a source object and doesn't touch blocks by itself.
+   Live-verified end to end against a disposable clone of a real project ("Tia for Claude", user
+   set it up specifically for testing writes): imported a test FB's `.scl`, generated a real
+   `FB_ClaudeTest` block from it, exported that block back to SCL and confirmed on disk the logic
+   round-tripped exactly (only whitespace formatting changed), then deleted the source object and
+   confirmed it's gone from `GetExternalSources`.
 7. ~~**HMI tag table read tools**~~ - **Partially done (2026-09-10).** New `GetHmiTagTables`/
    `GetHmiTags` for **Unified Comfort/Advanced Panels only** (`Siemens.Engineering.HmiUnified.HmiTags`
    - classic WinCC Comfort/Basic panels use a different namespace, not covered). Mirrors the
@@ -196,8 +208,17 @@ Priority order for picking pieces up ourselves, each to go through this project'
    share the Device's name there). Live-verified against Mahindra's `HMI_1/HMI_RT_1`
    (MTP1200 Unified Comfort): dozens of real tag tables listed, and `HMI_IO List`'s 3 tags
    returned fully correct including PLC linkage (`plcName: PLC_1`, `plcTag:
-   HMI_System.InPut_List[1]`). HMI screens/alarms/text lists (the rest of PR #26's HMI list) and
+   HMI_System.InPut_List[1]`). HMI screens/alarms/text lists are also done now, see below;
    technology objects/safety programming remain not pursued - no concrete need yet.
+   - ~~**HMI screens/alarms/text lists**~~ - **Done (2026-09-10).** New `GetHmiScreens`/
+     `GetHmiDiscreteAlarms`/`GetHmiAnalogAlarms`/`GetHmiTextLists`, all read-only, same
+     `softwarePath` rule as HMI tag tables. Text list *entries* (the actual localized values)
+     are not reachable - this Openness version has no type shaped like an entry/item for
+     `HmiTextList` (confirmed by enumerating every type in the installed DLL), so
+     `GetHmiTextLists` only returns names. Live-verified against Mahindra/Tia for Claude's
+     `HMI_1/HMI_RT_1`: 4 real screens (1280x600 each), multiple real discrete alarms with
+     event text/alarm class/trigger address, 0 analog alarms (correctly empty, not an error),
+     and multiple real text list names.
 8. **HTTP transport** (PR #30) - not needed today, stdio covers the actual clients in use (Claude
    Desktop, VS Code). See the existing "Transports (HTTP / TCP)" section below for why Streamable
    HTTP specifically isn't reachable from this net48-pinned project anyway.
