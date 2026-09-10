@@ -2,16 +2,19 @@
 
 Centralized list of actionable improvements gathered from initial repo review. Use this to track, prioritize, and reference across PRs. See file paths in backticks.
 
-## Open bug: Attach succeeds but Projects/LocalSessions empty for a specific TIA instance
+## ~~Open bug: Attach succeeds but Projects/LocalSessions empty for a specific TIA instance~~ - Resolved, not a code bug
 
-Found while verifying multi-instance `Connect(processId)` (see `CHANGES.md` 2026-09-10). One of
-two open TIA Portal instances (a project opened from a `카카오톡 받은 파일` folder) attaches fine
-but `_portal.Projects`/`_portal.LocalSessions` both report empty even though that TIA window
-visibly has the project and a block editor open. 5 hypotheses ruled out (elevation, Multiuser/
-`ProjectServers`, how the file was opened, timing/race, a blocking modal) - see `CHANGES.md` for
-detail and the reproduction. Unsolved; needs either a second real-world repro to compare against,
-or visibility into TIA Portal's own internal state that isn't available through this codebase's
-current tools.
+Found while verifying multi-instance `Connect(processId)` (see `CHANGES.md` 2026-09-10, full
+writeup). One specific project file (received via KakaoTalk) always showed an empty
+`_portal.Projects`/`LocalSessions` after a successful Attach, no matter what - 7 hypotheses ruled
+out one by one (elevation, Multiuser/`ProjectServers`, how the file was opened, timing/race, a
+blocking modal, another instance's online state, instance launch order - tested standalone too).
+Opening a *different* project (unrelated file) attached and enumerated correctly on the first try,
+isolating the cause to something specific to that one `.ap20` file (likely needed migration or
+picked up some odd state from whoever originally authored it) - not a bug in `Connect`/
+`ListTiaPortalInstances` or this server's attach logic, which was in fact repeatedly confirmed
+correct throughout the investigation. No further action planned; low priority given it needs that
+specific file to reproduce.
 
 ## Multi-instance selection + cross-project compare (2026-09-10 idea, not started)
 

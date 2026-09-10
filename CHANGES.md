@@ -5,49 +5,49 @@
 
 ---
 
-## [2026-09-10] 알려진 한계: 특정 TIA 인스턴스에서 Attach는 되는데 Projects/LocalSessions가 비어 보임 (미해결)
+## [2026-09-10] 특정 프로젝트 파일 하나에서만 Attach 후 Projects/LocalSessions가 비어 보임 (해결 — 파일 한정 문제로 확인)
 
 ### 증상
-- 방금 만든 다중 인스턴스 선택(`ListTiaPortalInstances`/`Connect(processId)`) 기능을
-  실제로 TIA Portal 2개(서로 다른 프로젝트) 띄워놓고 검증하던 중 발견.
-- `id=15676` (Mahindra_CPU01_V20_260909_k1_002) → `Connect`/`GetProject`/`GetState`
-  전부 정상.
-- `id=46056` (부대설비_Ver4.0.ap20, `Documents\카카오톡 받은 파일\...`) → `Connect`
-  자체는 성공(`isConnected: true`)하는데, `GetProject`/`GetState`가 계속
-  `items: []` / `project: "-"` — **실제로는 그 TIA 창에 프로젝트가 정상적으로 열려
-  있고 펑션블록 에디터까지 열려 있는 상태**였음(사용자가 스크린샷으로 직접 확인,
-  하단 상태바에 "Project '부대설비_Ver4.0' opened" 표시됨).
+- 다중 인스턴스 선택(`ListTiaPortalInstances`/`Connect(processId)`) 기능을 실제로
+  TIA Portal 2개 띄워놓고 검증하던 중 발견.
+- `id=15676` (Mahindra_CPU01_V20_260909_k1_002) → 항상 정상.
+- 카카오톡으로 받은 `부대설비_Ver4.0.ap20`(이후 `add_on_eqp_ver4.0.ap20`으로 개명,
+  경로도 여러 번 이동) → `Connect`는 매번 성공(`isConnected: true`)하는데
+  `GetProject`/`GetState`가 계속 `items: []` / `project: "-"`. 사용자가 스크린샷으로
+  직접 확인 — 그 TIA 창엔 프로젝트가 정상적으로 열려 있고 펑션블록 에디터까지 열려
+  있었음 (하단 상태바 "Project '부대설비_Ver4.0' opened").
 
-### 원인 조사 — 5가지 가설 전부 기각됨
-1. **권한/관리자 레벨 차이** — 두 프로세스 다 `NotElevated`, 같은 사용자 소유. 기각.
-2. **Multiuser(`ProjectServers`)** — 두 인스턴스 다 동일하게 `ProjectServers=1`
-   ("Local Project Server", `net.tcp://localhost/:9237`)이 떠있고, 이건
-   `GetCompositionInfos()`가 빈 목록을 반환하고 `GetComposition("LocalSessions")`도
-   "지원 안 됨" 에러 — 실제 프로젝트와 무관한 TIA의 백그라운드 서비스로 확인. 기각.
-3. **여는 방식(탐색기 더블클릭 vs TIA 내부 File > Open)** — 사용자가 TIA 안에서
-   Close Project 후 File > Open으로 재현했으나 동일하게 재현됨. 기각.
-4. **타이밍/레이스 컨디션** — 연결 직후, 2초 후, 재연결 후 3번 모두 동일하게
-   `items: []`. 기각.
-5. **모달 대화상자가 막고 있음** — 사용자가 확인, 막고 있는 대화상자 없음. 기각.
+### 원인 조사 — 7가지 가설을 순서대로 기각
+1. **권한/관리자 레벨 차이** — 최초엔 둘 다 `NotElevated`라 기각. 이후 사용자가 그
+   프로젝트를 관리자 권한으로 재실행했을 때도 재확인 — 여전히 재현. 이후 일반
+   권한으로 다시 실행해도 재현 → 최종 기각.
+2. **Multiuser(`ProjectServers`)** — 정상 인스턴스(Mahindra)도 동일하게
+   `ProjectServers=1`("Local Project Server", `net.tcp://localhost/:9237`)이 떠있고,
+   `GetCompositionInfos()`는 빈 목록, `GetComposition("LocalSessions")`는 "지원 안 됨"
+   에러 — 실제 프로젝트와 무관한 TIA 백그라운드 서비스로 확인. 기각.
+3. **여는 방식(탐색기 더블클릭 vs TIA 내부 File > Open)** — Close Project 후 TIA
+   안에서 File > Open으로 재현했으나 동일. 기각.
+4. **타이밍/레이스 컨디션** — 연결 직후·2초 후·재연결 후 3번 모두 동일. 기각.
+5. **모달 대화상자가 막고 있음** — 사용자 확인, 없음. 기각.
+6. **다른 인스턴스(Mahindra)가 온라인 상태라 간섭** — Mahindra를 `GoOffline`으로
+   내린 채로 재시도해도 동일하게 재현, 이후 Mahindra는 `GoOnline`으로 정상 복원.
+   기각.
+7. **"첫 번째 vs 두 번째로 뜬 인스턴스" 순서 문제** — Mahindra를 완전히 닫고 문제의
+   프로젝트를 **단독 인스턴스**로(관리자 권한 없이) 띄워도 여전히 재현. 기각.
 
-### 결론
-- 원인 불명 — Openness API 자체의 엣지 케이스로 보이나, 이 리포지토리의 도구만으로는
-  더 깊이 들어가기 어려움 (TIA Portal 내부 상태/로그에 대한 가시성이 없음).
-- **다중 인스턴스 선택 기능 자체(`ListTiaPortalInstances`/`Connect(processId)`)는
-  정상 작동 확인됨** — 정확한 PID에 Attach되는 것까지는 매번 성공. 이건 그 위에서
-  우연히 발견된, 특정 TIA 인스턴스에 한정된 별개의 문제.
-- 재현 조건: 두 번째로 띄운 TIA Portal 인스턴스, `카카오톡 받은 파일` 폴더에서 받은
-  `.ap20` 파일. 최초 원본 인스턴스(Mahindra)는 항상 정상.
-
-### 다음에 다시 파볼 때 참고할 것
-- 임시 진단 코드(`_portal.LocalSessions.Count`/`Projects.Count`/`ProjectServers.Count`
-  로깅, `ProjectServer`의 컴포지션 탐색)를 넣었다 뺐음 — 재현 시 같은 코드를
-  `ConnectPortal()`의 `Attach()` 직후에 다시 넣으면 빠르게 재현 가능.
-  Git 이력에는 없음(커밋 전에 되돌림) — 이 항목의 진단 로그가 필요하면 이 설명을
-  참고해서 다시 작성할 것.
-- 다음에 볼만한 것: TIA Portal 자체의 이벤트 뷰어/로그, 혹은 그 프로젝트 파일이
-  원래 다른 TIA 버전에서 만들어져 처음 열 때 마이그레이션이 필요했는지 여부
-  (아직 확인 안 함).
+### 결론 — 프로젝트 파일 자체의 문제로 확정
+- 위 7가지를 전부 배제한 뒤, **완전히 다른 프로젝트**(`CTe_BMA_PLC1_V20`, 작성자
+  "Kim Min", 역시 한글이 섞인 경로)를 새로 열어서 테스트 → **정상적으로 조회됨**
+  (`GetProject`/`GetState` 둘 다 프로젝트 이름 정확히 반환).
+- 즉 원인은 프로세스/권한/타이밍/인스턴스 순서가 아니라 **카카오톡으로 전달받은 그
+  특정 `.ap20` 파일 자체**에 있음 — 아마 다른 TIA 버전에서 만들어져 마이그레이션이
+  필요했거나, 다른 사람 환경에서 만들어지며 생긴 파일 자체의 특이 상태로 추정
+  (구체적 내부 원인은 미확인, 우선순위 낮음 — 재현에 이 특정 파일이 필요해서
+  일반적으로 재현하기 어려움).
+- **다중 인스턴스 선택 기능(`ListTiaPortalInstances`/`Connect(processId)`) 자체는
+  전체 과정에서 한 번도 틀리지 않고 정확한 PID에 Attach함** — 이 조사로 오히려
+  기능이 매우 탄탄하게 검증됨.
+- 실제 작업 프로젝트(Mahindra)는 전체 조사 기간 내내 영향 없음.
 
 ---
 
