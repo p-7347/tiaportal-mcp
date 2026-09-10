@@ -183,8 +183,21 @@ Priority order for picking pieces up ourselves, each to go through this project'
    etc.) rather than copying PR #26's approach uncritically.
 6. **External source (SCL) import/export** (PR #26, overlaps issue #22's feature request) - noted,
    not prioritized yet; revisit once 1-3 are done.
-7. **HMI engineering, technology objects, safety programming** (PR #26) - outside this project's
-   current PLC-logic-focused usage; not pursued unless a concrete need shows up.
+7. ~~**HMI tag table read tools**~~ - **Partially done (2026-09-10).** New `GetHmiTagTables`/
+   `GetHmiTags` for **Unified Comfort/Advanced Panels only** (`Siemens.Engineering.HmiUnified.HmiTags`
+   - classic WinCC Comfort/Basic panels use a different namespace, not covered). Mirrors the
+   PLC `GetTagTables`/`GetTags` shape; `HmiTag` exposes strongly-typed Address/DataType/
+   Connection/PlcName/PlcTag/AccessMode/AcquisitionMode/Scope/TagType directly (no `GetAttribute`
+   needed). **No export tool** - `HmiTagTable` has no `Export()` method in this Openness version
+   (verified via reflection, unlike `PlcTagTable`/classic `Hmi.Tag.TagTable`), so
+   `ExportHmiTagTable` isn't possible here. **Path gotcha**: `softwarePath` isn't just the HMI
+   device name - the `HmiSoftware` lives on a nested DeviceItem (e.g. `HMI_1/HMI_RT_1`, not just
+   `HMI_1`); PLC's `softwarePath` being a single name was a coincidence (DeviceItem happens to
+   share the Device's name there). Live-verified against Mahindra's `HMI_1/HMI_RT_1`
+   (MTP1200 Unified Comfort): dozens of real tag tables listed, and `HMI_IO List`'s 3 tags
+   returned fully correct including PLC linkage (`plcName: PLC_1`, `plcTag:
+   HMI_System.InPut_List[1]`). HMI screens/alarms/text lists (the rest of PR #26's HMI list) and
+   technology objects/safety programming remain not pursued - no concrete need yet.
 8. **HTTP transport** (PR #30) - not needed today, stdio covers the actual clients in use (Claude
    Desktop, VS Code). See the existing "Transports (HTTP / TCP)" section below for why Streamable
    HTTP specifically isn't reachable from this net48-pinned project anyway.

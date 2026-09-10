@@ -118,6 +118,22 @@ SIMATIC SD document format, mainly useful for round-tripping SCL logic through t
 | `GetTags` | RO | `softwarePath`, `tagTablePath`, `regexName` (optional) | |
 | `ExportTagTable` | **Destructive** | `softwarePath`, `tagTablePath`, `exportPath`, `preservePath` (optional) | |
 
+## HMI tag tables (Unified Comfort/Advanced Panels only)
+
+Classic WinCC Comfort/Basic panels use a different Openness API and aren't covered by these tools.
+
+| Tool | Flags | Parameters | Notes |
+|---|---|---|---|
+| `GetHmiTagTables` | RO | `softwarePath`, `regexName` (optional) | |
+| `GetHmiTags` | RO | `softwarePath`, `tagTablePath`, `regexName` (optional) | Returns `plcName`/`plcTag` linkage, `accessMode`, `acquisitionMode`, `scope`, `tagType` alongside the usual name/dataType/address/comment. |
+
+> **`softwarePath` gotcha for HMI:** unlike PLC (`"PLC_1"` alone works because the Device and its
+> software-holding DeviceItem happen to share a name there), an HMI device's `HmiSoftware` lives on
+> a *nested* DeviceItem - e.g. `"HMI_1/HMI_RT_1"`, not `"HMI_1"`. Use `GetProjectTree` to find the
+> exact DeviceItem name under the HMI device (look for `HmiSoftware: ... [HMI Program]` in the
+> tree). Also **no export tool** - `HmiTagTable` has no `Export()` method in this Openness version
+> (unlike `PlcTagTable`), verified via reflection - not just missing, unsupported here.
+
 ---
 
 ## Safety: what these tools *cannot* do

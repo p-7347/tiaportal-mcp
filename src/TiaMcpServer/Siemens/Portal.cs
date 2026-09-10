@@ -4,6 +4,7 @@ using Siemens.Engineering.Compiler;
 using Siemens.Engineering.CrossReference;
 using Siemens.Engineering.Hmi;
 using Siemens.Engineering.HmiUnified;
+using Siemens.Engineering.HmiUnified.HmiTags;
 using Siemens.Engineering.HW;
 using Siemens.Engineering.HW.Features;
 using Siemens.Engineering.Multiuser;
@@ -3338,6 +3339,185 @@ namespace TiaMcpServer.Siemens
             }
 
             return path;
+        }
+
+        #endregion
+
+        #region hmi tag tables
+
+        // Unified Comfort/Advanced Panels only (Siemens.Engineering.HmiUnified.HmiTags) - classic
+        // WinCC Comfort/Basic panels use a different, older API (Siemens.Engineering.Hmi.Tag) not
+        // covered here since this project hasn't needed it yet. Read-only: HmiTagTable has no
+        // Export() method in this Openness version (unlike PlcTagTable/classic Hmi.Tag.TagTable),
+        // so there is no ExportHmiTagTable - verified empirically, not just undocumented.
+
+        public List<HmiTagTable> GetHmiTagTables(string softwarePath, string regexName = "")
+        {
+            _logger?.LogInformation("Getting HMI tag tables...");
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            var list = new List<HmiTagTable>();
+
+            try
+            {
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is HmiSoftware hmiSoftware)
+                {
+                    CollectHmiTagTablesFromComposition(hmiSoftware.TagTables, list, regexName);
+
+                    foreach (var subgroup in hmiSoftware.TagTableGroups)
+                    {
+                        GetHmiTagTablesRecursive(subgroup, list, regexName);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "GetHmiTagTables failed for {SoftwarePath}", softwarePath);
+                throw;
+            }
+
+            return list;
+        }
+
+        public HmiTagTable? GetHmiTagTable(string softwarePath, string tagTablePath)
+        {
+            _logger?.LogInformation($"Getting HMI tag table by path: {tagTablePath}");
+
+            if (IsProjectNull())
+            {
+                return null;
+            }
+
+            if (string.IsNullOrWhiteSpace(tagTablePath))
+            {
+                return null;
+            }
+
+            var softwareContainer = GetSoftwareContainer(softwarePath);
+            if (softwareContainer?.Software is HmiSoftware hmiSoftware)
+            {
+                var parts = tagTablePath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 0)
+                {
+                    return null;
+                }
+
+                var tableName = parts[parts.Length - 1];
+
+                if (parts.Length == 1)
+                {
+                    // Search root-level tables first, then recurse into groups
+                    var found = hmiSoftware.TagTables.FirstOrDefault(t => t.Name.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+                    if (found != null) return found;
+                    return FindHmiTagTableRecursive(hmiSoftware.TagTableGroups, tableName);
+                }
+                else
+                {
+                    HmiTagTableGroup? current = hmiSoftware.TagTableGroups.FirstOrDefault(g => g.Name.Equals(parts[0], StringComparison.OrdinalIgnoreCase));
+                    for (int i = 1; i < parts.Length - 1 && current != null; i++)
+                    {
+                        current = current.Groups.FirstOrDefault(g => g.Name.Equals(parts[i], StringComparison.OrdinalIgnoreCase));
+                    }
+
+                    if (current == null)
+                    {
+                        return null;
+                    }
+
+                    return current.TagTables.FirstOrDefault(t => t.Name.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+                }
+            }
+
+            return null;
+        }
+
+        public List<HmiTag> GetHmiTags(string softwarePath, string tagTablePath, string regexName = "")
+        {
+            _logger?.LogInformation($"Getting HMI tags for table: {tagTablePath}");
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            var list = new List<HmiTag>();
+
+            try
+            {
+                var table = GetHmiTagTable(softwarePath, tagTablePath);
+                if (table != null)
+                {
+                    foreach (var tag in table.Tags)
+                    {
+                        try
+                        {
+                            if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(tag.Name, regexName, RegexOptions.IgnoreCase))
+                            {
+                                continue;
+                            }
+                        }
+                        catch (Exception)
+                        {
+                            continue;
+                        }
+
+                        list.Add(tag);
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // Same swallow style as GetTags (PLC)
+            }
+
+            return list;
+        }
+
+        private HmiTagTable? FindHmiTagTableRecursive(HmiTagTableGroupComposition groups, string tableName)
+        {
+            foreach (var group in groups)
+            {
+                var found = group.TagTables.FirstOrDefault(t => t.Name.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+                if (found != null) return found;
+                found = FindHmiTagTableRecursive(group.Groups, tableName);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        private void CollectHmiTagTablesFromComposition(HmiTagTableComposition tables, List<HmiTagTable> list, string regexName)
+        {
+            foreach (var table in tables)
+            {
+                try
+                {
+                    if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(table.Name, regexName, RegexOptions.IgnoreCase))
+                    {
+                        continue;
+                    }
+                }
+                catch (Exception)
+                {
+                    continue;
+                }
+
+                list.Add(table);
+            }
+        }
+
+        private void GetHmiTagTablesRecursive(HmiTagTableGroup group, List<HmiTagTable> list, string regexName = "")
+        {
+            CollectHmiTagTablesFromComposition(group.TagTables, list, regexName);
+
+            foreach (var subgroup in group.Groups)
+            {
+                GetHmiTagTablesRecursive(subgroup, list, regexName);
+            }
         }
 
         #endregion

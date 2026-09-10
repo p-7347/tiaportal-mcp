@@ -5,6 +5,44 @@
 
 ---
 
+## [2026-09-10] HMI 태그 테이블 조회 (`GetHmiTagTables`/`GetHmiTags`) - Unified Comfort/Advanced 패널
+
+Upstream PR #26 아이디어 목록에 있던 HMI 기능 중 사용자가 가장 필요하다고 한 "HMI 태그 테이블
+조회/export"를 구현. 마힌드라 프로젝트에 실제로 Unified Comfort Panel(HMI_1/HMI_2/HMI_3,
+MTP1200)이 추가된 상태라 바로 라이브 검증까지 진행.
+
+### 구조 (리플렉션으로 확인, `Siemens.Engineering.HmiUnified.HmiTags`)
+- `HmiSoftware`(→ `SoftwareContainer.Software`, PLC와 동일한 `GetSoftwareContainer(softwarePath)`
+  헬퍼 재사용) → `.TagTables`(루트 태그 테이블) + `.TagTableGroups`(재귀 그룹, PLC의
+  `PlcTagTableGroup`과 동일한 모양이지만 루트 래퍼 객체 없이 `HmiSoftware`에 직접 두 프로퍼티로
+  분리되어 있음).
+- `HmiTag`는 PLC의 `PlcTag`와 달리 `GetAttribute` 없이 Address/DataType/HmiDataType/Connection/
+  PlcName/PlcTag/AccessMode/AcquisitionMode/Scope/TagType 등을 강타입 프로퍼티로 직접 노출 -
+  PLC 태그 연동 정보(`plcName`/`plcTag`)까지 한 번에 나옴.
+- **Export 불가, 확인됨**: `HmiTagTable`에는 `PlcTagTable`/클래식 `Hmi.Tag.TagTable`에 있는
+  `Export()` 메서드가 없음 (리플렉션으로 멤버 목록 직접 대조 확인) - 그래서 `ExportHmiTagTable`은
+  만들지 않음, 이 Openness 버전에서 원천적으로 지원 안 됨.
+- 클래식 WinCC Comfort/Basic 패널(`Siemens.Engineering.Hmi.Tag`, 다른 네임스페이스)은 이번엔
+  손대지 않음 - 지금 필요한 건 Unified뿐이었음.
+
+### 경로 관련 함정 (라이브 테스트로 발견)
+- `GetSoftwareTree`/기존 PLC 툴들과 달리, HMI는 `softwarePath`가 Device 이름 한 단계로 안 끝남.
+  `HMI_1`(Device)의 HmiSoftware는 그 밑에 중첩된 `HMI_RT_1`(DeviceItem)에 있음 - 즉
+  `softwarePath`는 `"HMI_1"`이 아니라 `"HMI_1/HMI_RT_1"`. PLC는 우연히 Device 밑 DeviceItem
+  이름이 똑같이 `PLC_1`이라 한 단계처럼 보였던 것뿐, 실제로는 항상 DeviceItem까지 내려가야 함.
+  처음 `"HMI_1"`로 테스트했을 때 에러 없이 빈 배열만 나와서 헷갈렸음 - `GetProjectTree`로 실제
+  트리를 다시 뽑아보고서야 발견.
+
+### 라이브 검증 (Mahindra, PID 41948, `HMI_1/HMI_RT_1`)
+- `GetHmiTagTables`: "Default tag table", "Internal Tag", "Recipe", "Alarm", "HMI_IO List" 등
+  실제 태그 테이블 수십 개 정상 조회.
+- `GetHmiTags("HMI_IO List")`: 실제 태그 3개 정상 조회, 모든 필드(address/connection/plcName=
+  `PLC_1`/plcTag=`HMI_System.InPut_List[1]`/accessMode=`SymbolicAccess`/tagType=`UDT` 등) 정확.
+- "Default tag table"은 항목 0개로 정상 - 시스템이 자동 생성하는 빈 기본 테이블로 확인됨(에러
+  아님).
+
+---
+
 ## [2026-09-10] Upstream 이슈/PR 리뷰에서 나온 4가지 개선 구현 (export 경로 보안, GetProject/GetProjects 분리, GSD 의존성 조회)
 
 Upstream 저장소의 open issue(#18 export 경로 보안, #29 -32603 크래시)와 open PR(#26, #30 - "Lots of

@@ -2231,6 +2231,87 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         #endregion
+
+        #region hmi tag tables
+
+        [McpServerTool(Name = "GetHmiTagTables"), Description("Get a list of HMI tag tables from a device's HMI software (Unified Comfort/Advanced Panels only - classic WinCC Comfort/Basic panels aren't supported by this tool). Read-only: there's no export tool for HMI tag tables, this Openness version doesn't expose one.")]
+        public static ResponseHmiTagTables GetHmiTagTables(
+            [Description("softwarePath: defines the path in the project structure to the HMI device/device item, e.g. 'HMI_1'")] string softwarePath,
+            [Description("regexName: defines the name or regular expression to find the tag table. Use empty string (default) to find all")] string regexName = "")
+        {
+            try
+            {
+                var list = Portal.GetHmiTagTables(softwarePath, regexName);
+
+                var responseList = list
+                    .Where(table => table != null)
+                    .Select(table => new ResponseHmiTagTableInfo { Name = table.Name })
+                    .ToList();
+
+                return new ResponseHmiTagTables
+                {
+                    Message = $"HMI tag tables with regex '{regexName}' retrieved from '{softwarePath}'",
+                    Items = responseList,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving HMI tag tables with regex '{regexName}' in '{softwarePath}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "GetHmiTags"), Description("Get a list of tags from a specific HMI tag table (Unified Comfort/Advanced Panels only), including address/PLC-link/connection info")]
+        public static ResponseHmiTags GetHmiTags(
+            [Description("softwarePath: defines the path in the project structure to the HMI device/device item, e.g. 'HMI_1'")] string softwarePath,
+            [Description("tagTablePath: full path to the HMI tag table, e.g. 'Group/Subgroup/Name' (single names allowed at root level)")] string tagTablePath,
+            [Description("regexName: defines the name or regular expression to find the tag. Use empty string (default) to find all")] string regexName = "")
+        {
+            try
+            {
+                var list = Portal.GetHmiTags(softwarePath, tagTablePath, regexName);
+
+                var responseList = list
+                    .Where(tag => tag != null)
+                    .Select(tag => new ResponseHmiTagInfo
+                    {
+                        Name = tag.Name,
+                        DataType = tag.DataType,
+                        HmiDataType = tag.HmiDataType,
+                        Address = tag.Address,
+                        Connection = tag.Connection,
+                        PlcName = tag.PlcName,
+                        PlcTag = tag.PlcTag,
+                        AccessMode = tag.AccessMode.ToString(),
+                        AcquisitionMode = tag.AcquisitionMode.ToString(),
+                        Scope = tag.Scope.ToString(),
+                        TagType = tag.TagType.ToString(),
+                        Comment = Helper.MultilingualTextToString(tag.Comment)
+                    })
+                    .ToList();
+
+                return new ResponseHmiTags
+                {
+                    Message = $"HMI tags with regex '{regexName}' retrieved from tag table '{tagTablePath}' in '{softwarePath}'",
+                    Items = responseList,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving HMI tags from '{tagTablePath}' in '{softwarePath}': {ex.Message}", ex);
+            }
+        }
+
+        #endregion
     }
 }
 

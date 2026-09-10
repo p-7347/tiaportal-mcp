@@ -275,6 +275,37 @@ namespace TiaMcpServer.ModelContextProtocol
     {
     }
 
+    public class ResponseHmiTagTableInfo
+    {
+        public string? Name { get; set; }
+    }
+
+    public class ResponseHmiTagTables : ResponseMessage
+    {
+        public IEnumerable<ResponseHmiTagTableInfo>? Items { get; set; }
+    }
+
+    public class ResponseHmiTagInfo
+    {
+        public string? Name { get; set; }
+        public string? DataType { get; set; }
+        public string? HmiDataType { get; set; }
+        public string? Address { get; set; }
+        public string? Connection { get; set; }
+        public string? PlcName { get; set; }
+        public string? PlcTag { get; set; }
+        public string? AccessMode { get; set; }
+        public string? AcquisitionMode { get; set; }
+        public string? Scope { get; set; }
+        public string? TagType { get; set; }
+        public string? Comment { get; set; }
+    }
+
+    public class ResponseHmiTags : ResponseMessage
+    {
+        public IEnumerable<ResponseHmiTagInfo>? Items { get; set; }
+    }
+
     public class ResponseCrossReferenceLocation
     {
         public string? Name { get; set; }
