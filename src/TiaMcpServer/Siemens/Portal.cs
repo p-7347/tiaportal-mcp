@@ -52,6 +52,48 @@ namespace TiaMcpServer.Siemens
         public bool IsProfinet { get; set; }
     }
 
+    // One physical port on a network interface, and (best-effort) what it's wired to per the
+    // project's own planned topology - the same shape PRONETA's "Include device details" CSV
+    // export uses (Port ID / Partner Port ID / Partner Device Name), so a project's own topology
+    // can be diff'd against a real PRONETA scan without needing a shared format beyond this.
+    public class PortConnectionInfo
+    {
+        public string Name { get; set; } = "";
+        public string? ConnectedDeviceItemName { get; set; }
+        public string? ConnectedPortName { get; set; }
+    }
+
+    // One device row from a PRONETA "Device Table (CSV)" export (with "Include device details").
+    public class PronetaDevice
+    {
+        public string Name { get; set; } = "";
+        public string DeviceType { get; set; } = "";
+        public string? IpAddress { get; set; }
+        public string? SubnetMask { get; set; }
+        public string? MacAddress { get; set; }
+        public string? Role { get; set; }
+        public List<PronetaPort> Ports { get; set; } = [];
+    }
+
+    public class PronetaPort
+    {
+        public string PortId { get; set; } = "";
+        public string? PortDescription { get; set; }
+        public string? PartnerPortId { get; set; }
+        public string? PartnerDeviceName { get; set; }
+    }
+
+    // Result of comparing one PRONETA device row against the currently open TIA project.
+    public class NetworkImportMatch
+    {
+        public PronetaDevice PronetaDevice { get; set; } = null!;
+        public string? MatchedTiaDeviceName { get; set; }
+        public string? MatchMethod { get; set; }
+        public string? TiaCurrentIp { get; set; }
+        public string? TiaCurrentSubnetMask { get; set; }
+        public bool IpDiffers { get; set; }
+    }
+
     public class Portal
     {
         // closing parantheses for regex characters ommitted, because they are not relevant for regex detection
@@ -823,10 +865,55 @@ namespace TiaMcpServer.Siemens
         // that doesn't itself carry a NetworkInterface, search every DeviceItem nested under it
         // and auto-resolve if exactly one is found. Returns the resolved path alongside the
         // interface so the caller can see what was actually used when it wasn't an exact match.
-        public (NetworkInterface Interface, string ResolvedPath) GetNetworkInterfaceInfo(string path)
+        public (NetworkInterface Interface, string ResolvedPath, List<PortConnectionInfo> Ports) GetNetworkInterfaceInfo(string path)
         {
             _logger?.LogInformation($"Getting network interface info for: {path}");
+            var (iface, resolvedPath) = ResolveNetworkInterface(path);
+            return (iface, resolvedPath, GetPortConnections(iface));
+        }
 
+        // Best-effort - NetworkPort.ConnectedPorts is documented "Internal use only" in the
+        // shipped Openness XML docs, so a per-port try/catch keeps one misbehaving port from
+        // breaking the whole list rather than trusting it unconditionally.
+        private List<PortConnectionInfo> GetPortConnections(NetworkInterface iface)
+        {
+            var results = new List<PortConnectionInfo>();
+
+            foreach (var port in iface.Ports)
+            {
+                var name = (port.Parent as DeviceItem)?.Name ?? port.ToString() ?? "?";
+                string? connectedDeviceItem = null;
+                string? connectedPortName = null;
+
+                try
+                {
+                    var connected = port.ConnectedPorts?.FirstOrDefault();
+                    if (connected != null)
+                    {
+                        connectedPortName = (connected.Parent as DeviceItem)?.Name;
+                        connectedDeviceItem = connected.Interface?.OwnedBy?.Name;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogDebug(ex, "ConnectedPorts lookup failed for port {PortName} - leaving it unconnected in the response", name);
+                }
+
+                results.Add(new PortConnectionInfo
+                {
+                    Name = name,
+                    ConnectedDeviceItemName = connectedDeviceItem,
+                    ConnectedPortName = connectedPortName
+                });
+            }
+
+            return results;
+        }
+
+        // Shared by GetNetworkInterfaceInfo (read) and the network write tools below - one
+        // resolution path so the auto-descend/ambiguity behavior can't drift between them.
+        private (NetworkInterface Interface, string ResolvedPath) ResolveNetworkInterface(string path)
+        {
             if (IsProjectNull())
             {
                 throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
@@ -895,6 +982,572 @@ namespace TiaMcpServer.Siemens
                 }
             }
         }
+
+        #endregion
+
+        #region network topology comparison (PRONETA CSV)
+
+        // Compares a PRONETA "Device Table (CSV)" export (Network Analysis > Online > Export,
+        // with "Include device details" checked - that's what adds the Port ID/Partner Port ID/
+        // Partner Device Name columns this needs) against the currently open project's devices.
+        // Read-only / report only - matching is by case-insensitive device name (PROFINET device
+        // names are lowercase by spec, so e.g. project device "PLC_1" vs PRONETA's discovered
+        // "plc_1" is the expected normal case, not a mismatch). MAC-address matching was
+        // considered first but isn't possible: verified via the shipped Openness XML docs that no
+        // MAC-address attribute/property exists anywhere in this API surface, on Node or
+        // otherwise - so name is the only available matching key, and is therefore best-effort,
+        // not guaranteed-correct. No write happens here; use SetIpAddress separately once a
+        // mismatch is confirmed by a human.
+        public List<NetworkImportMatch> CompareNetworkCsv(string csvPath)
+        {
+            _logger?.LogInformation($"Comparing PRONETA CSV: {csvPath}");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            var pronetaDevices = ParsePronetaCsv(csvPath);
+            var tiaDevices = GetDevices();
+            var results = new List<NetworkImportMatch>();
+
+            foreach (var pd in pronetaDevices)
+            {
+                var match = new NetworkImportMatch { PronetaDevice = pd };
+
+                var nameMatch = tiaDevices.FirstOrDefault(d => d.Name.Equals(pd.Name, StringComparison.OrdinalIgnoreCase));
+                if (nameMatch != null)
+                {
+                    match.MatchedTiaDeviceName = nameMatch.Name;
+                    match.MatchMethod = "name";
+
+                    // Don't go through ResolveNetworkInterface here - a device can have more than
+                    // one interface (e.g. an HMI's two communication processors), which is
+                    // "ambiguous" from a single-path lookup but not actually a problem here: walk
+                    // every interface under the device and prefer whichever node's IP matches the
+                    // PRONETA row, falling back to the first node found if none match exactly.
+                    var candidates = new List<(DeviceItem Item, string Path)>();
+                    if (nameMatch.DeviceItems != null)
+                    {
+                        foreach (var child in nameMatch.DeviceItems)
+                        {
+                            CollectNetworkInterfaceDeviceItems(child, nameMatch.Name, candidates);
+                        }
+                    }
+
+                    foreach (var (ifaceItem, _) in candidates)
+                    {
+                        var iface = ifaceItem.GetService<NetworkInterface>();
+                        if (iface == null)
+                        {
+                            continue;
+                        }
+
+                        foreach (var node in iface.Nodes)
+                        {
+                            // Not every Node supports "Address"/"SubnetMask" (e.g. a PROFIBUS
+                            // node has neither) - GetAttribute throws for an unsupported name on
+                            // this instance, so treat that as "no IP info from this node" rather
+                            // than failing the whole comparison.
+                            string? addr = null;
+                            string? mask = null;
+                            try
+                            {
+                                addr = node.GetAttribute("Address") as string;
+                                mask = node.GetAttribute("SubnetMask") as string;
+                            }
+                            catch (Exception)
+                            {
+                                continue;
+                            }
+
+                            var pronetaIp = pd.IpAddress;
+
+                            var isExactMatch = !string.IsNullOrEmpty(pronetaIp) && !string.IsNullOrEmpty(addr)
+                                && pronetaIp!.Equals(addr, StringComparison.OrdinalIgnoreCase);
+
+                            if (isExactMatch || match.TiaCurrentIp == null)
+                            {
+                                match.TiaCurrentIp = addr;
+                                match.TiaCurrentSubnetMask = mask;
+                            }
+
+                            if (isExactMatch)
+                            {
+                                break;
+                            }
+                        }
+                    }
+
+                    var pronetaIpToCompare = pd.IpAddress;
+                    var tiaIpToCompare = match.TiaCurrentIp;
+                    if (!string.IsNullOrEmpty(pronetaIpToCompare) && !string.IsNullOrEmpty(tiaIpToCompare))
+                    {
+                        match.IpDiffers = !pronetaIpToCompare!.Equals(tiaIpToCompare, StringComparison.OrdinalIgnoreCase);
+                    }
+                }
+
+                results.Add(match);
+            }
+
+            return results;
+        }
+
+        public List<PronetaDevice> ParsePronetaCsv(string csvPath)
+        {
+            if (!File.Exists(csvPath))
+            {
+                throw new PortalException(PortalErrorCode.NotFound, $"CSV file not found at '{csvPath}'");
+            }
+
+            var lines = File.ReadAllLines(csvPath);
+            var devices = new List<PronetaDevice>();
+            PronetaDevice? current = null;
+
+            // Find the real header row (contains "Device Type") - skips "sep=," and the
+            // "Online Topology" title row that precede it.
+            var startIndex = 0;
+            for (var i = 0; i < lines.Length; i++)
+            {
+                if (lines[i].Contains("Device Type"))
+                {
+                    startIndex = i + 1;
+                    break;
+                }
+            }
+
+            for (var i = startIndex; i < lines.Length; i++)
+            {
+                var fields = ParseCsvLine(lines[i]);
+                if (fields.Count == 0 || fields.All(string.IsNullOrWhiteSpace))
+                {
+                    current = null; // blank row = device separator
+                    continue;
+                }
+
+                // A new device is signaled by the leading "#" (device index) column, not by
+                // Name - PRONETA can discover a device with no configured name at all (e.g. an
+                // RF1100 reader straight from the factory), and that's still a real device that
+                // needs to show up in the report, not silently vanish because Name was blank.
+                var deviceIndex = fields.ElementAtOrDefault(0);
+                if (!string.IsNullOrWhiteSpace(deviceIndex))
+                {
+                    current = new PronetaDevice
+                    {
+                        Name = fields.ElementAtOrDefault(1) ?? "",
+                        DeviceType = fields.ElementAtOrDefault(2) ?? "",
+                        IpAddress = NullIfEmpty(fields.ElementAtOrDefault(3)),
+                        SubnetMask = NullIfEmpty(fields.ElementAtOrDefault(4)),
+                        MacAddress = NullIfEmpty(fields.ElementAtOrDefault(5)),
+                        Role = NullIfEmpty(fields.ElementAtOrDefault(6))
+                    };
+                    devices.Add(current);
+                }
+
+                if (current == null)
+                {
+                    continue; // a continuation row before any device header showed up - ignore
+                }
+
+                var portId = fields.ElementAtOrDefault(18);
+                if (!string.IsNullOrWhiteSpace(portId))
+                {
+                    current.Ports.Add(new PronetaPort
+                    {
+                        PortId = portId,
+                        PortDescription = NullIfEmpty(fields.ElementAtOrDefault(19)),
+                        PartnerPortId = NullIfEmpty(fields.ElementAtOrDefault(20)),
+                        PartnerDeviceName = NullIfEmpty(fields.ElementAtOrDefault(21))
+                    });
+                }
+            }
+
+            return devices;
+        }
+
+        private static string? NullIfEmpty(string? s) => string.IsNullOrWhiteSpace(s) ? null : s;
+
+        // Minimal RFC4180-ish CSV line parser (handles quoted fields, "" as an escaped quote) -
+        // a plain Split(',') would break since every field in this export is quoted.
+        private static List<string> ParseCsvLine(string line)
+        {
+            var fields = new List<string>();
+            var sb = new StringBuilder();
+            var inQuotes = false;
+
+            for (var i = 0; i < line.Length; i++)
+            {
+                var c = line[i];
+
+                if (inQuotes)
+                {
+                    if (c == '"')
+                    {
+                        if (i + 1 < line.Length && line[i + 1] == '"')
+                        {
+                            sb.Append('"');
+                            i++;
+                        }
+                        else
+                        {
+                            inQuotes = false;
+                        }
+                    }
+                    else
+                    {
+                        sb.Append(c);
+                    }
+                }
+                else
+                {
+                    if (c == '"')
+                    {
+                        inQuotes = true;
+                    }
+                    else if (c == ',')
+                    {
+                        fields.Add(sb.ToString());
+                        sb.Clear();
+                    }
+                    else
+                    {
+                        sb.Append(c);
+                    }
+                }
+            }
+
+            fields.Add(sb.ToString());
+            return fields;
+        }
+
+        #endregion
+
+        #region network/device write CRUD
+
+        // Not implemented: importing/installing a GSD file. Verified via a full-assembly method
+        // search (every method whose name contains "Gsd", no verb filter) that no Install/Import/
+        // Add/Register-shaped method exists anywhere in this Openness version - PR #26's
+        // ImportGsdFile(gsdFilePath) calling project.InstallGsdFile(...) doesn't correspond to any
+        // real API here. Confirmed absent, not just unused.
+
+        // Sets IP/subnet mask/router on every node under a network interface (same auto-resolving
+        // path as GetNetworkInterfaceInfo). Important: this only changes the TIA *project's*
+        // metadata - nothing reaches real hardware until the project is compiled and downloaded.
+        // Changing the address can also regenerate the PROFINET device name hash
+        // (PnDeviceNameConverted) - if that no longer matches what's actually downloaded to a
+        // switch/drive on the line, the online connection to that device breaks. The response
+        // message says this explicitly so a caller can't mistake "set" for "applied".
+        public (NetworkInterface Interface, string ResolvedPath) SetIpAddress(string path, string ipAddress, string subnetMask, string? routerAddress = null)
+        {
+            _logger?.LogInformation($"Setting IP address for: {path}");
+
+            var (iface, resolvedPath) = ResolveNetworkInterface(path);
+
+            try
+            {
+                foreach (var node in iface.Nodes)
+                {
+                    node.SetAttribute("Address", ipAddress);
+                    node.SetAttribute("SubnetMask", subnetMask);
+                    if (!string.IsNullOrEmpty(routerAddress))
+                    {
+                        node.SetAttribute("UseRouter", true);
+                        node.SetAttribute("RouterAddress", routerAddress);
+                    }
+                }
+
+                return (iface, resolvedPath);
+            }
+            catch (Exception ex)
+            {
+                var pex = new PortalException(PortalErrorCode.ExportFailed, "Set IP address failed", null, ex);
+                pex.Data["path"] = path;
+                pex.Data["ipAddress"] = ipAddress;
+                _logger?.LogError(pex, "SetIpAddress failed for {Path}", path);
+                throw pex;
+            }
+        }
+
+        // Connects every node under a network interface to the named subnet (must already exist -
+        // see GetSubnets). Same "project metadata only" caveat as SetIpAddress.
+        public (NetworkInterface Interface, string ResolvedPath, string SubnetName) ConnectToSubnet(string path, string subnetName)
+        {
+            _logger?.LogInformation($"Connecting {path} to subnet '{subnetName}'");
+
+            if (_project is not Project project)
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "Subnets (and ConnectToSubnet) are only available on a full project, not a multiuser local session");
+            }
+
+            var subnet = project.Subnets?.FirstOrDefault(s => s.Name.Equals(subnetName, StringComparison.OrdinalIgnoreCase))
+                ?? throw new PortalException(PortalErrorCode.NotFound, $"Subnet '{subnetName}' not found - see GetSubnets for the real names");
+
+            var (iface, resolvedPath) = ResolveNetworkInterface(path);
+
+            try
+            {
+                foreach (var node in iface.Nodes)
+                {
+                    node.ConnectToSubnet(subnet);
+                }
+
+                return (iface, resolvedPath, subnet.Name);
+            }
+            catch (Exception ex)
+            {
+                var pex = new PortalException(PortalErrorCode.ExportFailed, "Connect to subnet failed", null, ex);
+                pex.Data["path"] = path;
+                pex.Data["subnetName"] = subnetName;
+                _logger?.LogError(pex, "ConnectToSubnet failed for {Path} -> {SubnetName}", path, subnetName);
+                throw pex;
+            }
+        }
+
+        public (NetworkInterface Interface, string ResolvedPath) DisconnectFromSubnet(string path)
+        {
+            _logger?.LogInformation($"Disconnecting {path} from its subnet");
+
+            var (iface, resolvedPath) = ResolveNetworkInterface(path);
+
+            try
+            {
+                foreach (var node in iface.Nodes)
+                {
+                    node.DisconnectFromSubnet();
+                }
+
+                return (iface, resolvedPath);
+            }
+            catch (Exception ex)
+            {
+                var pex = new PortalException(PortalErrorCode.ExportFailed, "Disconnect from subnet failed", null, ex);
+                pex.Data["path"] = path;
+                _logger?.LogError(pex, "DisconnectFromSubnet failed for {Path}", path);
+                throw pex;
+            }
+        }
+
+        public Device CreateDevice(string typeIdentifier, string name, string groupPath = "")
+        {
+            _logger?.LogInformation($"Creating device '{name}' ({typeIdentifier}) under '{groupPath}'");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            var (devices, _) = ResolveDeviceGroupPath(groupPath);
+            if (devices == null)
+            {
+                throw new PortalException(PortalErrorCode.NotFound, $"Device group not found at '{groupPath}'");
+            }
+
+            try
+            {
+                return devices.Create(typeIdentifier, name);
+            }
+            catch (Exception ex)
+            {
+                var pex = new PortalException(PortalErrorCode.ExportFailed, "Create device failed", null, ex);
+                pex.Data["typeIdentifier"] = typeIdentifier;
+                pex.Data["name"] = name;
+                pex.Data["groupPath"] = groupPath;
+                _logger?.LogError(pex, "CreateDevice failed for {TypeIdentifier} {Name}", typeIdentifier, name);
+                throw pex;
+            }
+        }
+
+        // For devices that need both a station-level name and a first sub-item name in one call
+        // (e.g. a CPU station, mirroring how existing devices are shaped: Device
+        // "S7-1500/ET200MP station_1" containing DeviceItem "PLC_1").
+        public Device CreateDeviceWithItem(string typeIdentifier, string name, string deviceItemName, string groupPath = "")
+        {
+            _logger?.LogInformation($"Creating device '{name}' with item '{deviceItemName}' ({typeIdentifier}) under '{groupPath}'");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            var (devices, _) = ResolveDeviceGroupPath(groupPath);
+            if (devices == null)
+            {
+                throw new PortalException(PortalErrorCode.NotFound, $"Device group not found at '{groupPath}'");
+            }
+
+            try
+            {
+                return devices.CreateWithItem(typeIdentifier, name, deviceItemName);
+            }
+            catch (Exception ex)
+            {
+                var pex = new PortalException(PortalErrorCode.ExportFailed, "Create device failed", null, ex);
+                pex.Data["typeIdentifier"] = typeIdentifier;
+                pex.Data["name"] = name;
+                pex.Data["deviceItemName"] = deviceItemName;
+                pex.Data["groupPath"] = groupPath;
+                _logger?.LogError(pex, "CreateDeviceWithItem failed for {TypeIdentifier} {Name}", typeIdentifier, name);
+                throw pex;
+            }
+        }
+
+        // Dry-run by default (confirm=false): reports what would be deleted without touching the
+        // project. TIA's own undo only survives until the next save, and hardware config changes
+        // are more expensive to recover from than a block/tag (physical wiring and GSD matching
+        // are entangled with it) - so unlike DeleteBlock/DeleteTag, this needs an explicit
+        // confirm=true to actually execute, on top of whatever confirmation the caller already
+        // got from the user.
+        public (bool Executed, string DeviceName, string TypeName) DeleteDevice(string devicePath, bool confirm = false)
+        {
+            _logger?.LogInformation($"{(confirm ? "Deleting" : "Previewing delete of")} device: {devicePath}");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            var device = GetDeviceByPath(devicePath)
+                ?? throw new PortalException(PortalErrorCode.NotFound, "Device not found");
+
+            var name = device.Name;
+            var typeName = device.GetAttribute("TypeName") as string ?? "";
+
+            if (!confirm)
+            {
+                return (false, name, typeName);
+            }
+
+            try
+            {
+                device.Delete();
+                return (true, name, typeName);
+            }
+            catch (Exception ex)
+            {
+                var pex = new PortalException(PortalErrorCode.ExportFailed, "Delete device failed", null, ex);
+                pex.Data["devicePath"] = devicePath;
+                _logger?.LogError(pex, "DeleteDevice failed for {DevicePath}", devicePath);
+                throw pex;
+            }
+        }
+
+        public DeviceUserGroup CreateDeviceGroup(string parentGroupPath, string name)
+        {
+            _logger?.LogInformation($"Creating device group '{name}' under '{parentGroupPath}'");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            var (_, groups) = ResolveDeviceGroupPath(parentGroupPath);
+            if (groups == null)
+            {
+                throw new PortalException(PortalErrorCode.NotFound, $"Device group not found at '{parentGroupPath}'");
+            }
+
+            try
+            {
+                return groups.Create(name);
+            }
+            catch (Exception ex)
+            {
+                var pex = new PortalException(PortalErrorCode.ExportFailed, "Create device group failed", null, ex);
+                pex.Data["parentGroupPath"] = parentGroupPath;
+                pex.Data["name"] = name;
+                _logger?.LogError(pex, "CreateDeviceGroup failed for {ParentGroupPath} {Name}", parentGroupPath, name);
+                throw pex;
+            }
+        }
+
+        public void DeleteDeviceGroup(string groupPath)
+        {
+            _logger?.LogInformation($"Deleting device group: {groupPath}");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            var group = GetDeviceUserGroupByPath(groupPath)
+                ?? throw new PortalException(PortalErrorCode.NotFound, $"Device group not found at '{groupPath}'");
+
+            try
+            {
+                group.Delete();
+            }
+            catch (Exception ex)
+            {
+                var pex = new PortalException(PortalErrorCode.ExportFailed, "Delete device group failed", null, ex);
+                pex.Data["groupPath"] = groupPath;
+                _logger?.LogError(pex, "DeleteDeviceGroup failed for {GroupPath}", groupPath);
+                throw pex;
+            }
+        }
+
+        // Returns both the Devices and Groups compositions at a group path ("" = project root) -
+        // CreateDevice/CreateDeviceWithItem need the former, CreateDeviceGroup needs the latter.
+        private (DeviceComposition? Devices, DeviceUserGroupComposition? Groups) ResolveDeviceGroupPath(string groupPath)
+        {
+            if (_project == null)
+            {
+                return (null, null);
+            }
+
+            if (string.IsNullOrWhiteSpace(groupPath))
+            {
+                return (_project.Devices, _project.DeviceGroups);
+            }
+
+            var segments = groupPath.Split(['/'], StringSplitOptions.RemoveEmptyEntries);
+            DeviceUserGroupComposition? groups = _project.DeviceGroups;
+            DeviceUserGroup? group = null;
+
+            foreach (var segment in segments)
+            {
+                group = groups?.FirstOrDefault(g => g.Name.Equals(segment, StringComparison.OrdinalIgnoreCase));
+                if (group == null)
+                {
+                    return (null, null);
+                }
+
+                groups = group.Groups;
+            }
+
+            return (group?.Devices, group?.Groups);
+        }
+
+        // Resolves the DeviceUserGroup object itself at a path (for delete, which needs the
+        // group, not its child compositions). Root has no single object to delete, so an empty
+        // path returns null (surfaces as NotFound) rather than a special "can't delete root" case.
+        private DeviceUserGroup? GetDeviceUserGroupByPath(string groupPath)
+        {
+            if (_project == null || string.IsNullOrWhiteSpace(groupPath))
+            {
+                return null;
+            }
+
+            var segments = groupPath.Split(['/'], StringSplitOptions.RemoveEmptyEntries);
+            DeviceUserGroupComposition? groups = _project.DeviceGroups;
+            DeviceUserGroup? group = null;
+
+            foreach (var segment in segments)
+            {
+                group = groups?.FirstOrDefault(g => g.Name.Equals(segment, StringComparison.OrdinalIgnoreCase));
+                if (group == null)
+                {
+                    return null;
+                }
+
+                groups = group.Groups;
+            }
+
+            return group;
+        }
+
+        #endregion
+
+        #region devices helpers
 
         /// <summary>
         /// Resolves the OnlineProvider service for a device or device item path - tries a Device

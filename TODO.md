@@ -288,18 +288,57 @@ Priority order for picking pieces up ourselves, each to go through this project'
       the exact previously-failing path (`HMI_1/HMI_1.IE_CP_1`) now auto-resolves in one call, a
       bare device name (`HMI_1`) correctly reports ambiguity with real candidate paths, and the
       old exact-path behavior still works unchanged (regression check).
-    - **Write side deliberately not pursued yet** (device creation/deletion, IP/subnet
-      reassignment, `ImportGsdFile`) - different risk shape than block/tag CRUD, since it can
-      affect how the project matches physical hardware in a way that's harder to eyeball-verify
-      than a block/tag diff. Did read PR #26's actual diff for these (not just the commit
-      message/method list) - `SetIpAddress` calls `node.SetAttribute("Address"/"SubnetMask"/
-      "RouterAddress", ...)` on every node under the target interface, `ConnectToSubnet` calls a
-      `node.ConnectToSubnet(subnet)` method (not previously found by our own reflection pass -
-      worth confirming it's real before relying on it), `DeleteDevice` is just `device.Delete()`,
-      `ImportGsdFile` calls `((Project)_project).InstallGsdFile(new FileInfo(path))`,
-      `CreateDeviceGroup` mirrors the block/type/tag group-creation pattern already used
-      elsewhere. None of this has been independently reflection-verified or implemented yet -
-      revisit only if a concrete need shows up.
+    - ~~**Write side**~~ - **Done (2026-09-17).** Before implementing, another session (live-
+      diagnosing a real HIOKI integration bug on the actual Mahindra project) reviewed the plan
+      and flagged 3 things, all incorporated: (1) asked whether `Node.ConnectToSubnet` was a real
+      method or a PR #26 fabrication - independently reflection-verified it's real (along with
+      `CreateAndConnectToSubnet`/`DisconnectFromSubnet`), while the same full-assembly method
+      search found `ImportGsdFile`/`InstallGsdFile` genuinely doesn't exist anywhere - not
+      implemented, confirmed absent rather than just unused; (2) pointed out
+      `GetNetworkInterfaceInfo`'s `PnDeviceNameConverted` field means changing IP/name regenerates
+      a PROFINET device-name hash that can desync from what's actually downloaded to physical
+      hardware, breaking the online connection - `SetIpAddress`/`ConnectToSubnet` responses now
+      say explicitly this is project-metadata-only until compiled and downloaded; (3) recommended
+      `DeleteDevice` default to dry-run given HW config is entangled with physical wiring/GSD
+      matching (costlier to recover than a block/tag) - implemented with `confirm=false` default
+      (preview only, nothing changes) and `confirm=true` required to actually delete.
+      New tools: `SetIpAddress`/`ConnectToSubnet`/`DisconnectFromSubnet` (share
+      `GetNetworkInterfaceInfo`'s auto-resolve path via a common private `ResolveNetworkInterface`
+      helper - no duplicated resolution logic), `CreateDevice`/`CreateDeviceWithItem`
+      (`DeviceComposition.Create`/`.CreateWithItem`), `DeleteDevice` (dry-run by default),
+      `CreateDeviceGroup`/`DeleteDeviceGroup`. Live-verified end to end against "Tia for Claude":
+      set a real IP and confirmed it stuck via `GetNetworkInterfaceInfo`, disconnected and
+      reconnected a subnet, created a device group + a SINAMICS G drive inside it, previewed
+      deletion (`confirm=false` - verified nothing changed), then actually deleted it
+      (`confirm=true`), then cleaned up the group. All 9 steps passed on the first run.
+11. ~~**Port-level wiring + PRONETA CSV comparison**~~ - **Done (2026-09-17).** Follow-on to item
+    10, relayed in from another session's real-project work. `GetNetworkInterfaceInfo` now
+    includes per-port wiring (`NetworkPort.ConnectedPorts` - documented "Internal use only" in
+    the Openness XML, but live-verified as working, not just theoretically present). New
+    `CompareNetworkCsv(csvPath)`: parses a PRONETA "Device Table (CSV)" export (with "Include
+    device details" checked - that's what adds the Port ID/Partner Port/Partner Device columns)
+    and compares it against the open project's devices. Read-only - never calls `SetIpAddress`
+    itself, a human confirms a reported mismatch first.
+    - **MAC-based matching is impossible**: searched the entire shipped Openness XML docs for
+      any MAC-address property/attribute - genuinely doesn't exist anywhere (only an unrelated
+      DHCP enum value matched). Matching is by case-insensitive device name instead (PROFINET
+      device names are lowercase by spec, so `PLC_1` project vs `plc_1` PRONETA is the expected
+      normal case).
+    - Three real bugs found and fixed during live testing against an actual 46-device PRONETA
+      export: (1) the CSV parser used the Name column to detect a new device row, which silently
+      dropped PRONETA rows for unnamed devices (e.g. a factory-default RF1100) - switched to the
+      `#` (device index) column, which is always present; (2) IP comparison reused
+      `GetNetworkInterfaceInfo`'s single-path resolution, which fails as "ambiguous" for any
+      device with more than one interface (e.g. an HMI's two communication processors) - fixed
+      by walking every interface under the matched device and preferring an exact IP match; (3)
+      calling `Node.GetAttribute("Address")` unconditionally crashed on node types that don't
+      support it (seen across a device mix of SINAMICS S/G, EX600, ET200SP, SCALANCE) - wrapped
+      in a try/catch, treated as "no IP info from this node".
+    - Live-verified against "Tia for Claude" with a real 46-device PRONETA CSV: all 46 parsed
+      correctly (including the 2 previously-dropped unnamed RF1100 rows), 3 devices matched by
+      name (`hmi_1/2/3` -> `HMI_1/2/3`) with real TIA IPs correctly retrieved
+      (`192.168.1.201/202/203`, exactly matching PRONETA's scan, `ipDiffers: false`), no crashes
+      across the full mixed-device-type set.
 
 ## Documentation
 - [ ] Add a "CLI Options" section to `README.md` documenting `--tia-major-version <int>` and `--logging <1|2|3>` with defaults and effect (1=stderr, 2=Debug, 3=Event Log). Cross-link to samples.

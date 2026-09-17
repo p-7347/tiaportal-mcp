@@ -111,14 +111,87 @@ namespace TiaMcpServer.ModelContextProtocol
         public string? ConnectedSubnetName { get; set; }
     }
 
+    public class ResponsePortInfo
+    {
+        public string? Name { get; set; }
+        public string? ConnectedDeviceItemName { get; set; }
+        public string? ConnectedPortName { get; set; }
+    }
+
     public class ResponseNetworkInterfaceInfo : ResponseMessage
     {
         public string? ResolvedPath { get; set; }
         public string? InterfaceType { get; set; }
         public IEnumerable<ResponseNetworkNodeInfo>? Nodes { get; set; }
         public int? PortCount { get; set; }
+        public IEnumerable<ResponsePortInfo>? Ports { get; set; }
         public string? IoControllerOfIoSystem { get; set; }
         public string? IoConnectorOfIoSystem { get; set; }
+    }
+
+    public class ResponsePronetaPort
+    {
+        public string? PortId { get; set; }
+        public string? PartnerPortId { get; set; }
+        public string? PartnerDeviceName { get; set; }
+    }
+
+    public class ResponseNetworkCsvMatch
+    {
+        public string? PronetaName { get; set; }
+        public string? DeviceType { get; set; }
+        public string? PronetaIp { get; set; }
+        public string? PronetaSubnetMask { get; set; }
+        public string? MacAddress { get; set; }
+        public string? Role { get; set; }
+        public string? MatchedTiaDeviceName { get; set; }
+        public string? MatchMethod { get; set; }
+        public string? TiaCurrentIp { get; set; }
+        public string? TiaCurrentSubnetMask { get; set; }
+        public bool? IpDiffers { get; set; }
+        public IEnumerable<ResponsePronetaPort>? Ports { get; set; }
+    }
+
+    public class ResponseCompareNetworkCsv : ResponseMessage
+    {
+        public IEnumerable<ResponseNetworkCsvMatch>? Items { get; set; }
+    }
+
+    public class ResponseSetIpAddress : ResponseMessage
+    {
+        public string? ResolvedPath { get; set; }
+    }
+
+    public class ResponseConnectToSubnet : ResponseMessage
+    {
+        public string? ResolvedPath { get; set; }
+        public string? SubnetName { get; set; }
+    }
+
+    public class ResponseDisconnectFromSubnet : ResponseMessage
+    {
+        public string? ResolvedPath { get; set; }
+    }
+
+    public class ResponseCreateDevice : ResponseMessage
+    {
+        public string? Name { get; set; }
+    }
+
+    public class ResponseDeleteDevice : ResponseMessage
+    {
+        public bool? Executed { get; set; }
+        public string? DeviceName { get; set; }
+        public string? TypeName { get; set; }
+    }
+
+    public class ResponseCreateDeviceGroup : ResponseMessage
+    {
+        public string? Name { get; set; }
+    }
+
+    public class ResponseDeleteDeviceGroup : ResponseMessage
+    {
     }
 
     public class ResponseGsdReference

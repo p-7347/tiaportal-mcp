@@ -5,6 +5,89 @@
 
 ---
 
+## [2026-09-17] 포트 단위 배선 정보 + PRONETA CSV 비교 (`CompareNetworkCsv`)
+
+다른 세션(실프로젝트에서 HIOKI 진단 중)이 "네트워크 토폴로지 자동화" 아이디어를 relay해줘서
+시작. PRONETA "Device Table (CSV, Include device details)" export를 참고 자료로 받아서 설계.
+
+### 1. `GetNetworkInterfaceInfo`에 포트별 배선 정보 추가
+- `NetworkPort.ConnectedPorts`가 Openness XML 문서상 "Internal use only"라고 적혀있어서 신뢰도
+  걱정했는데, 실제로 라이브 테스트해보니 정상 동작함 - `Port_1`이 파트너 디바이스의
+  `Port_1`에 연결된 것까지 정확히 나옴. 다만 여전히 비공식 API라 응답 description에
+  "best-effort, 설정 안 해놨으면 null일 수 있음"이라고 명시해둠.
+- `NetworkPort`엔 이름이 없어서(`.Parent`가 그 포트를 나타내는 DeviceItem, 예: "Port_1") 그
+  DeviceItem 이름을 포트 이름으로 사용.
+
+### 2. `CompareNetworkCsv` - PRONETA CSV 비교 (읽기 전용)
+- **MAC 매칭 불가능 확정**: Openness XML 문서 전체에서 "MacAddress" 관련 속성을 찾아봤지만
+  DHCP 열거형 값 하나 말고는 전혀 없음 - Node/DeviceItem 어디에도 MAC 주소를 노출하는 진짜
+  속성이 없음. 그래서 대소문자 무시 디바이스 이름 매칭으로 설계(PROFINET 디바이스명은 규격상
+  소문자라 `PLC_1` ↔ `plc_1`은 정상 케이스).
+- CSV 파서는 `#`(디바이스 인덱스) 컬럼으로 "새 디바이스 행"을 판단 - 처음엔 Name 컬럼으로
+  판단했다가, PRONETA가 이름 미설정 장치(RF1100 등)는 Name이 빈 채로 스캔해온다는 걸 실측으로
+  발견하고 수정. Name 기준이었으면 이런 장치가 리포트에서 통째로 사라짐.
+- 매칭된 디바이스의 IP 비교 시, 처음엔 `GetNetworkInterfaceInfo`의 단일 경로 해석을 그대로
+  재사용했다가 실패 - HMI처럼 인터페이스가 2개(IE_CP_1/IE_CP_2)인 디바이스는 이름만으로는
+  모호(ambiguous)해서 조회가 막힘. 디바이스 밑 모든 인터페이스를 순회해서 PRONETA IP와
+  정확히 일치하는 노드를 우선하고, 없으면 첫 번째로 찾은 값을 폴백으로 쓰도록 수정.
+- 라이브 테스트 중 새 버그 발견: 일부 `Node`(PROFIBUS 등으로 추정)는 `GetAttribute("Address")`
+  자체가 "지원 안 됨" 예외를 던짐 - 이 프로젝트 안 모든 디바이스(SINAMICS S/G, EX600, ET200SP,
+  SCALANCE 등 타입 다양)를 순회하다 보니 걸림. try/catch로 감싸서 "이 노드는 IP 정보 없음"으로
+  처리하도록 수정.
+- **MAC 주소는 여전히 리포트에 포함** - 매칭 키로는 못 쓰지만 사람이 눈으로 대조할 수 있게
+  남겨둠.
+- 읽기 전용 - 아무것도 안 씀. 불일치 확인되면 이미 있는 `SetIpAddress`를 사람이 판단해서 따로
+  호출하는 구조.
+
+### 라이브 검증 (Tia for Claude, PID 57012, 실제 PRONETA CSV 46개 디바이스)
+- 46개 디바이스 전부 정상 파싱(빈 이름 RF1100 2대 포함, 수정 전엔 44개로 누락됐었음).
+- 이름 매칭: `hmi_1/hmi_2/hmi_3` ↔ `HMI_1/HMI_2/HMI_3` 3건 성공.
+- IP 비교: 3건 전부 TIA 쪽 실제 IP(`192.168.1.201/202/203`)까지 정확히 가져와서
+  `ipDiffers: false` 확인 (수정 전엔 인터페이스 모호성 때문에 전부 조회 실패했었음).
+- Node 속성 예외 가드 적용 후 46개 디바이스(SINAMICS S/G, EX600, ET200SP, SCALANCE 등 타입
+  혼재) 전부 크래시 없이 처리됨.
+
+---
+
+## [2026-09-17] 네트워크/디바이스 쓰기 CRUD (`SetIpAddress`/`ConnectToSubnet`/`CreateDevice`/`DeleteDevice` 등)
+
+TODO에 "의도적으로 보류"로 남겨뒀던 하드웨어 쓰기 쪽 구현. 다른 세션(실프로젝트에서 HIOKI
+버그를 직접 진단하던 쪽)에서 먼저 온 리뷰 피드백을 반영해서 설계함 - 요약하면 "네트워크/HW
+쓰기는 블록/태그 CRUD랑 리스크 성격이 다르다"는 지적이었고, 구체적으로 3가지를 반영:
+
+1. **`ConnectToSubnet`이 진짜 있는 API인지 재검증 요청** → 직접 리플렉션으로 확인, `Node.
+   ConnectToSubnet(Subnet)`/`CreateAndConnectToSubnet(string)`/`DisconnectFromSubnet()` 전부
+   실존. 대신 같은 리플렉션에서 `ImportGsdFile`/`InstallGsdFile`은 전체 어셈블리를 메서드명
+   기준으로 다 뒤져봐도(Gsd가 들어간 메서드 전수 조사, 동사 필터 없이) 어디에도 없다는 걸
+   확인 - PR #26의 해당 부분은 실제 API가 아니었던 것으로 결론, 구현에서 제외.
+2. **PN 디바이스 이름 재생성 경고** - `GetNetworkInterfaceInfo` 응답에 있던
+   `PnDeviceNameConverted` 필드를 보고 나온 지적: IP/이름을 바꾸면 PN 디바이스 이름 해시가
+   같이 바뀌는데, 이미 다운로드된 실제 장비(스위치/드라이브)의 PN 이름과 어긋나면 온라인
+   연결이 끊긴다는 것. `SetIpAddress`/`ConnectToSubnet` 응답 메시지에 "프로젝트 메타데이터일
+   뿐, 컴파일+다운로드 전까진 실제 하드웨어에 반영 안 됨"을 명시적으로 박아둠.
+3. **`DeleteDevice` dry-run 기본값 요청** - TIA undo가 다음 저장 전까지만 유효하고, HW 구성은
+   실배선/GSD 매칭까지 얽혀서 블록/태그보다 복구 비용이 크다는 이유. `confirm` 파라미터
+   기본값 `false`(미리보기만, 아무것도 안 바뀜), `true`를 명시해야만 실제 삭제.
+
+### 새 툴 7개
+- `SetIpAddress`/`ConnectToSubnet`/`DisconnectFromSubnet` - `GetNetworkInterfaceInfo`와 완전히
+  동일한 자동탐색 경로 로직을 재사용(`ResolveNetworkInterface` private 헬퍼로 공통화, 로직
+  분기 없음).
+- `CreateDevice`/`CreateDeviceWithItem` - `DeviceComposition.Create(typeIdentifier, name)` /
+  `.CreateWithItem(typeIdentifier, name, deviceItemName)`. typeIdentifier는 카탈로그 문자열이라
+  (`"System:Device.S71500"` 등) 기존 비슷한 디바이스의 `GetDevices` 결과에서 복사해오는 방식
+  안내.
+- `DeleteDevice` - dry-run 기본, `confirm=true`로만 실행.
+- `CreateDeviceGroup`/`DeleteDeviceGroup` - 블록/타입/태그 그룹 CRUD와 동일한 패턴.
+
+### 라이브 검증 (Tia for Claude, PID 11284)
+전체 9단계: IP 설정 → `GetNetworkInterfaceInfo`로 실제 반영 확인(`192.168.1.211`) → 서브넷
+해제 → 재연결(`PN/IE_2`) → 디바이스 그룹 생성 → SINAMICS G 드라이브 생성 → 삭제 미리보기
+(`confirm=false`, 실제로 아무 것도 안 바뀜 확인) → 실제 삭제(`confirm=true`) → 그룹 정리,
+전부 정상 통과. dry-run 안전장치가 설계대로 동작함을 직접 확인.
+
+---
+
 ## [2026-09-10] `GetNetworkInterfaceInfo` 경로 자동 탐색 (실사용 테스트에서 발견된 버그 수정)
 
 오늘 오후 만든 네트워크 토폴로지 기능을 실제 Claude Desktop 세션(원격 환경)에서 실사용

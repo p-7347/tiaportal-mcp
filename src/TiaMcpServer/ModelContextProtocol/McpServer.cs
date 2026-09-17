@@ -721,19 +721,26 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GetNetworkInterfaceInfo", Title = "Get network interface info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get network topology info (nodes, connected subnet, IO controller/connector role, port count) for a device's network interface. path doesn't need to be the exact interface DeviceItem - give a device or device item path (e.g. just the device name, or 'PLC_1') and it auto-searches nested DeviceItems for the interface, since the interface sits at a different depth depending on device type. Check resolvedPath in the response to see what was actually used. Errors list every interface found if the given path is ambiguous (multiple interfaces underneath it).")]
+        [McpServerTool(Name = "GetNetworkInterfaceInfo", Title = "Get network interface info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get network topology info (nodes, connected subnet, IO controller/connector role, per-port wiring) for a device's network interface. path doesn't need to be the exact interface DeviceItem - give a device or device item path (e.g. just the device name, or 'PLC_1') and it auto-searches nested DeviceItems for the interface, since the interface sits at a different depth depending on device type. Check resolvedPath in the response to see what was actually used. Errors list every interface found if the given path is ambiguous (multiple interfaces underneath it). Each port's connectedDeviceItemName/connectedPortName reflects the project's own *planned* topology (best-effort - based on an undocumented Openness property) - it can be null/absent even for a physically wired port if nobody configured it in TIA's Topology view; it does not reflect what's actually plugged in on the real line (compare against a PRONETA scan for that).")]
         public static ResponseNetworkInterfaceInfo GetNetworkInterfaceInfo(
             [Description("path: a device or device item path, e.g. 'S7-1500/ET200MP station_1/PLC_1' or just 'HMI_1' - doesn't need to be the exact interface DeviceItem")] string path)
         {
             try
             {
-                var (iface, resolvedPath) = Portal.GetNetworkInterfaceInfo(path);
+                var (iface, resolvedPath, ports) = Portal.GetNetworkInterfaceInfo(path);
 
                 var nodes = iface.Nodes.Select(n => new ResponseNetworkNodeInfo
                 {
                     Name = n.Name,
                     ConnectedSubnetName = n.ConnectedSubnet?.Name,
                     Attributes = Helper.GetAttributeList(n)
+                }).ToList();
+
+                var responsePorts = ports.Select(p => new ResponsePortInfo
+                {
+                    Name = p.Name,
+                    ConnectedDeviceItemName = p.ConnectedDeviceItemName,
+                    ConnectedPortName = p.ConnectedPortName
                 }).ToList();
 
                 return new ResponseNetworkInterfaceInfo
@@ -745,6 +752,7 @@ namespace TiaMcpServer.ModelContextProtocol
                     InterfaceType = iface.InterfaceType.ToString(),
                     Nodes = nodes,
                     PortCount = iface.Ports.Count(),
+                    Ports = responsePorts,
                     IoControllerOfIoSystem = iface.IoControllers.FirstOrDefault()?.IoSystem?.Name,
                     IoConnectorOfIoSystem = iface.IoConnectors.FirstOrDefault()?.ConnectedToIoSystem?.Name,
                     Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
@@ -757,6 +765,279 @@ namespace TiaMcpServer.ModelContextProtocol
             catch (Exception ex) when (ex is not McpException)
             {
                 throw new McpException($"Unexpected error retrieving network interface info for '{path}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "CompareNetworkCsv", Title = "Compare PRONETA network CSV", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Compare a PRONETA 'Device Table (CSV)' export (Network Analysis > Online > Export, with 'Include device details' checked - that adds the Port ID/Partner Port/Partner Device columns this reads) against the currently open project's devices. Read-only - reports matches and differences, never writes anything. Matching is by case-insensitive device name only (PROFINET device names are lowercase by spec, so 'PLC_1' project vs 'plc_1' PRONETA is the normal case, not a mismatch) - MAC-based matching is not possible, no MAC-address attribute/property exists anywhere in this Openness version's public API (verified against the shipped XML docs). matchMethod null means no TIA device with that name was found - could be a device not yet in the project, offline at scan time, or renamed. ipDiffers flags a live IP that doesn't match the project's configured IP for a matched device. This tool never calls SetIpAddress itself - a human should confirm a reported mismatch before you call that separately to fix it.")]
+        public static ResponseCompareNetworkCsv CompareNetworkCsv(
+            [Description("csvPath: full path to the PRONETA CSV export file")] string csvPath)
+        {
+            try
+            {
+                var matches = Portal.CompareNetworkCsv(csvPath);
+
+                var items = matches.Select(m => new ResponseNetworkCsvMatch
+                {
+                    PronetaName = m.PronetaDevice.Name,
+                    DeviceType = m.PronetaDevice.DeviceType,
+                    PronetaIp = m.PronetaDevice.IpAddress,
+                    PronetaSubnetMask = m.PronetaDevice.SubnetMask,
+                    MacAddress = m.PronetaDevice.MacAddress,
+                    Role = m.PronetaDevice.Role,
+                    MatchedTiaDeviceName = m.MatchedTiaDeviceName,
+                    MatchMethod = m.MatchMethod,
+                    TiaCurrentIp = m.TiaCurrentIp,
+                    TiaCurrentSubnetMask = m.TiaCurrentSubnetMask,
+                    IpDiffers = m.IpDiffers,
+                    Ports = m.PronetaDevice.Ports.Select(p => new ResponsePronetaPort
+                    {
+                        PortId = p.PortId,
+                        PartnerPortId = p.PartnerPortId,
+                        PartnerDeviceName = p.PartnerDeviceName
+                    }).ToList()
+                }).ToList();
+
+                var unmatched = items.Count(i => i.MatchedTiaDeviceName == null);
+                var ipMismatches = items.Count(i => i.IpDiffers == true);
+
+                return new ResponseCompareNetworkCsv
+                {
+                    Message = $"Compared {items.Count} PRONETA device(s): {items.Count - unmatched} matched by name, {unmatched} unmatched, {ipMismatches} with a differing IP",
+                    Items = items,
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error comparing network CSV '{csvPath}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "SetIpAddress", Title = "Set IP address", Destructive = true, Idempotent = true, OpenWorld = false), Description("Set IP address/subnet mask/router on a device's network interface (same auto-resolving path as GetNetworkInterfaceInfo). IMPORTANT: this only changes the TIA project's saved metadata - nothing reaches real hardware until the project is compiled and downloaded. Changing the address can also regenerate the PROFINET device name hash used to match physical hardware on the wire; if that no longer matches what's actually downloaded to a switch/drive, the online connection to that device breaks. Confirm with the user before calling this against a real (non-disposable) project, and make clear to them that this alone does not reach the PLC/line.")]
+        public static ResponseSetIpAddress SetIpAddress(
+            [Description("path: a device or device item path, same auto-resolving rules as GetNetworkInterfaceInfo")] string path,
+            [Description("ipAddress: e.g. '192.168.0.1'")] string ipAddress,
+            [Description("subnetMask: e.g. '255.255.255.0'")] string subnetMask,
+            [Description("routerAddress: optional - omit to leave routing unset")] string? routerAddress = null)
+        {
+            try
+            {
+                var (iface, resolvedPath) = Portal.SetIpAddress(path, ipAddress, subnetMask, routerAddress);
+
+                return new ResponseSetIpAddress
+                {
+                    Message = $"IP address set to '{ipAddress}' on '{resolvedPath}' - project metadata only, not applied to real hardware until compiled and downloaded",
+                    ResolvedPath = resolvedPath,
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                var reason = pex.InnerException?.Message?.Trim();
+                var msg = pex.Message;
+                if (!string.IsNullOrEmpty(reason)) msg += $" Reason: {reason}";
+                throw new McpException(msg, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error setting IP address for '{path}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "ConnectToSubnet", Title = "Connect to subnet", Destructive = true, Idempotent = true, OpenWorld = false), Description("Connect a device's network interface to a named subnet (must already exist - see GetSubnets). Same auto-resolving path as GetNetworkInterfaceInfo, and same project-metadata-only caveat as SetIpAddress - nothing reaches real hardware until compiled and downloaded. Confirm with the user before calling this against a real (non-disposable) project.")]
+        public static ResponseConnectToSubnet ConnectToSubnet(
+            [Description("path: a device or device item path, same auto-resolving rules as GetNetworkInterfaceInfo")] string path,
+            [Description("subnetName: name of an existing subnet, from GetSubnets")] string subnetName)
+        {
+            try
+            {
+                var (iface, resolvedPath, resolvedSubnetName) = Portal.ConnectToSubnet(path, subnetName);
+
+                return new ResponseConnectToSubnet
+                {
+                    Message = $"'{resolvedPath}' connected to subnet '{resolvedSubnetName}' - project metadata only, not applied to real hardware until compiled and downloaded",
+                    ResolvedPath = resolvedPath,
+                    SubnetName = resolvedSubnetName,
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error connecting '{path}' to subnet '{subnetName}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "DisconnectFromSubnet", Title = "Disconnect from subnet", Destructive = true, Idempotent = true, OpenWorld = false), Description("Disconnect a device's network interface from its subnet. Same auto-resolving path as GetNetworkInterfaceInfo. Confirm with the user before calling this against a real (non-disposable) project.")]
+        public static ResponseDisconnectFromSubnet DisconnectFromSubnet(
+            [Description("path: a device or device item path, same auto-resolving rules as GetNetworkInterfaceInfo")] string path)
+        {
+            try
+            {
+                var (iface, resolvedPath) = Portal.DisconnectFromSubnet(path);
+
+                return new ResponseDisconnectFromSubnet
+                {
+                    Message = $"'{resolvedPath}' disconnected from its subnet",
+                    ResolvedPath = resolvedPath,
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error disconnecting '{path}' from its subnet: {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "CreateDevice", Title = "Create device", Destructive = false, Idempotent = false, OpenWorld = false), Description("Create a new single-item hardware device (e.g. a drive, HMI panel) in the project. For devices shaped like a CPU station (a station Device containing a named sub-item, e.g. 'S7-1500/ET200MP station_1' containing 'PLC_1'), use CreateDeviceWithItem instead. typeIdentifier is a catalog string like 'System:Device.S71500' - copy one from an existing similar device's GetDevices/GetDeviceInfo output (its TypeIdentifier attribute) rather than guessing.")]
+        public static ResponseCreateDevice CreateDevice(
+            [Description("typeIdentifier: catalog type string, e.g. 'System:Device.G120C-2' - copy from an existing device's TypeIdentifier attribute")] string typeIdentifier,
+            [Description("name: name for the new device")] string name,
+            [Description("groupPath: path to the device group to create it under, e.g. 'Group/Subgroup' (empty for the project root)")] string groupPath = "")
+        {
+            try
+            {
+                var device = Portal.CreateDevice(typeIdentifier, name, groupPath);
+
+                return new ResponseCreateDevice
+                {
+                    Message = $"Device '{device.Name}' created under '{groupPath}'",
+                    Name = device.Name,
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                var reason = pex.InnerException?.Message?.Trim();
+                var msg = pex.Message;
+                if (!string.IsNullOrEmpty(reason)) msg += $" Reason: {reason}";
+                throw new McpException(msg, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error creating device '{name}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "CreateDeviceWithItem", Title = "Create device with item", Destructive = false, Idempotent = false, OpenWorld = false), Description("Create a new hardware device that has both a station-level name and a first sub-item name in one call - e.g. a CPU station (mirrors how existing PLC devices are shaped: Device 'S7-1500/ET200MP station_1' containing DeviceItem 'PLC_1'). typeIdentifier is a catalog string like 'System:Device.S71500' - copy one from an existing similar device's GetDevices/GetDeviceInfo output rather than guessing.")]
+        public static ResponseCreateDevice CreateDeviceWithItem(
+            [Description("typeIdentifier: catalog type string, e.g. 'System:Device.S71500' - copy from an existing device's TypeIdentifier attribute")] string typeIdentifier,
+            [Description("name: name for the new device (station)")] string name,
+            [Description("deviceItemName: name for the first sub-item (e.g. the CPU module)")] string deviceItemName,
+            [Description("groupPath: path to the device group to create it under, e.g. 'Group/Subgroup' (empty for the project root)")] string groupPath = "")
+        {
+            try
+            {
+                var device = Portal.CreateDeviceWithItem(typeIdentifier, name, deviceItemName, groupPath);
+
+                return new ResponseCreateDevice
+                {
+                    Message = $"Device '{device.Name}' (with item '{deviceItemName}') created under '{groupPath}'",
+                    Name = device.Name,
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                var reason = pex.InnerException?.Message?.Trim();
+                var msg = pex.Message;
+                if (!string.IsNullOrEmpty(reason)) msg += $" Reason: {reason}";
+                throw new McpException(msg, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error creating device '{name}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "DeleteDevice", Title = "Delete device", Destructive = true, Idempotent = true, OpenWorld = false), Description("Delete a hardware device from the project. DRY-RUN BY DEFAULT: without confirm=true, this only reports what device would be deleted and changes nothing - call it once to preview, then again with confirm=true to actually delete. TIA's own undo only survives until the next save, and hardware config is entangled with physical wiring/GSD matching, so recovery is more expensive than a block/tag delete - confirm with the user before ever passing confirm=true against a real (non-disposable) project.")]
+        public static ResponseDeleteDevice DeleteDevice(
+            [Description("devicePath: full path to the device")] string devicePath,
+            [Description("confirm: must be explicitly true to actually delete - false (default) only previews what would be deleted")] bool confirm = false)
+        {
+            try
+            {
+                var (executed, deviceName, typeName) = Portal.DeleteDevice(devicePath, confirm);
+
+                return new ResponseDeleteDevice
+                {
+                    Message = executed
+                        ? $"Device '{deviceName}' ({typeName}) deleted"
+                        : $"Preview only (confirm=false, nothing changed) - would delete device '{deviceName}' ({typeName})",
+                    Executed = executed,
+                    DeviceName = deviceName,
+                    TypeName = typeName,
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error deleting device '{devicePath}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "CreateDeviceGroup", Title = "Create device group", Destructive = false, Idempotent = false, OpenWorld = false), Description("Create a new device group (folder) in the project, for organizing devices.")]
+        public static ResponseCreateDeviceGroup CreateDeviceGroup(
+            [Description("parentGroupPath: path to the parent group to create the new group under, e.g. 'Group/Subgroup' (empty for the project root)")] string parentGroupPath,
+            [Description("name: name for the new group")] string name)
+        {
+            try
+            {
+                var group = Portal.CreateDeviceGroup(parentGroupPath, name);
+
+                return new ResponseCreateDeviceGroup
+                {
+                    Message = $"Device group '{group.Name}' created under '{parentGroupPath}'",
+                    Name = group.Name,
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error creating device group '{name}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "DeleteDeviceGroup", Title = "Delete device group", Destructive = true, Idempotent = true, OpenWorld = false), Description("Delete a device group (folder) from the project - also deletes every device inside it. Confirm with the user before calling this against a real (non-disposable) project.")]
+        public static ResponseDeleteDeviceGroup DeleteDeviceGroup(
+            [Description("groupPath: full path to the group, e.g. 'Group/Subgroup'")] string groupPath)
+        {
+            try
+            {
+                Portal.DeleteDeviceGroup(groupPath);
+
+                return new ResponseDeleteDeviceGroup
+                {
+                    Message = $"Device group '{groupPath}' deleted",
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error deleting device group '{groupPath}': {ex.Message}", ex);
             }
         }
 
