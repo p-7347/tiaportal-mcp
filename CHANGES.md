@@ -5,6 +5,55 @@
 
 ---
 
+## [2026-09-17] CreateDevice/CreateDeviceWithItem "wrong type"/빈 껍데기 버그 근본 원인 규명 + 수정
+
+사용자가 "네가 토폴로지 자체를 새로 만드는 걸 보고 싶다"고 요청 → `CreateDevice`/
+`CreateDeviceWithItem`으로 실제 디바이스를 새로 만들어보는 라이브 검증 진행. 다른 세션에서도
+같은 검증을 독립적으로 진행해서 동일한 실패를 재현·relay해줌 (교차 확인됨).
+
+### 증상 (수정 전)
+- `CreateDevice("System:Device.G120C-2", ...)`는 성공 응답을 반환하지만 실제로는 내부
+  `DeviceItem`이 0개인 빈 껍데기를 만듦 - `GetProjectTree` diff로 정상 동작하는 실제
+  `SINAMICS G_1` 디바이스(내부에 `_0`, `INV01 Full Tray Conveyor #1` 등 구성 있음)와 비교해서
+  확인. `GetNetworkInterfaceInfo`도 정확히 "인터페이스 없음"으로 응답(정상 동작이지만, 애초에
+  만들어진 디바이스가 쓸모없다는 뜻).
+- `CreateDeviceWithItem`은 드라이브(`System:Device.G120C-2`)와 PLC 스테이션
+  (`System:Device.S71500`, 이 도구 자체가 문서화한 용도) 둘 다 동일하게
+  `"The object cannot be created. It is of the wrong type."` 에러로 실패.
+
+### 근본 원인
+`System:Device.X` 포맷은 `GetDevices`/`GetDeviceInfo`가 **이미 배치된 디바이스**의
+`TypeIdentifier` 속성에서 읽어오는 조회 전용 포맷이고, 생성 API는 이 포맷을 거부함.
+`TiaPortal.HardwareCatalog.Find(filter)`(신규 `FindHardwareCatalogEntries` 도구로 노출)로
+카탈로그를 직접 조회해보니, 카탈로그 엔트리의 `TypeIdentifier`는 완전히 다른 포맷임:
+`OrderNumber:<주문번호>/<버전>` (예: `OrderNumber:6ES7 516-3AN01-0AB0/V2.1`,
+`OrderNumber:6SL3210-1KE11-8AF2/4.7.14`). 생성 API가 실제로 요구하는 건 이 포맷.
+
+### 라이브 검증 (수정 확인, "Tia for Claude")
+- `CreateDeviceWithItem("OrderNumber:6ES7 516-3AN01-0AB0/V2.1", ...)`로 CPU 1516-3 PN/DP 생성
+  → 성공, `GetNetworkInterfaceInfo`가 실제로 `DP interface_1`/`PROFINET interface_1`/
+  `PROFINET interface_2` 3개를 정확히 보고함(모호성 에러로 후보 나열까지 정상 - 진짜 여러
+  인터페이스가 있다는 뜻). `DeleteDeviceGroup`으로 완전히 정리 확인.
+- **새로 발견한 별개 제약**: 카탈로그 포맷 TypeIdentifier를 줘도 평범한 `CreateDevice`(WithItem
+  아님)는 드라이브/CPU 계열 카탈로그 엔트리에 대해 여전히 "wrong type"으로 실패함
+  (`OrderNumber:6SL3210-1KE11-8AF2/4.7.14`로 확인). Siemens가 이런 타입을 스테이션+아이템
+  쌍으로 모델링해서 그런 걸로 추정 - `CreateDeviceWithItem`이 필요.
+- **새로 발견한 파라미터 동작**: `CreateDeviceWithItem` 결과의 `Device.Name`은 `name` 인자가
+  아니라 `deviceItemName` 인자를 따라감 - 실측으로 확인, 도구 설명에 명시함.
+- 마스터카피 경로(`DeviceComposition.CreateFrom(MasterCopy)`)도 먼저 조사: 신규
+  `GetDeviceMasterCopies` 도구로 "Tia for Claude" 프로젝트 라이브러리를 확인했더니 마스터카피가
+  0개 - 이 경로는 이 프로젝트에선 애초에 못 씀. 카탈로그 경로가 통하는 걸 확인했으므로 보조
+  진단 도구로만 남겨둠.
+
+### 코드 변경
+- 신규 `FindHardwareCatalogEntries(filter)` - `TiaPortal.HardwareCatalog.Find`를 감싸서
+  TypeName/TypeIdentifier/TypeIdentifierNormalized/ArticleNumber/Version/CatalogPath 반환.
+- 신규 `GetDeviceMasterCopies` - 프로젝트 라이브러리의 마스터카피 경로 나열(진단/보조용).
+- `CreateDevice`/`CreateDeviceWithItem` 도구 설명 전면 수정: `FindHardwareCatalogEntries`에서
+  얻은 TypeIdentifier를 쓰도록 명시하고, 기존 디바이스의 속성에서 복사하지 말라고 경고 추가.
+
+---
+
 ## [2026-09-17] 포트 단위 배선 정보 + PRONETA CSV 비교 (`CompareNetworkCsv`)
 
 다른 세션(실프로젝트에서 HIOKI 진단 중)이 "네트워크 토폴로지 자동화" 아이디어를 relay해줘서

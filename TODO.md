@@ -339,6 +339,36 @@ Priority order for picking pieces up ourselves, each to go through this project'
       name (`hmi_1/2/3` -> `HMI_1/2/3`) with real TIA IPs correctly retrieved
       (`192.168.1.201/202/203`, exactly matching PRONETA's scan, `ipDiffers: false`), no crashes
       across the full mixed-device-type set.
+12. ~~**Fix CreateDevice/CreateDeviceWithItem: root-caused the "wrong type"/empty-shell
+    failures**~~ - **Done (2026-09-17).** Live testing (both in this session and independently in
+    the other session, on the real Mahindra project) showed `CreateDevice("System:Device.G120C-2",
+    ...)` silently producing an empty shell (zero internal `DeviceItems`, confirmed via
+    `GetProjectTree` diff against a real working device) and `CreateDeviceWithItem` failing
+    outright with "the object cannot be created, it is of the wrong type" - for both a drive
+    (`System:Device.G120C-2`) and the tool's own documented use case, a PLC station
+    (`System:Device.S71500`). Root cause: `System:Device.X` is the format
+    `GetDevices`/`GetDeviceInfo` read off an *already-placed* device's `TypeIdentifier`
+    attribute - it's query-only and the creation APIs reject it. Reflection on
+    `TiaPortal.HardwareCatalog` (new: `FindHardwareCatalogEntries(filter)`, wraps
+    `HardwareCatalog.Find(filter)`) showed catalog entries carry a different, creation-ready
+    `TypeIdentifier` format: `OrderNumber:<article number>/<version>` (e.g.
+    `OrderNumber:6ES7 516-3AN01-0AB0/V2.1`). Live-verified the fix: `CreateDeviceWithItem` given
+    that format created a real CPU 1516-3 PN/DP with actual `DP interface_1`/`PROFINET
+    interface_1`/`PROFINET interface_2` DeviceItems (confirmed via `GetNetworkInterfaceInfo`
+    reporting them, not an empty-shell "not found"), and cleanup (`DeleteDeviceGroup`) removed it
+    completely. Also confirmed a real, separate constraint: plain `CreateDevice` (not `WithItem`)
+    still fails "wrong type" even with a correct catalog TypeIdentifier for drive/CPU-shaped
+    catalog entries - those are modeled by Siemens as a station+item pair and need
+    `CreateDeviceWithItem`; `CreateDevice` only fits catalog entries that are genuinely
+    single-item. Also discovered live: `CreateDeviceWithItem`'s resulting `Device.Name` mirrors
+    the `deviceItemName` argument, not `name` - documented in the tool description so callers
+    query the right path afterward. Investigated (but ruled out as unnecessary, not just
+    unavailable) the `MasterCopy`-based creation route first: new `GetDeviceMasterCopies` tool
+    confirmed "Tia for Claude" has zero master copies in its project library, so that path
+    wasn't viable here anyway - kept as a secondary/diagnostic tool since the catalog route now
+    works. Tool descriptions for `CreateDevice`/`CreateDeviceWithItem` updated to require a
+    `FindHardwareCatalogEntries`-sourced TypeIdentifier and explicitly warn against copying one
+    off an existing device's attribute.
 
 ## Documentation
 - [ ] Add a "CLI Options" section to `README.md` documenting `--tia-major-version <int>` and `--logging <1|2|3>` with defaults and effect (1=stderr, 2=Debug, 3=Event Log). Cross-link to samples.

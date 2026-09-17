@@ -91,6 +91,26 @@ namespace TiaMcpServer.ModelContextProtocol
     {
     }
 
+    public class ResponseDeviceMasterCopies : ResponseMessage
+    {
+        public IEnumerable<string>? Paths { get; set; }
+    }
+
+    public class ResponseCatalogEntry
+    {
+        public string TypeName { get; set; } = "";
+        public string? TypeIdentifier { get; set; }
+        public string? TypeIdentifierNormalized { get; set; }
+        public string? ArticleNumber { get; set; }
+        public string? Version { get; set; }
+        public string? CatalogPath { get; set; }
+    }
+
+    public class ResponseHardwareCatalogEntries : ResponseMessage
+    {
+        public IEnumerable<ResponseCatalogEntry>? Entries { get; set; }
+    }
+
     public class ResponseSubnetInfo : ResponseAttributes
     {
         public string? Name { get; set; }

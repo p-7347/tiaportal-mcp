@@ -691,6 +691,67 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
+        [McpServerTool(Name = "GetDeviceMasterCopies", Title = "Get device master copies", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("List master copies (saved device/module templates) in the project's own library, for DeviceComposition.CreateFrom(MasterCopy)/DeviceItemComposition.CreateFrom(MasterCopy). Secondary route for building a device: prefer CreateDevice/CreateDeviceWithItem with a TypeIdentifier from FindHardwareCatalogEntries, which is verified to produce fully-populated devices (confirmed with a real CPU 1516-3 PN/DP, complete DP/PROFINET interfaces). Use this only if you specifically need to replicate a saved project template rather than a plain catalog part.")]
+        public static ResponseDeviceMasterCopies GetDeviceMasterCopies()
+        {
+            try
+            {
+                var paths = Portal.GetDeviceMasterCopyPaths();
+
+                return new ResponseDeviceMasterCopies
+                {
+                    Message = paths.Count > 0
+                        ? $"Found {paths.Count} master cop(y/ies) in the project library"
+                        : "No master copies in the project library - there's nothing to copy a fully-populated device from",
+                    Paths = paths,
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving device master copies: {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "FindHardwareCatalogEntries", Title = "Search hardware catalog", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Diagnostic tool: search TIA Portal's hardware catalog (TiaPortal.HardwareCatalog.Find) by a text filter (e.g. article number, order number fragment, or product name like \"G120C\" or \"6ES7 510\"). Returns each match's TypeIdentifier/TypeIdentifierNormalized/ArticleNumber/Version. Live testing showed CreateDevice/CreateDeviceWithItem reject the TypeIdentifier format read off an already-placed device (GetDevices) with \"wrong type\" errors or produce an empty shell - the catalog's own TypeIdentifier string may be the format those creation APIs actually expect. Use this to find a creation-ready TypeIdentifier before calling CreateDevice/CreateDeviceWithItem.")]
+        public static ResponseHardwareCatalogEntries FindHardwareCatalogEntries(
+            [Description("Filter text, e.g. an article number or product name fragment")] string filter)
+        {
+            try
+            {
+                var entries = Portal.FindHardwareCatalogEntries(filter);
+
+                return new ResponseHardwareCatalogEntries
+                {
+                    Message = entries.Count > 0
+                        ? $"Found {entries.Count} catalog entr(y/ies) matching '{filter}'"
+                        : $"No catalog entries matched '{filter}'",
+                    Entries = entries.Select(e => new ResponseCatalogEntry
+                    {
+                        TypeName = e.TypeName,
+                        TypeIdentifier = e.TypeIdentifier,
+                        TypeIdentifierNormalized = e.TypeIdentifierNormalized,
+                        ArticleNumber = e.ArticleNumber,
+                        Version = e.Version,
+                        CatalogPath = e.CatalogPath
+                    }),
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error searching hardware catalog: {ex.Message}", ex);
+            }
+        }
+
         [McpServerTool(Name = "GetSubnets", Title = "Get subnets", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("List every subnet in the project (network topology) with its type and the devices/IO systems connected to it. Only works when attached to a full project - subnets aren't exposed for a multiuser local session (.als), returns an empty list there rather than erroring.")]
         public static ResponseSubnets GetSubnets()
         {
@@ -900,9 +961,9 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "CreateDevice", Title = "Create device", Destructive = false, Idempotent = false, OpenWorld = false), Description("Create a new single-item hardware device (e.g. a drive, HMI panel) in the project. For devices shaped like a CPU station (a station Device containing a named sub-item, e.g. 'S7-1500/ET200MP station_1' containing 'PLC_1'), use CreateDeviceWithItem instead. typeIdentifier is a catalog string like 'System:Device.S71500' - copy one from an existing similar device's GetDevices/GetDeviceInfo output (its TypeIdentifier attribute) rather than guessing.")]
+        [McpServerTool(Name = "CreateDevice", Title = "Create device", Destructive = false, Idempotent = false, OpenWorld = false), Description("Create a new single-item hardware device (e.g. a simple switch) in the project. Most real device types (drives, CPU stations, HMI panels) are modeled by Siemens as a station+item pair and need CreateDeviceWithItem instead - this fails with 'the object cannot be created, it is of the wrong type' for those even with a correct TypeIdentifier, so try CreateDeviceWithItem if this fails. typeIdentifier MUST come from FindHardwareCatalogEntries (format 'OrderNumber:<article>/<version>') - the TypeIdentifier attribute GetDevices/GetDeviceInfo expose off an already-placed device (format 'System:Device.X') is query-only and is rejected by this API.")]
         public static ResponseCreateDevice CreateDevice(
-            [Description("typeIdentifier: catalog type string, e.g. 'System:Device.G120C-2' - copy from an existing device's TypeIdentifier attribute")] string typeIdentifier,
+            [Description("typeIdentifier: a creation-ready catalog TypeIdentifier from FindHardwareCatalogEntries, e.g. 'OrderNumber:6SL3210-1KE11-8AF2/4.7.14' - NOT the TypeIdentifier attribute off an existing device")] string typeIdentifier,
             [Description("name: name for the new device")] string name,
             [Description("groupPath: path to the device group to create it under, e.g. 'Group/Subgroup' (empty for the project root)")] string groupPath = "")
         {
@@ -930,11 +991,11 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "CreateDeviceWithItem", Title = "Create device with item", Destructive = false, Idempotent = false, OpenWorld = false), Description("Create a new hardware device that has both a station-level name and a first sub-item name in one call - e.g. a CPU station (mirrors how existing PLC devices are shaped: Device 'S7-1500/ET200MP station_1' containing DeviceItem 'PLC_1'). typeIdentifier is a catalog string like 'System:Device.S71500' - copy one from an existing similar device's GetDevices/GetDeviceInfo output rather than guessing.")]
+        [McpServerTool(Name = "CreateDeviceWithItem", Title = "Create device with item", Destructive = false, Idempotent = false, OpenWorld = false), Description("Create a new hardware device that has both a station-level name and a first sub-item name in one call - e.g. a CPU station or a drive (mirrors how existing devices are shaped: Device 'S7-1500/ET200MP station_1' containing DeviceItem 'PLC_1'). Use this instead of CreateDevice for anything that isn't a bare single-item catalog entry - verified live for a CPU 1516-3 PN/DP, which came up with real DP/PROFINET interface DeviceItems, not an empty shell. typeIdentifier MUST come from FindHardwareCatalogEntries (format 'OrderNumber:<article>/<version>') - the TypeIdentifier attribute GetDevices/GetDeviceInfo expose off an already-placed device (format 'System:Device.X') is query-only and is rejected by this API ('the object cannot be created, it is of the wrong type'). Note: the resulting Device.Name mirrors deviceItemName, not name - the 'name' argument does not become the queryable device name in practice.")]
         public static ResponseCreateDevice CreateDeviceWithItem(
-            [Description("typeIdentifier: catalog type string, e.g. 'System:Device.S71500' - copy from an existing device's TypeIdentifier attribute")] string typeIdentifier,
-            [Description("name: name for the new device (station)")] string name,
-            [Description("deviceItemName: name for the first sub-item (e.g. the CPU module)")] string deviceItemName,
+            [Description("typeIdentifier: a creation-ready catalog TypeIdentifier from FindHardwareCatalogEntries, e.g. 'OrderNumber:6ES7 516-3AN01-0AB0/V2.1' - NOT the TypeIdentifier attribute off an existing device")] string typeIdentifier,
+            [Description("name: name for the new device (station) - note this does not end up as the queryable Device.Name; use deviceItemName for the path you'll query/reference afterward")] string name,
+            [Description("deviceItemName: name for the first sub-item (e.g. the CPU module) - this is what the resulting device is actually named/found under")] string deviceItemName,
             [Description("groupPath: path to the device group to create it under, e.g. 'Group/Subgroup' (empty for the project root)")] string groupPath = "")
         {
             try
