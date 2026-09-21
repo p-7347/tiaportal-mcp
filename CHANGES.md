@@ -5,6 +5,64 @@
 
 ---
 
+## [2026-09-21] "Ungrouped devices" 사각지대 관련 버그 2건 추가 발견 + "Tia for Claude" 완전 정리 검증
+
+바로 위 CAx 작업의 라이브 검증을 계속하다가, 포트 배선/화면 배치가 CAx로 되는지 확인하던 중
+"Tia for Claude"에 디바이스가 두 세트(원본 + 파킹랏 `_CAX` 중복) 있는 걸 발견 → 정리하려고
+전체를 지웠다가, 오늘 아침 고친 `UngroupedDevicesGroup` 버그와 같은 패턴의 버그가 두 군데 더
+있는 걸 발견.
+
+### 1. 포트 배선은 프로젝트 전체 export에만 있음
+단일 디바이스 export의 AML엔 그 디바이스↔서브넷 연결(`InternalLink`)만 있고, 디바이스 간
+포트-투-포트 배선은 없었음. 프로젝트 전체 export(`Tia for Claude_k1.aml`)를 다시 보니
+`RefPartnerSideA`/`RefPartnerSideB`가 양쪽 `CommunicationPortInterface`를 가리키는
+`InternalLink`가 **2,751건** 있었음 - "Link To Port_1" 같은 이름으로, 실제 디바이스 간 배선.
+편집+재import까지는 아직 안 해봄(데이터 존재만 확인).
+
+### 2. 화면 배치(토폴로지/네트워크 뷰 위치)는 확인 결과 불가능
+세 가지 방법으로 확인: (1) C# 프로퍼티 리플렉션 - Device/DeviceItem/Node에 X/Y/Position 없음,
+`PositionNumber`는 랙 슬롯 번호일 뿐 화면 좌표가 아님. (2) 실제 라이브 Device 객체의
+`GetAttributeInfos()` 전체 목록 - 좌표성 속성 0건. (3) 어셈블리 전체에서 Graphic/Diagram/
+Layout 타입 검색 - 나온 건 전부 HMI 화면(패널 UI) 관련이고 HW 토폴로지 뷰와는 무관.
+**CAx뿐 아니라 Openness 전체에 화면 배치를 다루는 기능이 없다는 게 확정.**
+
+### 3. `DeleteDeviceGroup`으로 INV/SERVO/HUB/ETC/ParkingLot 정리 → 61개가 예상 밖으로 남음
+그룹 5개 삭제는 정상 처리됐는데, 그 후에도 `GetDevices()`에 61개(GSD device_N, ET 200SP/eco
+station_N, SCALANCE X-200 IRT, PNPN Coupler)가 남아있었음. 처음엔 "삭제가 실패했나" 싶었지만,
+원본 export AML(`Tia for Claude_k1.aml`)을 직접 열어서 이 이름들을 검색해보니 전부 있었음 -
+**이번 테스트로 생긴 중복이 아니라, 애초에 프로젝트에 있던 원본 데이터**였고, "Ungrouped
+devices" 그룹 소속이라 오늘 아침 고친 `GetDevices()` 버그 때문에 지금까지 한 번도 안 보였던
+것. 삭제 실패가 아니라 관측 자체가 처음부터 틀렸던 것.
+
+### 4. 같은 패턴의 버그 2건 더 발견 (전부 "Ungrouped devices" 관련)
+싹 다 지우고 원본 AML로 한 번에 깨끗하게 재import하기로 하고 61개를 개별 `DeleteDevice`로
+지우려다가 발견:
+- **`FindDeviceByFullName`도 `UngroupedDevicesGroup`을 안 봄** - `_project.Devices`와
+  `_project.DeviceGroups`(재귀)만 확인하고 끝. `DeleteDevice`가 내부적으로 이 함수를 쓰기
+  때문에, 60개 전부 `"Device not found"`로 실패했음(61개 중 첫 번째는 그룹 밖 최상위 디바이스라
+  우연히 성공). `UngroupedDevicesGroup.Devices`도 마지막으로 확인하도록 추가.
+- **GSD 디바이스는 `TypeName` 속성 자체를 지원 안 함** - `DeleteDevice`가 응답 메시지용으로
+  `device.GetAttribute("TypeName")`을 무조건 호출하는데, GSD 기반 디바이스(42개, `GSD
+  device_N`)에서 전부 예외(`'TypeName' is not supported by type
+  'Siemens.Engineering.HW.DeviceImpl'`)가 나서 삭제 자체가 안 됐음. try/catch로 감싸서 실패하면
+  빈 문자열로 처리하도록 수정 - 삭제 로직의 핵심이 아니라 표시용 부가 정보였으므로.
+
+### 5. 완전 정리 후 단일 재import로 검증 완료
+두 버그를 고친 뒤 61개(60 재시도, TypeName 수정 후 남은 42개 재재시도) 전부 삭제 성공,
+`GetDevices()`/`GetSubnets()` 완전히 0으로 확인. 원본(수정 안 한) `Tia for Claude_k1.aml`로
+단 한 번 재import → **디바이스 113개, `_CAX` 중복 0개**(이전 INV/SERVO/HUB/ETC 52개 +
+Ungrouped devices 61개 = 113, 정확히 일치), 서브넷 2개 모두 실제 노드(39개/75개)까지 정상
+복원. `"The subnet PN/IE_1 ... already exists"` 경고가 떴지만(재import 전 빈 서브넷 껍데기가
+남아있었기 때문) 에러가 아니라 경고였고, 실제로는 기존 빈 서브넷에 노드들이 정상적으로
+재연결됐음. HMI_1/2/3은 원래 AML 자체에 없다는 게 이미 확인된 한계라 이번에도 그대로 없음
+(정상).
+
+### 코드 변경
+- `Portal.cs`: `FindDeviceByFullName`에 `UngroupedDevicesGroup` 검색 추가, `DeleteDevice`의
+  `TypeName` 조회를 try/catch로 감싸 GSD 디바이스에서도 삭제 가능하도록 수정.
+
+---
+
 ## [2026-09-21] CAx(AutomationML) export/import 추가 + 라이브 검증 중 실버그 2건 발견·수정
 
 "온라인 에러 분석 툴 있음?" 질문에서 시작해 S7CommPlus 쪽을 조사하다가, 실물 PLC 진단 버퍼에서

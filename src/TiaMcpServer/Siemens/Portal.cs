@@ -1540,7 +1540,18 @@ namespace TiaMcpServer.Siemens
                 ?? throw new PortalException(PortalErrorCode.NotFound, "Device not found");
 
             var name = device.Name;
-            var typeName = device.GetAttribute("TypeName") as string ?? "";
+            // GSD-based devices don't support "TypeName" at all (throws) - this is display-only
+            // for the response message, not load-bearing for the delete itself, so a device that
+            // can't report its type name shouldn't be undeletable because of it.
+            string typeName;
+            try
+            {
+                typeName = device.GetAttribute("TypeName") as string ?? "";
+            }
+            catch (Exception)
+            {
+                typeName = "";
+            }
 
             if (!confirm)
             {
@@ -3627,7 +3638,18 @@ namespace TiaMcpServer.Siemens
                 return device;
             }
 
-            return FindDeviceByFullNameInGroups(_project.DeviceGroups, name);
+            device = FindDeviceByFullNameInGroups(_project.DeviceGroups, name);
+            if (device != null)
+            {
+                return device;
+            }
+
+            // Same blind spot as GetDevices() had (see the "Ungrouped devices" fix there): devices
+            // directly under the project's "Ungrouped devices" system group aren't reachable
+            // through _project.Devices or DeviceGroups at all. Live-tested: DeleteDevice failed
+            // with "Device not found" on 60 real devices (all CAx-restored under this group) until
+            // this was added.
+            return _project.UngroupedDevicesGroup?.Devices?.FirstOrDefault(d => d.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
         }
 
         private static Device? FindDeviceByFullNameInGroups(DeviceUserGroupComposition? groups, string name)

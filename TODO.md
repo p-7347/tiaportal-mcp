@@ -398,6 +398,23 @@ Priority order for picking pieces up ourselves, each to go through this project'
       silently timed out (corrupted the stdio stream, returned an empty result with no error),
       and the empty result was misread as "device not found." Re-running with a clean connection
       found the device exactly where CAx had put it (in TIA's own "ParkingLot" group).
+    - Follow-up same day: two more bugs in the same "Ungrouped devices" blind spot, found while
+      fully cleaning up "Tia for Claude" (delete everything, single clean re-import, no `_CAX`
+      duplicates). `FindDeviceByFullName` had the identical gap as the morning's `GetDevices()`
+      bug - fixed the same way. `DeleteDevice` unconditionally read a device's `TypeName`
+      attribute for the response message, which GSD-based devices don't support at all (throws) -
+      wrapped in try/catch so a device that can't report its type name isn't undeletable because
+      of it. End-to-end verified: full wipe (113 devices including all 61 "Ungrouped devices"
+      ones + 2 subnets) then one clean re-import from the original AML reproduced the exact same
+      113 devices with zero `_CAX` duplicates and both subnets fully reconnected.
+    - Also checked (not yet round-trip tested by editing+re-importing): device-to-device **port
+      wiring** IS present in a whole-project AML export (2,751 `InternalLink` entries linking
+      `CommunicationPortInterface` pairs - absent from a single-device export, only the project-
+      wide one). **Graphical layout** (device box positions in Topology/Network view) is
+      confirmed absent everywhere - not in AML, not in any Openness attribute (checked via C#
+      property reflection, a live `GetAttributeInfos()` dump, and a whole-assembly type search
+      for Graphic/Diagram/Layout - the only hits were HMI screen-design APIs, unrelated to HW
+      topology). TIA Portal's own UI is the only way to reposition device boxes.
 
 ## Documentation
 - [ ] Add a "CLI Options" section to `README.md` documenting `--tia-major-version <int>` and `--logging <1|2|3>` with defaults and effect (1=stderr, 2=Debug, 3=Event Log). Cross-link to samples.
