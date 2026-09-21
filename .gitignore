@@ -6,3 +6,8 @@ tia-inventory/
 .gemini/
 .claude/
 .github/
+
+# TLS session key logs (SSLKEYLOGFILE format) - can appear from OpenSSL-based tooling
+# (e.g. the S7CommPlusDriver submodule under third_party/) run for local testing. Never commit:
+# these let anyone with the file decrypt the matching TLS session's traffic.
+key_*.log

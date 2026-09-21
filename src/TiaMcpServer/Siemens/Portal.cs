@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using Siemens.Engineering;
+using Siemens.Engineering.Cax;
 using Siemens.Engineering.Compiler;
 using Siemens.Engineering.CrossReference;
 using Siemens.Engineering.Hmi;
@@ -714,10 +715,23 @@ namespace TiaMcpServer.Siemens
                     GetDevicesRecursive(group, list, regexName);
                 }
 
-                //foreach (var group in _project.UngroupedDevicesGroup)
-                //{
-                //    GetDevicesRecursive(_project.UngroupedDevicesGroup, list, regexName);
-                //}
+                // "Ungrouped devices" in the project tree - a DeviceSystemGroup, not a
+                // DeviceUserGroup, so it can't go through GetDevicesRecursive (different type,
+                // no subgroups of its own). Live-tested: CAx-imported devices (e.g. a standalone
+                // power meter station) can land here even after MoveToParkingLot placed the
+                // colliding original elsewhere - this was silently dropping them from every
+                // GetDevices() caller (previously commented out, presumably because
+                // UngroupedDevicesGroup isn't itself IEnumerable).
+                if (_project.UngroupedDevicesGroup?.Devices != null)
+                {
+                    foreach (Device device in _project.UngroupedDevicesGroup.Devices)
+                    {
+                        if (string.IsNullOrEmpty(regexName) || Regex.IsMatch(device.Name, regexName, RegexOptions.IgnoreCase))
+                        {
+                            list.Add(device);
+                        }
+                    }
+                }
             }
 
             return list;
@@ -5063,6 +5077,116 @@ namespace TiaMcpServer.Siemens
             foreach (var subgroup in group.Groups)
             {
                 GetExternalSourcesRecursive(subgroup, list, regexName);
+            }
+        }
+
+        #endregion
+
+        #region CAx export/import (AutomationML, for ECAD/EPLAN round-trip)
+
+        // Siemens.Engineering.Cax.CaxProvider - a service on ProjectBase/Device, same GetService<T>()
+        // pattern as OnlineProvider/NetworkInterface elsewhere in this file. Export writes an AML
+        // file describing the HW config (devices, modules, IO addresses) for an ECAD tool like
+        // EPLAN; Import brings a (possibly hand-edited, e.g. with real cable/terminal data added)
+        // AML file back in. devicePath empty/null exports the whole project, matching
+        // GetGsdDependencies' convention.
+        public TransferResult ExportCax(string? devicePath, string exportPath)
+        {
+            _logger?.LogInformation($"Exporting CAx (AutomationML) to: {exportPath}");
+
+            try
+            {
+                exportPath = OutputPathPolicy.ResolveDirectory(exportPath);
+
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var caxProvider = _project!.GetService<CaxProvider>()
+                    ?? throw new PortalException(PortalErrorCode.InvalidState, "CAx export is not available for this project/session");
+
+                TransferResult result;
+                if (string.IsNullOrEmpty(devicePath))
+                {
+                    var fileName = Path.Combine(exportPath, $"{SanitizeFileName(_project!.Name)}.aml");
+                    result = caxProvider.Export(_project!, new FileInfo(fileName));
+                    exportPath = fileName;
+                }
+                else
+                {
+                    var device = GetDeviceByPath(devicePath)
+                        ?? throw new PortalException(PortalErrorCode.NotFound, $"Device not found at '{devicePath}'");
+                    var fileName = Path.Combine(exportPath, $"{SanitizeFileName(device.Name)}.aml");
+                    result = caxProvider.Export(device, new FileInfo(fileName));
+                    exportPath = fileName;
+                }
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "CAx export failed", null, ex);
+                pex.Data["devicePath"] = devicePath ?? "";
+                pex.Data["exportPath"] = exportPath;
+                _logger?.LogError(pex, "ExportCax failed for {DevicePath} -> {ExportPath}", devicePath, exportPath);
+                throw pex;
+            }
+        }
+
+        // Merge behavior on conflict (mergeOption) defaults to MoveToParkingLot - the only one of
+        // the three CaxImportOptions values that doesn't silently overwrite or silently discard
+        // AML content on a clash; conflicting items land in TIA's own Parking Lot for a human to
+        // resolve, matching this project's "don't guess, surface it" pattern. Openness exposes no
+        // preview/dry-run for CAx import (unlike DeleteDevice), so this needs an explicit
+        // confirm=true, following the same confirm-gate shape as DeleteDevice for anything that
+        // can restructure hardware.
+        // Uses the logFilePath-accepting overload (returns bool, not TransferResult) rather than
+        // Import(FileInfo, CaxImportOptions): live testing showed the TransferResult.Messages
+        // list only carries Warning/Information entries plus a final summary line - none of the
+        // individual Error-level messages actually show up there, only the aggregate ErrorCount.
+        // The log file is where TIA actually writes per-item error detail.
+        public (bool Success, string LogText, string LogPath) ImportCax(string importPath, CaxImportOptions mergeOption = CaxImportOptions.MoveToParkingLot, bool confirm = false)
+        {
+            _logger?.LogInformation($"{(confirm ? "Importing" : "Previewing import of")} CAx (AutomationML) from: {importPath}");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            var fileInfo = new FileInfo(importPath);
+            if (!fileInfo.Exists)
+            {
+                throw new PortalException(PortalErrorCode.NotFound, $"Import file not found at '{importPath}'");
+            }
+
+            if (!confirm)
+            {
+                throw new PortalException(PortalErrorCode.InvalidParams, "CAx import can restructure hardware config; call again with confirm=true to actually import. Openness has no preview for this operation, so double-check the AML source first.");
+            }
+
+            var logPath = Path.Combine(OutputPathPolicy.Root, "cax-import-logs", $"{Path.GetFileNameWithoutExtension(importPath)}_{DateTime.Now:yyyyMMdd_HHmmss}.log");
+            Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
+
+            try
+            {
+                var caxProvider = _project!.GetService<CaxProvider>()
+                    ?? throw new PortalException(PortalErrorCode.InvalidState, "CAx import is not available for this project/session");
+
+                var success = caxProvider.Import(fileInfo, new FileInfo(logPath), mergeOption);
+                var logText = File.Exists(logPath) ? File.ReadAllText(logPath) : "(TIA did not write a log file)";
+
+                return (success, logText, logPath);
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "CAx import failed", null, ex);
+                pex.Data["importPath"] = importPath;
+                pex.Data["mergeOption"] = mergeOption.ToString();
+                pex.Data["logPath"] = logPath;
+                _logger?.LogError(pex, "ImportCax failed for {ImportPath}", importPath);
+                throw pex;
             }
         }
 

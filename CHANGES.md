@@ -5,6 +5,74 @@
 
 ---
 
+## [2026-09-21] CAx(AutomationML) export/import 추가 + 라이브 검증 중 실버그 2건 발견·수정
+
+"온라인 에러 분석 툴 있음?" 질문에서 시작해 S7CommPlus 쪽을 조사하다가, 실물 PLC 진단 버퍼에서
+"Area length error"(FB11841 배열 범위 초과)와 IRT 동기화 실패를 실제로 발견 → 그 김에
+"CAx export하는 도구는 없냐"는 질문으로 이어져서 구현.
+
+### 1. Openness `Siemens.Engineering.Cax.CaxProvider` 확인
+리플렉션으로 확인: `Export(Device/ProjectBase, FileInfo)` → `TransferResult`,
+`Import(FileInfo, CaxImportOptions)` → `TransferResult`. `CaxImportOptions`는 이름 충돌 시
+`MoveToParkingLot`(안전, TIA의 "ParkingLot" 폴더로 격리) / `OverwriteTiaDevice`(위험) /
+`RetainTiaDevice`(보수적) 세 가지뿐. 프리뷰/드라이런 API 자체가 없어서 `ImportCax`는
+`DeleteDevice`와 같은 `confirm=true` 게이트로 구현.
+
+### 2. AML에 실제로 뭐가 들어있는지 직접 파일 열어서 확인
+- 하드웨어 구조(디바이스+모듈 트리), 네트워크/서브넷 연결, PLC 태그(디바이스당 최대 3,460개
+  확인) - 전부 확인됨.
+- **프로그램 로직(SCL/래더)은 0건** - export 범위 밖. CAx는 원래 EPLAN 같은 전기설계 툴과
+  "뭐가 어디 꽂혀있고 어떤 주소 쓰는지"만 주고받는 포맷이라 당연한 결과.
+- **HMI 패널(HMI_1/2/3)은 export 자체에 아예 안 담김** - `grep`으로 0건 확인. HMI는 CAx가
+  다루는 대상이 아님.
+
+### 3. 라이브 검증 순서 ("Tia for Claude" 클론)
+1. 프로젝트 전체 export + 디바이스 단위 export 둘 다 성공 (`Success`, 0 에러)
+2. `confirm=false` 게이트 정상 거부 확인
+3. **AML을 텍스트로 직접 수정해서 재import가 실제로 적용되는지 검증**: 빈 프로젝트에
+   `Name="PLC_1"` → `Name="TEST PLC"`로 바꾼 AML을 import → CPU가 F-CPU 안전 파라미터,
+   PROFINET/IP/SNMP 설정까지 전부 갖춘 채로 새 이름으로 복원됨, IO 시스템 로그에도 새 이름으로
+   참조됨 - 단순 표면적 이름표가 아니라 진짜 설정 전체가 새 이름 아래 재구성된다는 것 확인.
+4. 사용자가 "Tia for Claude"의 디바이스/서브넷을 전부 삭제(0개) → 원본 프로젝트 전체 AML로
+   재import (`MoveToParkingLot`) → 서브넷 2개+IO시스템, 디바이스 대부분 복원됨. 최종 상태
+   `Error`(111건)였지만, 원인 조사 결과 실제로 복원 안 된 건 HMI뿐이었음(아래 참고).
+
+### 4. `TransferResult.Messages`가 개별 에러를 안 준다는 것 발견 → 로그 파일 방식으로 전환
+`Import(FileInfo, CaxImportOptions)` 버전의 `Messages`는 Warning/Information만 담고, 개별
+Error 항목은 하나도 없이 마지막 요약 한 줄(`"...completed (errors: 111, warnings: 60)"`)만
+State=Error로 나옴. `Import(FileInfo, FileInfo logFilePath, CaxImportOptions)`(bool 반환)
+오버로드로 전환해서 실제 로그 파일을 읽어보니, **그 로그에도 개별 에러 내용은 없었음** - INFO
+2,698줄 + WARN 62줄(전부 `"Failed to enable IRT synchronization roles"` 동일 메시지) +
+마지막 `ERROR: ...completed (errors: 111, warnings: 62)` 한 줄뿐. TIA가 CAx import 개별 에러
+사유를 API로도 로그로도 노출 안 한다는 게 최종 결론. `ImportCax`는 이제 `LogText`/`LogPath`를
+반환(12,000자 넘으면 응답에서 잘리고 전체는 로그 파일에 남음).
+
+### 5. "복원 안 된 디바이스"를 쫓다가 발견한 버그 2건
+- **`GetDevices()`가 "Ungrouped devices" 그룹을 통째로 스킵하고 있었음** - 그 그룹을 순회하는
+  코드가 `//`로 주석 처리되어 있었음(아마 `UngroupedDevicesGroup`이 컬렉션이 아니라 단일
+  `DeviceSystemGroup` 객체라 기존 `foreach` 패턴이 안 맞아서 임시로 꺼놨던 것으로 추정).
+  `.Devices`로 바로 순회하도록 고침. `GetDevices()`를 쓰는 모든 도구에 영향.
+- **"PAC3220이 복원 안 됐다"는 판단 자체가 오진이었음** - 실제로는 `GetDevices()` 호출 시
+  `Connect`가 타임아웃나서 스트림이 깨졌고, 빈 응답을 "디바이스 없음"으로 잘못 읽은 것.
+  Connect를 다시 정상적으로 붙여서 재확인하니 `ParkingLot` 그룹 안에 `GSD device_29_CAX`
+  (헤드 아이템 이름이 "PAC3220", 전력량계)로 정상 복원되어 있었음. **라이브 테스트에서 뭔가
+  "없다"는 결과가 나오면, 먼저 연결 자체가 타임아웃/오염되지 않았는지부터 배제하고 판단할 것.**
+- (착오였지만 과정에서 확인된 것) `GetProjectTree`에서 "PAC3220 [DeviceItem]"이 다른 디바이스
+  아래 중첩된 걸 보고 "모듈이다"로 오판했던 적도 있음 - 실제로는 Device와 그 안의 동명
+  DeviceItem이 같은 이름("PAC3220")을 쓰는 흔한 패턴(`S7-1500/ET200MP station_1` 안에
+  `PLC_1`이 있는 것과 동일 구조)이었음. GSD 기반 디바이스는 TIA가 자동으로 "GSD device_N"으로
+  명명하고, 화면에 보이는 라벨은 그 안의 실제 부품(헤드 모듈) 이름이라는 것도 이 과정에서 재확인
+  (세션 초반 SMC/EX600 "GSD device_11" 패턴과 동일).
+
+### 코드 변경
+- `Portal.cs`: `ExportCax(devicePath?, exportPath)`, `ImportCax(importPath, mergeOption, confirm)`
+  (로그 파일 기반), `GetDevices()`의 `UngroupedDevicesGroup` 순회 버그 수정.
+- `Responses.cs`: `ResponseCaxMessage`, `ResponseCaxTransfer`(`LogPath`/`LogText` 포함).
+- `McpServer.cs`: `ExportCax`/`ImportCax` 도구, `mergeOption` 문자열 파싱(`MoveToParkingLot`
+  등), 로그 12,000자 초과 시 응답에서 자르고 파일 경로 안내.
+
+---
+
 ## [2026-09-17] CreateDevice/CreateDeviceWithItem "wrong type"/빈 껍데기 버그 근본 원인 규명 + 수정
 
 사용자가 "네가 토폴로지 자체를 새로 만드는 걸 보고 싶다"고 요청 → `CreateDevice`/

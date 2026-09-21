@@ -133,6 +133,25 @@ through existing blocks/types instead, see `ExportSourceFromBlocks`.
 | `DeleteExternalSource` | **Destructive** | `softwarePath`, `sourcePath` | Removes the source object only - blocks already generated from it are unaffected. |
 | `ExportSourceFromBlocks` | **Destructive** (writes to disk only, doesn't touch the project) | `softwarePath`, `exportPath`, `fileName`, `blockPaths` (optional), `typePaths` (optional), `withDependencies` (optional) | Exports existing blocks/types as combined SCL text. Give at least one of `blockPaths`/`typePaths`. |
 
+## CAx (AutomationML) - ECAD round-trip (e.g. EPLAN)
+
+> Live-verified end to end against "Tia for Claude": export (whole project and single-device),
+> import into an emptied project (with a renamed device to confirm AML content is editable
+> before import), and a real recovery scenario after wiping all devices/subnets. See
+> `CHANGES.md` 2026-09-21 for the full writeup, including two real bugs found and fixed along
+> the way.
+
+| Tool | Flags | Parameters | Notes |
+|---|---|---|---|
+| `ExportCax` | **Destructive** (writes to disk only, doesn't touch the project) | `exportPath`, `devicePath` (optional) | Exports hardware config (devices, modules, IO addressing, subnets, ~3.5k PLC tags per station) as AutomationML. Omit `devicePath` for the whole project. Does **not** include program logic (SCL/Ladder - confirmed absent from the AML) or HMI panels (confirmed absent from export - CAx doesn't cover HMI at all). |
+| `ImportCax` | **Destructive**, writes to project | `importPath`, `confirm` (must be `true`), `mergeOption` (`MoveToParkingLot` default / `OverwriteTiaDevice` / `RetainTiaDevice`) | Can restructure hardware config. No preview/dry-run exists in Openness, so `confirm=true` is required. `MoveToParkingLot` is the safe default - name-colliding items land in TIA's own "ParkingLot" folder (a real `DeviceUserGroup` under `Project.DeviceGroups`) instead of silently overwriting or being discarded. Returns `LogText`/`LogPath` (TIA's own import log, capped at 12k chars in the response, full log always on disk) - `TransferResult`'s own `Messages` list only carries Warning/Information entries, not individual per-item errors, so the log file is the only place error detail actually shows up (and even there, only as an aggregate count - see the write-up in `CHANGES.md`). |
+
+**Editing an AML before re-importing it works** - live-verified by renaming a CPU's `Name="PLC_1"` to `Name="TEST PLC"` directly in the exported AML text and re-importing; the CPU came back fully configured (F-CPU safety params, PROFINET/IP/SNMP settings, etc.) under the new name, and IO-system send-clock messages in the log referenced it by the new name too - confirming this isn't a shallow rename.
+
+**Real bugs found and fixed while testing this (2026-09-21):**
+- `GetDevices()` was silently skipping every device directly under "Ungrouped devices" in the project tree (`Project.UngroupedDevicesGroup`) - the code that should have walked it was commented out. Fixed; this affects every caller of `GetDevices()`, not just CAx.
+- A device that looked "missing" after a CAx-restore turned out to be a live-testing methodology bug, not a real gap: the `GetDevices()` call had silently timed out on `Connect` (stdio stream got corrupted, returning an empty result with no error) - re-running it cleanly found the device exactly where it should be. Worth remembering when a live-test result looks like a gap: rule out a timed-out/corrupted connection before trusting a "not found".
+
 ## Documents (.s7dcl/.s7res) - **requires TIA Portal V20+**
 
 SIMATIC SD document format, mainly useful for round-tripping SCL logic through text-based tools.

@@ -369,6 +369,35 @@ Priority order for picking pieces up ourselves, each to go through this project'
     works. Tool descriptions for `CreateDevice`/`CreateDeviceWithItem` updated to require a
     `FindHardwareCatalogEntries`-sourced TypeIdentifier and explicitly warn against copying one
     off an existing device's attribute.
+13. ~~**CAx (AutomationML) export/import**~~ - **Done (2026-09-21).** New `ExportCax`/`ImportCax`
+    tools wrapping `Siemens.Engineering.Cax.CaxProvider` (confirmed real via reflection). Covers
+    hardware config, network/subnet connections, and PLC tags (~3,460 per station, confirmed by
+    reading an exported AML directly) - does not cover program logic (SCL/Ladder, confirmed
+    absent) or HMI panels (confirmed absent from export entirely). Live-verified end to end
+    against "Tia for Claude": export (project-wide and single-device), the `confirm=true` gate
+    (Openness has no preview for CAx import), and a real recovery scenario - wiped every
+    device/subnet, re-imported the original export, got the hardware/network/tags back. Also
+    live-verified the AML is genuinely editable before re-import, not just a black box: hand-edited
+    a device's `Name="PLC_1"` to `Name="TEST PLC"` directly in the exported XML and re-imported -
+    the CPU came back under the new name with its full config (F-CPU safety params, IP/SNMP/
+    PROFINET settings), not just a relabeled shell.
+    - Found `TransferResult.Messages` (the `Import(FileInfo, CaxImportOptions)` overload) never
+      carries individual Error-level entries, only Warning/Information plus one final summary
+      line - switched to the `Import(FileInfo, FileInfo logFilePath, CaxImportOptions)` overload
+      to capture TIA's own import log, but even that log has no individual error detail either,
+      only an aggregate count. This appears to be a genuine Openness/TIA limitation, not something
+      fixable from the client side - documented in the tool description and `CHANGES.md` rather
+      than worked around.
+    - Two real bugs found while chasing an apparently-missing post-restore device, both fixed:
+      (1) `GetDevices()` was silently skipping everything under the "Ungrouped devices" project-
+      tree group - the traversal code was commented out (`_project.UngroupedDevicesGroup` is a
+      single `DeviceSystemGroup`, not a collection, so the existing `foreach`-over-groups pattern
+      didn't fit it as-is); fixed to walk its `.Devices` directly. Affects every `GetDevices()`
+      caller, not just CAx. (2) A device that looked missing after a restore turned out to be a
+      live-testing methodology bug, not a real gap - the `GetDevices()` call's `Connect` had
+      silently timed out (corrupted the stdio stream, returned an empty result with no error),
+      and the empty result was misread as "device not found." Re-running with a clean connection
+      found the device exactly where CAx had put it (in TIA's own "ParkingLot" group).
 
 ## Documentation
 - [ ] Add a "CLI Options" section to `README.md` documenting `--tia-major-version <int>` and `--logging <1|2|3>` with defaults and effect (1=stderr, 2=Debug, 3=Event Log). Cross-link to samples.
