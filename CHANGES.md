@@ -5,6 +5,76 @@
 
 ---
 
+## [2026-10-08] `CompileSoftware` 에러/경고 목록 추가 + `GetNetworkSource` (SCL 네트워크 읽기) 신규
+
+다른 Claude 세션(클라우드, 실제 Mahindra 프로젝트에서 GOP1/2/3DataSetting 리팩터링 중)이
+겪은 실사용 불편을 공유 폴더(`%TEMP%/tiaportal-mcp-exports/vs_reference/REQUESTS.md`)로
+전달받아, 우선순위 P1·P2를 구현. 코드 리뷰/빌드는 완료, 최종 `.exe` 교체는 그 세션이
+`TiaMcpServer.exe`를 쓰는 중이라 일단 대기 (`Portal.cs`/`McpServer.cs` 자체의 C# 컴파일은
+새 에러 0건, 기존 경고 4건만 재확인됨).
+
+### P1. `CompileSoftware`가 에러/경고 상세를 반환하지 않음
+기존엔 `CompilerResult.ToString()` 한 줄만 반환하고 `Error` 상태면 예외를 던졌음 - 실제로
+어떤 블록이 왜 실패했는지 알 방법이 없었음. 리플렉션으로 `CompilerResult.Messages`
+(`CompilerResultMessageComposition`)가 블록별 `Description`/`Path`/`State`/`DateTime`을
+재귀적으로 담고 있는 걸 확인(CAx import의 `TransferResult`와 달리 실제 상세 데이터 있음) →
+`CompileSoftware`/`McpServer.cs`를 고쳐 `errorCount`/`warningCount`/`messages[]`를 반환하도록
+변경. **에러 상태에서도 예외를 던지지 않고 구조화된 데이터를 반환**하도록 동작을 바꿈
+(ImportCax 패턴과 동일) - `state`/`errorCount`로 성공 여부를 판단해야 함.
+
+### P2. `GetNetworkSource` 신규 (SCL 네트워크를 텍스트로 읽기)
+Openness엔 Network/CompileUnit 객체 모델이 전혀 없음(리플렉션으로 재확인, 0건) - 블록을
+export한 XML을 직접 파싱해야 하는 게 유일한 경로. 다른 세션이 이미 같은 결론에 도달해
+`st_render.py`(StructuredText v4 XML → SCL 텍스트 렌더러)를 손으로 만들어 쓰고 있었음.
+이를 `Portal.GetNetworkSource(softwarePath, blockPath, networkIndex)`로 C# 포팅:
+- `ExportBlock`과 동일한 패턴으로 블록을 **사용자에게 보이지 않는 임시 파일**로 export 후
+  즉시 삭제, `System.Xml.Linq`로 `SW.Blocks.CompileUnit` 요소들을 파싱.
+- `Token`/`Blank`/`NewLine`/`Access`(`LiteralConstant`/`TypedConstant`/`Call`/`LocalVariable`/
+  `GlobalVariable`)/`CallInfo`/`Parameter`/`LineComment`/`Comment` 전체 렌더링.
+- **`st_render.py`의 기존 버그 수정**: 배열 인덱스가 `[[ ]]`로 중복 출력되던 문제 - 실제
+  export된 XML을 직접 떠보니 인덱스용 `[`/`]` Token이 이미 `Component` 안에 들어있었음
+  (렌더러가 또 한 번 괄호를 씌운 게 원인). 직접 렌더링하도록 고쳐서 해결(`GOP[#Z5]`로 정상
+  출력, 실제 export 파일로 확인).
+- 검증: 실제 프로젝트에서 export된 레퍼런스 파일
+  (`%TEMP%/tiaportal-mcp-exports/ds_v6fin_1008/GOP2DataSetting.xml`)의 네트워크 인덱스 2를
+  동일 렌더링 로직을 복사한 독립 스크래치 콘솔 앱으로 돌려 `st_render.py`/`REQUESTS.md`가
+  제시한 기대 출력(`IF "MainAssy".Mode.Dry_Run AND NOT #Dry_Prev THEN` 등)과 정확히 일치함을
+  확인. LAD/FBD 네트워크는 `isStructuredText: false`/`text: null`로 반환(렌더링 범위 밖).
+  **실제 MCP 도구 호출을 통한 라이브 테스트는 아직 미완료** (exe 락 대기 중).
+- `SetNetworkSource`(텍스트→XML 쓰기)는 범위가 훨씬 커서 별도 작업으로 남김.
+
+### 실제 MCP 도구 호출로 라이브 검증 완료 (exe 락 해제 후)
+다른 세션이 `TiaMcpServer.exe`를 종료해서 재빌드 후 실제 Mahindra 프로젝트
+(`Mahindra_CPU01_V20_261007_k7`)에 대해 실제 도구 호출로 검증:
+
+- **`GetNetworkSource`**: `101_GOP2_A-Conveyor/1_DataSetting/GOP2DataSetting`의 네트워크
+  인덱스 2를 실제 도구 호출로 읽어서, standalone 검증 때와 동일한 SCL 텍스트가 정확히
+  나오는 것 확인. 처음엔 프로젝트가 온라인 상태라 `Export`가 "This function is not supported
+  in online mode"로 막혔음 - 사용자 확인 받고 `GoOffline("PLC_1")` 실행 후 재시도, 끝나고
+  `GoOnline("PLC_1")`으로 원상 복구.
+- **`CompileSoftware`**: 같은 온라인 상태에서 먼저 테스트했더니 `Portal.CompileSoftware`의
+  `catch (Exception) { return null; }`가 실제 예외를 통째로 삼켜버려서 "Compile did not run"
+  이라는 의미 없는 메시지만 나옴 - **이번 기능 개선의 핵심 목적(진짜 에러 내용 보여주기)을
+  정면으로 무력화하는 기존 버그**였음. `PortalException`을 던지도록 고치고, MCP 쪽
+  catch에도 `Reason: ...` 상세를 붙이도록 수정 → 재시도하니 실제 이유가 보임: "The operation
+  is not permitted in online mode" (**CompileSoftware도 ExportBlock과 동일하게 오프라인
+  필요** - 이전엔 이 사실 자체가 안 보였음, 다른 세션이 PLCSIM 다운로드 실패 원인을 못 찾은
+  것도 같은 맥락일 가능성). `GoOffline` 후 재시도하니 실제 컴파일 결과가 정상적으로 나옴:
+  `state: Warning, errorCount: 0, warningCount: 1`, 메시지 목록에 "Inputs or outputs are used
+  that do not exist in the configured hardware" 같은 실제 경고 포함.
+- 부가로, 기존 `BuildBlockPathSuggestion`(`ExportBlock`/`GetNetworkSource`가 공유하는
+  "Did you mean" 제안 로직)이 **가장 바깥쪽 그룹 이름을 하나 빠뜨리는 기존 버그**를 발견함
+  (`GOP2DataSetting`의 제안이 `1_DataSetting/GOP2DataSetting`으로 나왔는데, 실제 경로는
+  `101_GOP2_A-Conveyor/1_DataSetting/GOP2DataSetting`이었음 - `parts.RemoveAt(0)`이 항상
+  맨 앞 세그먼트를 제거하는 게 원인). 이번 작업 범위 밖이라 고치지 않았지만 `TODO.md`에 남김.
+
+### 메모
+P1/P2 완료 내용은 `vs_reference/DONE.md`에도 기록 - 위 라이브 검증 결과까지 포함해서 업데이트.
+남은 요청(P3 그룹 경로, P4 일괄 import+롤백, P5 출력 크기 제어, P6 변경 감지, P7 기타)은
+`vs_reference/REQUESTS.md` 참고.
+
+---
+
 ## [2026-09-21] "Ungrouped devices" 사각지대 관련 버그 2건 추가 발견 + "Tia for Claude" 완전 정리 검증
 
 바로 위 CAx 작업의 라이브 검증을 계속하다가, 포트 배선/화면 배치가 CAx로 되는지 확인하던 중

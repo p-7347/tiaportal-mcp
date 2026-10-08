@@ -307,8 +307,20 @@ namespace TiaMcpServer.ModelContextProtocol
     {
     }
 
+    public class ResponseCompilerMessage
+    {
+        public string? Description { get; set; }
+        public string? Path { get; set; }
+        public string? State { get; set; }
+        public DateTime? DateTime { get; set; }
+    }
+
     public class ResponseCompileSoftware : ResponseMessage
     {
+        public string? State { get; set; }
+        public int? ErrorCount { get; set; }
+        public int? WarningCount { get; set; }
+        public IEnumerable<ResponseCompilerMessage>? Messages { get; set; }
     }
     
     public class ResponseBlocks : ResponseMessage
@@ -318,6 +330,21 @@ namespace TiaMcpServer.ModelContextProtocol
 
     public class ResponseExportBlock : ResponseMessage
     {
+    }
+
+    public class ResponseNetwork
+    {
+        public int Index { get; set; }
+        public string? Title { get; set; }
+        public string? Comment { get; set; }
+        public string? ProgrammingLanguage { get; set; }
+        public bool IsStructuredText { get; set; }
+        public string? Text { get; set; }
+    }
+
+    public class ResponseNetworkSource : ResponseMessage
+    {
+        public IEnumerable<ResponseNetwork>? Networks { get; set; }
     }
 
     public class ResponseImportBlock : ResponseMessage

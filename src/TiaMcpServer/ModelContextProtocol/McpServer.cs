@@ -4,6 +4,7 @@ using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using Siemens.Engineering.Cax;
+using Siemens.Engineering.Compiler;
 using Siemens.Engineering.SW;
 using Siemens.Engineering.SW.Blocks;
 using Siemens.Engineering.SW.Types;
@@ -1221,34 +1222,69 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "CompileSoftware", Title = "Compile PLC software", Destructive = false, Idempotent = true, OpenWorld = false), Description("Compile the plc software")]
+        [McpServerTool(Name = "CompileSoftware", Title = "Compile PLC software", Destructive = false, Idempotent = true, OpenWorld = false), Description("Compile the plc software and return the real per-block error/warning list (Description + block Path), not just a pass/fail summary. Does not throw on compile errors - check the State/ErrorCount in the response; a thrown McpException means the compile call itself couldn't run (e.g. software path not found). Same offline-mode requirement as ExportBlock - TIA Portal refuses to compile while online/monitoring. If it fails for that reason, tell the user rather than calling GoOffline yourself; going offline disconnects TIA Portal's live view for anyone watching it, with no warning.")]
         public static ResponseCompileSoftware CompileSoftware(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("password: the password to access adminsitration, default: no password")] string password = "")
         {
             try
             {
-                var result = Portal.CompileSoftware(softwarePath, password);
-                if (result != null && !result.State.ToString().Equals("Error"))
+                var result = Portal.CompileSoftware(softwarePath, password)
+                    ?? throw new McpException($"Compile did not run for '{softwarePath}' - check the software path and that a project is open");
+
+                var messages = new List<ResponseCompilerMessage>();
+                FlattenCompilerMessages(result.Messages, messages);
+
+                return new ResponseCompileSoftware
                 {
-                    return new ResponseCompileSoftware
+                    Message = $"Software '{softwarePath}' compiled: {result.State} ({result.ErrorCount} error(s), {result.WarningCount} warning(s))",
+                    State = result.State.ToString(),
+                    ErrorCount = result.ErrorCount,
+                    WarningCount = result.WarningCount,
+                    Messages = messages,
+                    Meta = new JsonObject
                     {
-                        Message = $"Software '{softwarePath}' compiled with {result}",
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true
-                        }
-                    };
-                }
-                else
-                {
-                    throw new McpException($"Failed compiling software '{softwarePath}': {result}");
-                }
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = result.State != CompilerResultState.Error
+                    }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                var reason = pex.InnerException?.Message?.Trim();
+                var msg = pex.Message;
+                if (!string.IsNullOrEmpty(reason)) msg += $" Reason: {reason}";
+
+                throw new McpException(msg, pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {
                 throw new McpException($"Unexpected error compiling software '{softwarePath}': {ex.Message}", ex);
+            }
+        }
+
+        // CompilerResult.Messages is a recursive tree (a group-level message can have its own
+        // nested Messages for the blocks inside it) - this walks all levels and keeps only the
+        // leaves that actually carry a Description, so the flat list is exactly the per-block
+        // error/warning detail TIA's own Inspector window shows, not the group headers.
+        private static void FlattenCompilerMessages(CompilerResultMessageComposition? messages, List<ResponseCompilerMessage> into)
+        {
+            if (messages == null) return;
+
+            foreach (var m in messages)
+            {
+                if (!string.IsNullOrEmpty(m.Description))
+                {
+                    into.Add(new ResponseCompilerMessage
+                    {
+                        Description = m.Description,
+                        Path = m.Path,
+                        State = m.State.ToString(),
+                        DateTime = m.DateTime
+                    });
+                }
+
+                FlattenCompilerMessages(m.Messages, into);
             }
         }
 
@@ -1583,6 +1619,79 @@ namespace TiaMcpServer.ModelContextProtocol
             catch (Exception ex) when (ex is not McpException)
             {
                 throw new McpException($"Unexpected error exporting block from '{blockPath}' to '{exportPath}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "GetNetworkSource", Title = "Read a block's networks as SCL text", Destructive = false, Idempotent = true, OpenWorld = false), Description("Read a block's networks (CompileUnits) back as text - Openness has no Network/CompileUnit API, so this exports the block to a throwaway temp file internally (never written to the export folder) and renders each StructuredText (SCL) network's XML into SCL source. LAD/FBD networks are returned with isStructuredText=false and text=null - ladder logic is not rendered. Same offline-mode requirement as ExportBlock - if it fails because the project is online, tell the user instead of calling GoOffline yourself.")]
+        public static ResponseNetworkSource GetNetworkSource(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("blockPath: full path to the block in the project structure, e.g. 'Group/Subgroup/Name' (single names are ambiguous)")] string blockPath,
+            [Description("networkIndex: 0-based network index to read; omit or pass -1 to read all networks in the block")] int networkIndex = -1)
+        {
+            try
+            {
+                var networks = Portal.GetNetworkSource(softwarePath, blockPath, networkIndex)
+                    .Select(n => new ResponseNetwork
+                    {
+                        Index = n.Index,
+                        Title = n.Title,
+                        Comment = n.Comment,
+                        ProgrammingLanguage = n.ProgrammingLanguage,
+                        IsStructuredText = n.IsStructuredText,
+                        Text = n.Text
+                    })
+                    .ToList();
+
+                return new ResponseNetworkSource
+                {
+                    Message = $"Read {networks.Count} network(s) from '{blockPath}'",
+                    Networks = networks,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                switch (pex.Code)
+                {
+                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
+                        {
+                            if (pex.Message.StartsWith("Network index", StringComparison.OrdinalIgnoreCase))
+                            {
+                                throw new McpException(pex.Message);
+                            }
+
+                            var suggestionNote = BuildBlockPathSuggestion(softwarePath, blockPath);
+                            throw new McpException($"Block not found.{suggestionNote}".Trim());
+                        }
+
+                    case TiaMcpServer.Siemens.PortalErrorCode.ExportFailed:
+                        {
+                            var reason = pex.InnerException?.Message?.Trim();
+                            var msg = "Failed to read network source.";
+                            if (!string.IsNullOrEmpty(reason)) msg += $" Reason: {reason}";
+
+                            Logger?.LogError(pex, "MCP GetNetworkSource failed for {SoftwarePath} {BlockPath} [{NetworkIndex}]",
+                                pex.Data?["softwarePath"], pex.Data?["blockPath"], pex.Data?["networkIndex"]);
+
+                            throw new McpException(msg);
+                        }
+
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
+                        {
+                            throw new McpException(pex.Message);
+                        }
+                }
+
+                throw new McpException(pex.Message);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error reading network source for '{blockPath}': {ex.Message}", ex);
             }
         }
 

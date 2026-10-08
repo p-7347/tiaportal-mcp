@@ -89,7 +89,7 @@ project (never reaches actual PLC hardware - see the "Safety" note at the end).
 |---|---|---|---|
 | `GetSoftwareInfo` | RO | `softwarePath` | |
 | `GetSoftwareTree` | RO | `softwarePath` | ASCII tree of blocks, types, and external sources under a PLC software container. |
-| `CompileSoftware` | idempotent | `softwarePath`, `password` (optional) | Compiles the *engineering project*, not a download to hardware. |
+| `CompileSoftware` | idempotent | `softwarePath`, `password` (optional) | Compiles the *engineering project*, not a download to hardware. Returns the real per-block error/warning list (`messages[]`: `description`, `path`, `state`, `dateTime`), not just a pass/fail summary - does not throw on compile errors, check `state`/`errorCount` in the response. **Same offline-mode requirement as `ExportBlock`** - TIA Portal refuses to compile while online/monitoring ("The operation is not permitted in online mode"); if it fails for that reason, tell the user instead of calling `GoOffline` yourself. |
 
 ## Blocks
 
@@ -99,6 +99,7 @@ project (never reaches actual PLC hardware - see the "Safety" note at the end).
 | `GetBlocks` | RO | `softwarePath`, `regexName` (optional, default = all) | Flat list; can be slow on large projects since it reads every block's full attribute set. |
 | `GetBlocksWithHierarchy` | RO | `softwarePath` | Same data as `GetBlocks` but nested by group, mirroring `GetSoftwareTree`'s shape. |
 | `ExportBlock` | **Destructive** | `softwarePath`, `blockPath`, `exportPath`, `preservePath` (optional) | Exports one block to XML. Fails with "not found" + path suggestions if `blockPath` is a bare, ambiguous name. Requires the project to be **offline** - TIA Portal itself refuses export while online/monitoring. See the offline-mode callout below `GoOffline` before reaching for it to unblock this. |
+| `GetNetworkSource` | RO | `softwarePath`, `blockPath`, `networkIndex` (optional, 0-based, default = all) | Reads a block's networks (CompileUnits) back as SCL text, since Openness has no Network/CompileUnit object model. Internally exports the block to a throwaway temp file (never written to the export folder) and renders the StructuredText (SCL) XML grammar back into source, including call parameter lists and array indices. LAD/FBD networks come back with `isStructuredText: false` and `text: null` - ladder logic is not rendered. Same offline-mode requirement as `ExportBlock`. Write-side (`SetNetworkSource`) is not implemented yet. |
 | `ImportBlock` | **Destructive** | `softwarePath`, `groupPath`, `importPath` (XML file) | Overwrites an existing block of the same name. |
 | `ExportBlocks` | **Destructive**, async w/ progress | `softwarePath`, `exportPath`, `regexName` (optional), `preservePath` (optional) | Bulk export. Skips inconsistent blocks and reports them separately in `Inconsistent`; compile first if you need them included. |
 | `GetBlockCrossReferences` | RO | `softwarePath`, `blockPath` | Compiler-backed "where is this block used" - e.g. an FB used as an instance type: which blocks declare a Static instance of it (`access: "Multiinstance"`), or an FC/OB and who calls it (`access: "Call"`). Only returns `UsedBy` locations for the block's own entry (its internal `Uses` - what it calls/reads - is filtered out; see `CHANGES.md` 2026-09-09). |

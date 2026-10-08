@@ -2,6 +2,21 @@
 
 Centralized list of actionable improvements gathered from initial repo review. Use this to track, prioritize, and reference across PRs. See file paths in backticks.
 
+## Open bug: `BuildBlockPathSuggestion` drops the outermost group segment (2026-10-08)
+
+Found while live-testing `GetNetworkSource` (see `CHANGES.md` 2026-10-08) against the real
+Mahindra project: `ExportBlock`/`GetNetworkSource`'s shared "Did you mean" helper in
+`McpServer.cs` walks a block's parent groups up to (but excluding) the root
+`PlcBlockSystemGroup`, then unconditionally does `parts.RemoveAt(0)` - dropping whichever
+group that walk found first (the *outermost* one), not a redundant/root segment. For a block
+nested 3+ levels deep (e.g. `101_GOP2_A-Conveyor/1_DataSetting/GOP2DataSetting`), the
+suggestion came back as `1_DataSetting/GOP2DataSetting` - missing the real top-level group -
+which then fails `GetPlcBlockGroupByPath`'s exact-path matching again. Only verified harmless
+for blocks nested exactly 2 levels deep, where dropping the first segment coincidentally still
+leaves a resolvable (if wrong) path. Fix: only remove a segment if `GetPlcBlockGroupByPath`
+confirms it's spurious (e.g. compare path lengths/validate before trimming), or build the
+suggestion by rendering the full group chain and letting the caller compare bottom level only.
+
 ## ~~Open bug: Attach succeeds but Projects/LocalSessions empty for a specific TIA instance~~ - Resolved, root cause confirmed: missing GSD files
 
 Found while verifying multi-instance `Connect(processId)` (see `CHANGES.md` 2026-09-10, full

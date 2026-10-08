@@ -30,6 +30,7 @@ using System.Net;
 using System.Security;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 
 namespace TiaMcpServer.Siemens
 {
@@ -109,6 +110,20 @@ namespace TiaMcpServer.Siemens
         public string? TiaCurrentIp { get; set; }
         public string? TiaCurrentSubnetMask { get; set; }
         public bool IpDiffers { get; set; }
+    }
+
+    // One network (SW.Blocks.CompileUnit) inside a block, as read back from its exported XML -
+    // Openness has no Network/CompileUnit object model, so this is reconstructed from the same
+    // XML ExportBlock writes. Text is the rendered SCL source for StructuredText (SCL) networks;
+    // it is null for LAD/FBD networks (FlgNet content is not parsed).
+    public class NetworkSourceInfo
+    {
+        public int Index { get; set; }
+        public string? Title { get; set; }
+        public string? Comment { get; set; }
+        public string? ProgrammingLanguage { get; set; }
+        public bool IsStructuredText { get; set; }
+        public string? Text { get; set; }
     }
 
     public class Portal
@@ -1807,9 +1822,14 @@ namespace TiaMcpServer.Siemens
 
                     return result;
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    return null; // "Error, compiling failed";
+                    // Surface the real reason (e.g. "not supported in online mode") instead of
+                    // swallowing it - that detail is exactly what CompileSoftware exists to show.
+                    var pex = new PortalException(PortalErrorCode.InvalidState, "Compile failed", null, ex);
+                    pex.Data["softwarePath"] = softwarePath;
+                    _logger?.LogError(pex, "CompileSoftware failed for {SoftwarePath}", softwarePath);
+                    throw pex;
                 }
             }
 
@@ -2122,6 +2142,307 @@ namespace TiaMcpServer.Siemens
 
                 _logger?.LogError(pex, "ExportBlock failed for {SoftwarePath} {BlockPath} -> {ExportPath}", softwarePath, blockPath, exportPath);
                 throw pex;
+            }
+        }
+
+        // Reads a block's networks (SW.Blocks.CompileUnit elements) as SCL text, without writing
+        // any user-visible file - Openness has no Network/CompileUnit API, so this exports the
+        // block to a throwaway temp file (same as ExportBlock) and renders the StructuredText XML
+        // (http://www.siemens.com/automation/Openness/SW/NetworkSource/StructuredText/v4) back
+        // into SCL source. LAD/FBD networks (FlgNet) are returned with IsStructuredText=false and
+        // Text=null - rendering ladder logic back to a textual form is out of scope here.
+        // networkIndex selects a single network (0-based, in export order); omit/-1 for all.
+        public IEnumerable<NetworkSourceInfo> GetNetworkSource(string softwarePath, string blockPath, int networkIndex = -1)
+        {
+            _logger?.LogInformation($"Reading network source for block: {blockPath}");
+
+            string? tempPath = null;
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var block = GetBlock(softwarePath, blockPath);
+
+                if (block == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, "Block not found");
+                }
+
+                // TIA Portal never exports inconsistent blocks
+                if (!block.IsConsistent)
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "Block is inconsistent; TIA Portal does not export inconsistent blocks.");
+                }
+
+                tempPath = Path.Combine(Path.GetTempPath(), $"tiamcp_networksrc_{Guid.NewGuid():N}.xml");
+                block.Export(new FileInfo(tempPath), ExportOptions.None);
+
+                var doc = XDocument.Load(tempPath);
+                var compileUnits = doc.Descendants().Where(e => e.Name.LocalName == "SW.Blocks.CompileUnit").ToList();
+
+                var result = new List<NetworkSourceInfo>();
+
+                for (var i = 0; i < compileUnits.Count; i++)
+                {
+                    if (networkIndex >= 0 && i != networkIndex)
+                    {
+                        continue;
+                    }
+
+                    result.Add(ParseCompileUnit(compileUnits[i], i));
+                }
+
+                if (networkIndex >= 0 && result.Count == 0)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Network index {networkIndex} not found; block has {compileUnits.Count} network(s).");
+                }
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "GetNetworkSource failed", null, ex);
+
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["blockPath"] = blockPath;
+                pex.Data["networkIndex"] = networkIndex;
+
+                _logger?.LogError(pex, "GetNetworkSource failed for {SoftwarePath} {BlockPath} [{NetworkIndex}]", softwarePath, blockPath, networkIndex);
+                throw pex;
+            }
+            finally
+            {
+                if (tempPath != null && File.Exists(tempPath))
+                {
+                    File.Delete(tempPath);
+                }
+            }
+        }
+
+        private static NetworkSourceInfo ParseCompileUnit(XElement cu, int index)
+        {
+            var attributeList = cu.Elements().FirstOrDefault(e => e.Name.LocalName == "AttributeList");
+            var networkSource = attributeList?.Elements().FirstOrDefault(e => e.Name.LocalName == "NetworkSource");
+            var structuredText = networkSource?.Elements().FirstOrDefault(e => e.Name.LocalName == "StructuredText");
+            var programmingLanguage = attributeList?.Elements().FirstOrDefault(e => e.Name.LocalName == "ProgrammingLanguage")?.Value;
+
+            return new NetworkSourceInfo
+            {
+                Index = index,
+                Title = GetMultilingualText(cu, "Title"),
+                Comment = GetMultilingualText(cu, "Comment"),
+                ProgrammingLanguage = string.IsNullOrEmpty(programmingLanguage) ? null : programmingLanguage,
+                IsStructuredText = structuredText != null,
+                Text = structuredText != null ? RenderStructuredText(structuredText) : null
+            };
+        }
+
+        // Reads one MultilingualText composition (CompositionName = "Title" or "Comment"),
+        // preferring the en-US item and falling back to the first non-empty translation.
+        private static string? GetMultilingualText(XElement cu, string compositionName)
+        {
+            var multilingualText = cu.Descendants()
+                .FirstOrDefault(e => e.Name.LocalName == "MultilingualText" && (string?)e.Attribute("CompositionName") == compositionName);
+
+            if (multilingualText == null)
+            {
+                return null;
+            }
+
+            string? fallback = null;
+
+            foreach (var item in multilingualText.Descendants().Where(e => e.Name.LocalName == "MultilingualTextItem"))
+            {
+                var culture = item.Descendants().FirstOrDefault(e => e.Name.LocalName == "Culture")?.Value;
+                var text = item.Descendants().FirstOrDefault(e => e.Name.LocalName == "Text")?.Value;
+
+                if (string.IsNullOrEmpty(text))
+                {
+                    continue;
+                }
+
+                if (culture == "en-US")
+                {
+                    return text;
+                }
+
+                fallback ??= text;
+            }
+
+            return fallback;
+        }
+
+        // Renders a StructuredText (SCL) network's XML children back into SCL source text.
+        // Ported from the Openness StructuredText v4 grammar (Token/Blank/NewLine/Access/
+        // CallInfo/Parameter/LineComment/Comment/Text); namespace is ignored throughout since
+        // only this one element subtree uses the StructuredText XML namespace.
+        private static string RenderStructuredText(XElement container)
+        {
+            var sb = new StringBuilder();
+            foreach (var child in container.Elements())
+            {
+                RenderNode(child, sb);
+            }
+            return sb.ToString();
+        }
+
+        private static void RenderNode(XElement c, StringBuilder sb)
+        {
+            switch (c.Name.LocalName)
+            {
+                case "Token":
+                    sb.Append((string?)c.Attribute("Text") ?? "");
+                    break;
+                case "Blank":
+                    sb.Append(' ', ParseNum(c));
+                    break;
+                case "NewLine":
+                    sb.Append('\n', ParseNum(c));
+                    break;
+                case "Access":
+                    RenderAccess(c, sb);
+                    break;
+                case "LineComment":
+                    sb.Append("//").Append(ConcatText(c));
+                    break;
+                case "Comment":
+                    sb.Append("(*").Append(ConcatText(c)).Append("*)");
+                    break;
+                case "Text":
+                    sb.Append(c.Value);
+                    break;
+            }
+        }
+
+        private static int ParseNum(XElement e)
+        {
+            var attr = (string?)e.Attribute("Num");
+            return attr != null && int.TryParse(attr, out var n) ? n : 1;
+        }
+
+        private static string ConcatText(XElement e) =>
+            string.Concat(e.Descendants().Where(d => d.Name.LocalName == "Text").Select(d => d.Value));
+
+        private static void RenderAccess(XElement c, StringBuilder sb)
+        {
+            var scope = (string?)c.Attribute("Scope");
+
+            if (scope == "LiteralConstant" || scope == "TypedConstant")
+            {
+                var value = c.Descendants().FirstOrDefault(d => d.Name.LocalName == "ConstantValue");
+                var type = c.Descendants().FirstOrDefault(d => d.Name.LocalName == "ConstantType");
+                if (type != null && scope == "TypedConstant")
+                {
+                    sb.Append(type.Value).Append('#');
+                }
+                sb.Append(value != null ? value.Value : "?");
+                return;
+            }
+
+            var callInfo = c.Elements().FirstOrDefault(e => e.Name.LocalName == "CallInfo");
+            if (scope == "Call" && callInfo != null)
+            {
+                RenderCallInfo(callInfo, sb);
+                return;
+            }
+
+            if (scope == "LocalVariable" || scope == "GlobalVariable" || scope == "Call")
+            {
+                RenderSymbolAccess(c, scope, sb);
+                return;
+            }
+
+            sb.Append('<').Append(scope).Append('>');
+        }
+
+        // CallInfo's children are rendered with their own NewLine/Blank handling (a NewLine here
+        // is always a single '\n' regardless of its Num attribute) - this matches how TIA lays
+        // out multi-line call argument lists, confirmed against real exported SCL call networks.
+        private static void RenderCallInfo(XElement ci, StringBuilder sb)
+        {
+            var instanceComponent = ci.Elements().FirstOrDefault(e => e.Name.LocalName == "Instance")
+                ?.Elements().FirstOrDefault(e => e.Name.LocalName == "Component");
+
+            sb.Append('"').Append((string?)instanceComponent?.Attribute("Name") ?? "").Append('"');
+
+            foreach (var k in ci.Elements())
+            {
+                switch (k.Name.LocalName)
+                {
+                    case "Token":
+                        sb.Append((string?)k.Attribute("Text") ?? "");
+                        break;
+                    case "Parameter":
+                        sb.Append((string?)k.Attribute("Name") ?? "");
+                        foreach (var pc in k.Elements())
+                        {
+                            RenderNode(pc, sb);
+                        }
+                        break;
+                    case "NewLine":
+                        sb.Append('\n');
+                        break;
+                    case "Blank":
+                        sb.Append(' ', ParseNum(k));
+                        break;
+                }
+            }
+        }
+
+        // LocalVariable/GlobalVariable (and bare Call) access: a dotted Symbol/Component chain.
+        // The first Component is quoted ("Db") for GlobalVariable or '#'-prefixed for
+        // LocalVariable; later Components (after a '.' Token) are plain. Array index brackets
+        // are NOT added here - the exported XML already contains literal "[" / "]" Token
+        // children inside the indexed Component, so rendering them in place is correct; adding
+        // another bracket pair around them is what produced "[[ ]]" in the reference script
+        // this was ported from.
+        private static void RenderSymbolAccess(XElement c, string scope, StringBuilder sb)
+        {
+            var symbol = c.Elements().FirstOrDefault(e => e.Name.LocalName == "Symbol");
+            if (symbol == null)
+            {
+                return;
+            }
+
+            var any = false;
+
+            foreach (var cc in symbol.Elements())
+            {
+                if (cc.Name.LocalName == "Component")
+                {
+                    var name = (string?)cc.Attribute("Name") ?? "";
+
+                    if (!any && scope == "GlobalVariable")
+                    {
+                        sb.Append('"').Append(name).Append('"');
+                    }
+                    else if (!any && scope == "LocalVariable")
+                    {
+                        sb.Append('#').Append(name);
+                    }
+                    else
+                    {
+                        sb.Append(name);
+                    }
+                    any = true;
+
+                    foreach (var x in cc.Elements())
+                    {
+                        if (x.Name.LocalName == "Token" || x.Name.LocalName == "Access")
+                        {
+                            RenderNode(x, sb);
+                        }
+                    }
+                }
+                else if (cc.Name.LocalName == "Token")
+                {
+                    sb.Append((string?)cc.Attribute("Text") ?? "");
+                    any = true;
+                }
             }
         }
 
