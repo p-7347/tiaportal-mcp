@@ -128,6 +128,7 @@ namespace TiaMcpServer
 
                 // Register the Portal service for dependency injection
                 builder.Services.AddSingleton<Portal>();
+                builder.Services.AddSingleton<S7Diagnostics>();
 
                 var host = builder.Build();
 

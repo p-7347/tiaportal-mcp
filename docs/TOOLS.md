@@ -205,9 +205,37 @@ Same `softwarePath` rule as HMI tag tables (e.g. `"HMI_1/HMI_RT_1"`). All read-o
 
 ---
 
+## Direct PLC (S7CommPlus) - experimental, bypasses Openness entirely
+
+Everything else in this file goes through TIA Portal/Openness, so it only ever touches the local
+engineering project - Openness itself has no API for live tag values, active alarms, or the
+diagnostic buffer (verified via reflection: the `Online` namespace only exposes connection
+*state*, nothing else). These tools instead open a direct network connection (S7CommPlus protocol
+over TCP 102) straight to a live CPU, using
+[S7CommPlusDriver](https://github.com/thomas-v2/S7CommPlusDriver) - a reverse-engineered, **not**
+Siemens-documented protocol implementation (LGPL-3.0, see `THIRD_PARTY_LICENSES.md`). This is a
+different risk/trust category than the rest of this server: it is a real read straight off a live
+controller, independent of and unaffected by TIA Portal's own engineering session or the
+`GoOnline`/`GoOffline` connection. Prefer PLCSIM or a non-critical CPU until proven reliable for
+your use case; requires CPU firmware with S7CommPlus/TLS support (S7-1200 >= V4.3, S7-1500 >= V2.9).
+
+| Tool | Flags | Parameters | Notes |
+|---|---|---|---|
+| `ConnectPlcDirect` | EXPERIMENTAL | `ipAddress`, `username` (optional), `password` (optional) | Opens the direct connection. Only one at a time - call `DisconnectPlcDirect` first to switch targets. |
+| `DisconnectPlcDirect` | idempotent | - | |
+| `BrowsePlcTagsDirect` | RO, EXPERIMENTAL | `regexName` (optional) | Lists symbolic tags the CPU exposes (name, data type, internal access sequence). Every sub-member of every nested FB instance is its own tag - confirmed live, a real project returned 736,312 unfiltered. Use `regexName` (e.g. a DB name). |
+| `ReadPlcTagValuesDirect` | RO, EXPERIMENTAL | `tagNames` (string array) | Plain dotted symbol paths, e.g. `"MainAssy.Mode.Dry_Run"` (no TIA-style quotes). An unresolvable/bad-quality tag is reported per-item (`success: false`, `error`) rather than failing the whole call. |
+| `GetActivePlcAlarmsDirect` | RO, EXPERIMENTAL | `languageId` (optional, default 1033/en-US) | One-time snapshot (`GetActiveAlarms`), not a live subscription - call again to refresh. Covers ProDiag/user-program alarms; **not** the classic SZL-based diagnostic buffer (S7CommPlus has no SZL access, so a literal "Online & Diagnostics > Diagnostic buffer" equivalent isn't available). |
+
+Explicitly out of scope so far: any watch/force-table write or tag-modify capability, and the
+driver's own `AlarmSubscriptionCreate`/live-notification API (its own author marks the subscription
+code experimental, with several `// TODO! Unknown value!` markers - `GetActiveAlarms` above is a
+simpler, better-documented poll used instead).
+
 ## Safety: what these tools *cannot* do
 
-None of the above ever downloads to, starts/stops, or forces I/O on an actual PLC. Every
+None of the Openness-based tools above (i.e. everything except the "Direct PLC (S7CommPlus)"
+section) ever downloads to, starts/stops, or forces I/O on an actual PLC. Every
 `Destructive`-flagged tool only reads or writes the **local TIA Portal engineering project**
 (the open `.apXX`/`.alsXX` file and the block/type/tag XML files on disk) - there is no "download to
 device", "start/stop CPU", or force-write tool implemented anywhere in this server. Reaching a live

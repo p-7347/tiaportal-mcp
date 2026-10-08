@@ -26,6 +26,7 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         private static IServiceProvider? _services;
         private static Portal? _portal;
+        private static S7Diagnostics? _s7Diagnostics;
 
         public static ILogger? Logger { get; set; }
 
@@ -49,6 +50,30 @@ namespace TiaMcpServer.ModelContextProtocol
             set
             {
                 _portal = value ?? throw new ArgumentNullException(nameof(value), "Portal cannot be null");
+            }
+        }
+
+        // Independent of Portal - a live S7CommPlus (direct, non-Openness) connection to a PLC.
+        public static S7Diagnostics S7Diagnostics
+        {
+            get
+            {
+                if (_services != null)
+                {
+                    return _services.GetRequiredService<S7Diagnostics>();
+                }
+                else
+                {
+                    if (_s7Diagnostics == null)
+                    {
+                        _s7Diagnostics = new S7Diagnostics();
+                    }
+                    return _s7Diagnostics;
+                }
+            }
+            set
+            {
+                _s7Diagnostics = value ?? throw new ArgumentNullException(nameof(value), "S7Diagnostics cannot be null");
             }
         }
 
@@ -1179,6 +1204,158 @@ namespace TiaMcpServer.ModelContextProtocol
             catch (Exception ex) when (ex is not McpException)
             {
                 throw new McpException($"Unexpected error going offline from '{path}': {ex.Message}", ex);
+            }
+        }
+
+        #endregion
+
+        #region direct plc (S7CommPlus) - experimental, bypasses Openness entirely
+
+        [McpServerTool(Name = "ConnectPlcDirect", Title = "Connect directly to a PLC (S7CommPlus)", Destructive = false, Idempotent = false, OpenWorld = true), Description("EXPERIMENTAL. Opens a direct network connection (S7CommPlus protocol over TCP 102) straight to a live CPU, completely bypassing TIA Portal/Openness - this is NOT the engineering station connection used by GoOnline/GoOffline/GetOnlineState, and is unaffected by (and unaffecting of) that connection or any open TIA Portal session. Uses a reverse-engineered, community-maintained protocol implementation (not Siemens-documented) - prefer pointing this at PLCSIM or a non-critical CPU until proven reliable for your use case. Requires CPU firmware with S7CommPlus/TLS support (S7-1200 >= V4.3, S7-1500 >= V2.9). Only one direct connection is held at a time - call DisconnectPlcDirect before connecting elsewhere.")]
+        public static ResponseS7Connect ConnectPlcDirect(
+            [Description("ipAddress: IP address of the PLC's PROFINET interface (or PLCSIM virtual adapter)")] string ipAddress,
+            [Description("username: optional, default: none")] string username = "",
+            [Description("password: optional, default: none")] string password = "")
+        {
+            try
+            {
+                S7Diagnostics.Connect(ipAddress, username, password);
+
+                return new ResponseS7Connect
+                {
+                    Message = $"Connected directly to '{ipAddress}' (S7CommPlus)",
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Direct connect to '{ipAddress}' failed: {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "DisconnectPlcDirect", Title = "Disconnect the direct PLC connection", Destructive = false, Idempotent = true, OpenWorld = false), Description("Closes the direct S7CommPlus connection opened by ConnectPlcDirect. Does not affect TIA Portal's own online/engineering connection.")]
+        public static ResponseMessage DisconnectPlcDirect()
+        {
+            try
+            {
+                var ip = S7Diagnostics.ConnectedIp;
+                S7Diagnostics.Disconnect();
+
+                return new ResponseMessage
+                {
+                    Message = ip != null ? $"Disconnected from '{ip}'" : "Already disconnected",
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error disconnecting direct PLC connection: {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "BrowsePlcTagsDirect", Title = "Browse PLC tags (S7CommPlus)", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("EXPERIMENTAL. Lists symbolic tags the directly-connected CPU exposes (name, data type, internal access sequence) - requires ConnectPlcDirect first. Read-only; does not modify anything on the PLC. Every sub-member of every nested FB instance is its own tag - a real project can expose hundreds of thousands of them, confirmed live, so pass regexName (e.g. a DB name) rather than browsing unfiltered.")]
+        public static ResponseS7TagBrowse BrowsePlcTagsDirect(
+            [Description("regexName: optional case-insensitive regex to filter tag names, e.g. 'MainAssy' or '^MyDb\\\\.'")] string? regexName = null)
+        {
+            try
+            {
+                var tags = S7Diagnostics.BrowseTags(regexName);
+
+                return new ResponseS7TagBrowse
+                {
+                    Message = $"{tags.Count} tag(s) found",
+                    Tags = tags.Select(t => new ResponseS7TagBrowseEntry
+                    {
+                        Name = t.Name,
+                        DataType = t.DataType,
+                        AccessSequence = t.AccessSequence
+                    }).ToList(),
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error browsing PLC tags: {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "ReadPlcTagValuesDirect", Title = "Read live PLC tag values (S7CommPlus)", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("EXPERIMENTAL. Reads current live values straight off the directly-connected CPU for the given symbolic tag names - requires ConnectPlcDirect first. Tag names are plain dotted symbol paths (e.g. 'MainAssy.Mode.Dry_Run' for a global DB member, 'MyTag' for a top-level tag - no TIA-style quotes). Read-only; does not write anything. An unresolvable or bad-quality tag is reported per-item (success=false, error) rather than failing the whole call.")]
+        public static ResponseS7TagValues ReadPlcTagValuesDirect(
+            [Description("tagNames: symbolic tag names to read, e.g. [\"MainAssy.Mode.Dry_Run\", \"MyGlobalDb.Counter\"]")] string[] tagNames)
+        {
+            try
+            {
+                var values = S7Diagnostics.ReadTagValues(tagNames);
+
+                return new ResponseS7TagValues
+                {
+                    Message = $"Read {values.Count(v => v.Success)}/{values.Count} tag(s) successfully",
+                    Values = values.Select(v => new ResponseS7TagValue
+                    {
+                        Name = v.Name,
+                        DataType = v.DataType,
+                        Value = v.Value,
+                        Success = v.Success,
+                        Error = v.Error
+                    }).ToList(),
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error reading PLC tag values: {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "GetActivePlcAlarmsDirect", Title = "Get active PLC alarms (S7CommPlus)", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("EXPERIMENTAL. Snapshot of currently active (coming) and not-yet-cleared (going) alarms straight off the directly-connected CPU - requires ConnectPlcDirect first. This is a one-time poll, not a live subscription - call it again to refresh. Covers ProDiag/user-program alarms, not the classic SZL-based diagnostic buffer (S7CommPlus has no SZL access). Read-only.")]
+        public static ResponseS7Alarms GetActivePlcAlarmsDirect(
+            [Description("languageId: Windows LCID for alarm text language, default 1033 (en-US); e.g. 1042 for ko-KR, 1031 for de-DE")] int languageId = 1033)
+        {
+            try
+            {
+                var alarms = S7Diagnostics.GetActiveAlarms(languageId);
+
+                return new ResponseS7Alarms
+                {
+                    Message = $"{alarms.Count} active alarm(s)",
+                    Alarms = alarms.Select(a => new ResponseS7Alarm
+                    {
+                        CpuAlarmId = a.CpuAlarmId,
+                        AlarmDomain = a.AlarmDomain,
+                        MessageType = a.MessageType,
+                        SequenceCounter = a.SequenceCounter,
+                        IsComing = a.IsComing,
+                        Timestamp = a.Timestamp,
+                        AckTimestamp = a.AckTimestamp,
+                        AlarmText = a.AlarmText,
+                        InfoText = a.InfoText
+                    }).ToList(),
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error getting active PLC alarms: {ex.Message}", ex);
             }
         }
 

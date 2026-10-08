@@ -5,6 +5,89 @@
 
 ---
 
+## [2026-10-08] S7CommPlusDriver 직접 PLC 연결 (Phase 1) - 태그 값/활성 알람 읽기, 실험적
+
+"온라인에서 뭔가 데이터를 확인하거나 하는 툴은 지금 없는건가?" 질문에서 시작. Openness엔 라이브
+태그 값/활성 알람/진단 버퍼 API가 전혀 없음(이번 세션 초반에 리플렉션으로 이미 확인 - `Online`
+네임스페이스는 연결 상태만 노출). 유일한 경로는 Openness를 건너뛰고 S7CommPlus 프로토콜로
+직접 CPU(TCP 102)에 붙는 것 - 이전에 Phase 0(서브모듈 추가, 리버스 엔지니어링된 드라이버로
+PLCSIM 대상 standalone 검증)까지는 돼 있었지만 MCP 도구로 연결하는 작업(Phase 1)은 안 돼 있었음.
+
+### 빌드 통합 이슈 (서브모듈은 legacy csproj)
+`third_party/S7CommPlusDriver`의 `.csproj`들이 구형(비-SDK) 포맷, net4.7.2 타겟, x64/x86
+플랫폼만 정의(AnyCPU 없음)라서 `ProjectReference`로 바로 물리면:
+- `Platform=AnyCPU` 전파 문제로 OutputPath를 못 찾음 (`AdditionalProperties="Platform=x64"`로
+  1단계는 해결되지만 그 밑의 Zlib.net 참조까지는 전파 안 됨 - legacy csproj는 SDK 프로젝트의
+  플랫폼 협상 프로토콜을 안 씀).
+- `-p:Platform=x64`를 전역으로 주면 해결은 되지만, `TiaMcpServer.csproj` 자신의 출력 경로가
+  `bin\x64\Debug\net48\...`으로 바뀌어버림 - 이 세션과 다른 세션들이 다 `bin\Debug\net48\...`을
+  하드코딩해서 쓰고 있어서 받아들일 수 없는 변경.
+- v4.7.2 타겟팅 팩이 이 머신엔 없음(v4.8만 있음) - `-p:TargetFrameworkVersion=v4.8`로 우회.
+
+**해결**: `ProjectReference` 대신 `S7CommPlusDriver.dll`/`zlib.net.dll`을 한 번 미리 빌드해서
+(`-p:Platform=x64 -p:TargetFrameworkVersion=v4.8`) 일반 `<Reference HintPath=...>`로 참조 -
+`System.Management`를 참조하던 기존 방식과 동일한 패턴. `TiaMcpServer.csproj`의 출력 경로는
+그대로 유지됨. 서브모듈을 업데이트하면 저 빌드 명령을 다시 돌려야 함 - `THIRD_PARTY_LICENSES.md`
+에 명령어 기록.
+
+### 구현
+`src/TiaMcpServer/Siemens/S7Diagnostics.cs` 신규 - `Portal`의 `_portal`/`_project` 상태와
+완전히 독립된 자체 연결 생애주기(`S7CommPlusConnection`). `Connect`/`Disconnect`/`BrowseTags`/
+`ReadTagValues(tagNames)`/`GetActiveAlarms(languageId)`.
+- 태그 값 읽기는 `conn.getPlcTagBySymbol(name)`으로 심볼 이름("MainAssy.Mode.Dry_Run" 같은
+  점 표기, TIA 식 따옴표 없음)을 직접 해석해서 `PlcTag`를 받고 `conn.ReadTags(tags)`로 일괄
+  읽음 - 사전 Browse 없이도 바로 쓸 수 있음. 개별 태그가 없거나 품질이 나쁘면 전체 호출을
+  실패시키지 않고 항목별 `success:false`/`error`로 보고.
+- 알람은 드라이버 저자가 직접 "실험적, 값 의미 모름" 주석을 단 구독 기반
+  `AlarmSubscriptionCreate`가 아니라, 문서화와 사용 예가 더 명확한 `GetActiveAlarms`
+  (일회성 폴링 스냅샷)를 사용 - SZL 기반 진단 버퍼는 이 프로토콜에 아예 없음, ProDiag/
+  사용자 프로그램 알람만 커버.
+
+새 MCP 도구 5개 (`McpServer.cs`): `ConnectPlcDirect`/`DisconnectPlcDirect`/
+`BrowsePlcTagsDirect`/`ReadPlcTagValuesDirect`/`GetActivePlcAlarmsDirect` - 전부 설명에
+"Openness를 완전히 건너뛰고 리버스 엔지니어링된 프로토콜로 직접 연결" 경고와 PLCSIM 권장을
+명시. `Responses.cs`에 DTO 5종류 추가. `Program.cs`에 `S7Diagnostics` DI 등록,
+`McpServer.cs`에 `Portal`과 동일한 패턴의 static 프로퍼티 추가. `THIRD_PARTY_LICENSES.md`
+신규(LGPL-3.0 귀속), `docs/TOOLS.md`에 "Direct PLC (S7CommPlus) - experimental" 섹션 추가.
+
+### 라이브 검증 완료 (PLCSIM Advanced, TCP/IP Single Adapter 모드)
+exe 락 해제 후 실제 PLCSIM(192.168.0.1, S7-1500)에 대해 전체 도구 체인을 라이브로 검증. 과정에서
+진짜 버그 2개를 더 찾아 고침 - 둘 다 "컴파일은 되는데 실제로 돌려보니 막힘" 케이스:
+
+1. **OpenSSL 네이티브 DLL 누락**: `ConnectPlcDirect`가 타임아웃 후 `S7CommPlus error code
+   51380224` (`errOpenSSL`)로 실패. 드라이버가 관리 코드가 아니라 네이티브 OpenSSL을 P/Invoke로
+   직접 호출하는데(`libssl-3-x64.dll`/`libcrypto-3-x64.dll`), 서브모듈 자체 빌드엔 PostBuildEvent로
+   복사되지만 `TiaMcpServer.csproj`가 DLL을 직접 참조하는 방식으론 같이 안 따라옴 - exe 폴더에
+   명시적으로 복사하도록 `<None CopyToOutputDirectory>` 추가해서 해결.
+   - 참고로 처음엔 PLCSIM Advanced의 "Online Access"가 **PLCSIM**(내부 가상 버스, 실제 TCP/IP
+     아님) 모드였던 것도 원인 중 하나였음 - 사용자가 **TCP/IP Single Adapter**로 바꿔서 해결.
+     이 도구는 실제 TCP 102 소켓 연결이 필요하므로 PLCSIM 모드에서는 애초에 닿을 수 없음.
+2. **드라이버의 `Console.WriteLine`이 MCP stdio 프로토콜 스트림을 오염시킴**: OpenSSL DLL을
+   고친 뒤 `ConnectPlcDirect`를 호출하니 JSON-RPC 응답 대신
+   `"S7CommPlusConnection - Connect: Using SessionId=0x70000FE3"` 같은 드라이버 자체 디버그
+   텍스트가 그대로 stdout에 찍혀서 나오고, 그 뒤로 모든 호출의 응답이 한 칸씩 밀려서 깨짐.
+   드라이버 소스에 `Console.WriteLine` 호출이 64곳 흩어져 있음(서브모듈이라 직접 고치지
+   않음) - 대신 `S7Diagnostics.cs`에 `WithSuppressedConsoleOut` 헬퍼를 추가해서 드라이버로
+   들어가는 모든 호출(Connect/Disconnect/Browse/getPlcTagBySymbol/ReadTags/GetActiveAlarms)
+   동안 `Console.Out`을 `TextWriter.Null`로 임시 교체 - MCP SDK 자체의 stdio 전송은 raw stdout
+   핸들을 직접 쓰는 것으로 보여 영향 없음, 스레드 안전을 위해 lock으로 감쌈.
+
+두 버그 다 고친 뒤 실제 호출로 전부 확인:
+- `ConnectPlcDirect("192.168.0.1")` → 정상 연결.
+- `ReadPlcTagValuesDirect(["MainAssy.Mode.Dry_Run"])` → `{ dataType: "BBOOL", value: "C0: False", success: true }`.
+- `BrowsePlcTagsDirect()` (필터 없이) → **736,312개** 태그 반환 - 중첩 FB 인스턴스의 모든
+  서브멤버가 각각 하나의 태그라서 실사용 불가능한 크기임을 확인 → `regexName` 필터 파라미터
+  추가(기존 `GetBlocks` 등과 동일한 패턴). `regexName="^MainAssy\."`로 재확인하니 70개로 줄고
+  `MainAssy.Mode.Dry_Run`이 정확히 포함됨.
+- `GetActivePlcAlarmsDirect()` → 실제 의미 있는 알람 텍스트 확인: `"MC Fatal Alarm: PLC_1
+  SM137: Error in drive configuration adaptation. (Parameter P964 not supported by device or
+  cannot be read. Unspecified.)"` 등 다수.
+- `DisconnectPlcDirect()` → 정상 종료.
+
+C# 컴파일 깨끗함(새 에러 0건, 기존 경고 4개만).
+
+---
+
 ## [2026-10-08] `CompileSoftware` 에러/경고 목록 추가 + `GetNetworkSource` (SCL 네트워크 읽기) 신규
 
 다른 Claude 세션(클라우드, 실제 Mahindra 프로젝트에서 GOP1/2/3DataSetting 리팩터링 중)이

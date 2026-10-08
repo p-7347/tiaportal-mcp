@@ -7,6 +7,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TiaMcpServer.Test", "tests\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TiaMcpServer", "src\TiaMcpServer\TiaMcpServer.csproj", "{9979E0D0-923F-F721-2D6E-3663C0D68B0F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "S7CommPlusDriver", "third_party\S7CommPlusDriver\src\S7CommPlusDriver\S7CommPlusDriver.csproj", "{781951D8-80DE-4E2F-92CA-A5FEF0059415}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Zlib.net", "third_party\S7CommPlusDriver\src\Zlib.net\Zlib.net.csproj", "{0C89B7A2-A218-49E4-B545-5B044A45F977}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +25,14 @@ Global
 		{9979E0D0-923F-F721-2D6E-3663C0D68B0F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9979E0D0-923F-F721-2D6E-3663C0D68B0F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{9979E0D0-923F-F721-2D6E-3663C0D68B0F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{781951D8-80DE-4E2F-92CA-A5FEF0059415}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{781951D8-80DE-4E2F-92CA-A5FEF0059415}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{781951D8-80DE-4E2F-92CA-A5FEF0059415}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{781951D8-80DE-4E2F-92CA-A5FEF0059415}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0C89B7A2-A218-49E4-B545-5B044A45F977}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0C89B7A2-A218-49E4-B545-5B044A45F977}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0C89B7A2-A218-49E4-B545-5B044A45F977}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0C89B7A2-A218-49E4-B545-5B044A45F977}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

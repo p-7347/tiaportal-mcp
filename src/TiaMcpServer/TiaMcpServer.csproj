@@ -22,6 +22,28 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <!-- Direct PLC (S7CommPlus) diagnostics - bypasses Openness entirely, see THIRD_PARTY_LICENSES.md.
+         Referenced as prebuilt DLLs rather than ProjectReference: the submodule's legacy-format
+         csproj only defines Debug/Release x64|x86 configs (no AnyCPU) and targets net4.7.2 (no
+         targeting pack installed here, only net48) - a ProjectReference forces Platform=x64 onto
+         this whole project's own build, which changes its output path. Rebuild the DLLs after
+         updating the submodule with:
+           dotnet build third_party\S7CommPlusDriver\src\S7CommPlusDriver\S7CommPlusDriver.csproj -c Debug -p:Platform=x64 -p:TargetFrameworkVersion=v4.8 -->
+    <Reference Include="S7CommPlusDriver">
+      <HintPath>..\..\third_party\S7CommPlusDriver\src\S7CommPlusDriver\bin\x64\Debug\S7CommPlusDriver.dll</HintPath>
+    </Reference>
+    <Reference Include="zlib.net">
+      <HintPath>..\..\third_party\S7CommPlusDriver\src\Zlib.net\bin\x64\Debug\zlib.net.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- S7CommPlusDriver P/Invokes OpenSSL directly (libssl/libcrypto), loaded from the running
+         exe's own directory - must be copied here explicitly, a managed DLL reference alone does
+         not bring along a dependency's native siblings. -->
+    <None Include="..\..\third_party\S7CommPlusDriver\src\S7CommPlusDriver\OpenSSL-dll-x64\libssl-3-x64.dll" Link="libssl-3-x64.dll" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\third_party\S7CommPlusDriver\src\S7CommPlusDriver\OpenSSL-dll-x64\libcrypto-3-x64.dll" Link="libcrypto-3-x64.dll" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <Compile Remove="tests\**" />
     <None Include="tests\**" />
   </ItemGroup>
