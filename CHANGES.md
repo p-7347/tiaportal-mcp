@@ -5,6 +5,57 @@
 
 ---
 
+## [2026-10-09] ConnectPlcDirect 크래시 진짜 원인 확정 + 수정 (TLS keylog 콜백, 작업 디렉터리)
+
+전날 커밋한 `RunThread()` try/catch 패치가 Cowork 쪽 재현에서는 계속 실패해서 (VS 쪽 PowerShell
+하네스로는 같은 세이프티 CPU 인스턴스/같은 시퀀스로 4번 재현 시도해도 전혀 안 죽었음) 디버깅을
+더 진행. Cowork가 **Windows 이벤트 뷰어(Application 로그, .NET Runtime 소스)**에서 실제
+크래시 스택트레이스를 직접 찾아내서 진짜 원인을 확정함.
+
+### 진짜 원인
+Claude Desktop이 이 서버를 **작업 디렉터리 `C:\WINDOWS\System32`**로 띄움. 드라이버의
+`S7Client.SSL_CTX_keylog_cb`(OpenSSL이 TLS 세션 키를 넘겨줄 때 호출하는 콜백)가 상대경로
+`key_<timestamp>.log`에 `StreamWriter`로 쓰려다가 `UnauthorizedAccessException` 발생.
+**이 콜백은 네이티브 OpenSSL이 함수 포인터로 직접 호출하는 거라**, 거기서 터지는 예외는
+네이티브/매니지드 경계를 넘어가면서 **`RunThread()`의 try/catch로도 못 잡음** - 그래서 어제
+패치로도 안 고쳐졌던 것. VS 쪽 테스트가 매번 쓰기 가능한 폴더(`C:\Users\USER\tiaportal-mcp`
+등)에서 실행해서 전혀 재현이 안 됐던 것도 이걸로 설명됨 - 작업 디렉터리를 직접
+`C:\WINDOWS\System32`로 맞춰서 재현해보니 즉시 재현됨(`ExitCode: -532462766` =
+`0xE0434352`, .NET 처리되지 않은 예외의 표준 종료 코드).
+
+### 수정 (서브모듈 로컬 패치, `60ecafb`)
+`S7Client.cs`의 `SSL_CTX_keylog_cb`:
+1. 콜백 본문을 try/catch로 감쌈(네이티브 경계를 넘는 콜백은 절대 예외를 던지면 안 됨).
+2. **콜백 등록 자체를 기본적으로 꺼버림**(`SSL_CTX_set_keylog_callback` 호출 주석 처리) - TLS
+   세션 키를 평문으로 디스크에 쓰는 동작 자체가 기본값으로는 적절하지 않음(세션 초반에 이미
+   `key_*.log` 유출을 한 번 발견해서 `.gitignore`에 추가했던 적이 있음 - 같은 문제의 다른
+   얼굴이었던 셈).
+
+### 빌드 시스템 함정 추가 발견: 드라이버 재빌드해도 exe가 옛날 DLL을 계속 씀
+패치하고 드라이버 DLL을 재빌드한 뒤 `TiaMcpServer.exe`를 일반적으로(`dotnet build`) 재빌드했는데
+**"Build succeeded"가 떠도 실제로는 2026-09-18일자(한 달도 더 된) `S7CommPlusDriver.dll`을
+그대로 쓰고 있었음** - `System32`에서 재현 테스트했을 때도 여전히 크래시해서 발견. 원인은
+MSBuild의 증분 빌드 캐시(`obj/`)가 `HintPath` 참조 파일의 내용 변경을 항상 다시 체크하지는
+않는 것으로 보이고, 예전에 `-p:Platform=x64`를 전역으로 줬던 실험이 남긴 `obj\x64`/`bin\x64`
+잔재도 섞여 있었음. **해결**: `src/TiaMcpServer/obj/Debug`, `bin/Debug`, 그리고 남아있던
+`obj\x64`/`bin\x64`를 전부 지우고 완전히 클린 빌드 - 그제서야 exe 폴더의 DLL 타임스탬프가
+방금 만든 패치 빌드와 일치함을 확인. `THIRD_PARTY_LICENSES.md`에 "드라이버 재빌드 후엔 반드시
+exe 폴더 DLL 타임스탬프를 직접 확인하라"는 경고로 남겨둠 - 안 그러면 패치했다고 믿고 있지만
+실제로는 구버전이 계속 돌아가는 상황이 소리 없이 재발할 수 있음(이번에 정확히 그랬음).
+
+### 검증
+클린 빌드 후 `C:\WINDOWS\System32`를 작업 디렉터리로 지정해서 직접 재현 테스트 - 더 이상
+크래시 없음, `key_*.log`도 System32에 안 생김(콜백 비활성화 확인). `ConnectPlcDirect` ->
+`DisconnectPlcDirect` 정상 응답, 프로세스 끝까지 생존.
+
+### 메모
+이번 디버깅은 VS 쪽 로컬 재현 시도(4회, 전부 실패 = 못 깨뜨림)와 Cowork 쪽의 실제 실패 환경
+재현(정확한 작업 디렉터리 차이 + 이벤트 뷰어 스택트레이스)이 상호보완적으로 맞아떨어져서
+해결된 케이스 - 로컬에서 재현이 안 된다고 "그쪽 환경이 특이해서 그런가보다"로 넘기지 않고
+끝까지 구체적인 차이(작업 디렉터리)를 찾아낸 게 핵심이었음.
+
+---
+
 ## [2026-10-08] `ConnectPlcDirect`가 실제 세이프티 CPU에서 MCP 서버 프로세스 전체를 죽이는 버그 수정
 
 Cowork 세션이 `vs_reference/DONE.md`에 버그 리포트: 실제 PLCSIM Advanced(CPU 1518F-3 PN, 세이프티
