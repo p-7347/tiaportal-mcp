@@ -8,7 +8,7 @@ repository's own license. They are kept as independent assemblies (not merged/IL
 
 - **Path**: `third_party/S7CommPlusDriver` (git submodule)
 - **Upstream**: https://github.com/thomas-v2/S7CommPlusDriver
-- **Pinned commit**: `dbd61e4`
+- **Pinned commit**: `4ccdb00` (local patch on top of upstream `dbd61e4` - see below)
 - **License**: GNU Lesser General Public License v3.0 (LGPL-3.0) - see
   `third_party/S7CommPlusDriver/LICENSE`
 - **Copyright**: Thomas Wiens (th.wiens@gmx.de)
@@ -22,6 +22,14 @@ repository's own license. They are kept as independent assemblies (not merged/IL
   the "Direct PLC (S7CommPlus)" section of `docs/TOOLS.md` for the reliability/maturity caveats
   this carries (undocumented protocol, parts of the driver - e.g. alarm subscriptions - are
   explicitly marked experimental by its own author).
+- **Local patch (not upstream)**: `src/S7CommPlusDriver/Net/S7Client.cs`'s `RunThread()` - the driver's background
+  socket-receive thread - had no exception handling at all. Confirmed live: connecting to a real
+  safety CPU (1518F-3 PN via PLCSIM Advanced) crashed the **entire host process**, not just the
+  connection, because an unhandled exception on a background thread always terminates a .NET
+  process regardless of any try/catch at the call site (different thread/call stack). Patched to
+  catch and log to stderr, stopping just that thread instead - the caller's own read-timeout path
+  then surfaces a normal connection failure. This is a local modification to the pinned commit,
+  not part of upstream; worth proposing back to the maintainer.
 - **Build integration note**: the submodule's own `.csproj` files are legacy-format (not
   SDK-style), target .NET Framework 4.7.2, and only define `x64`/`x86` platform configs (no
   `AnyCPU`). Rather than a `ProjectReference` (which would force `Platform=x64` onto

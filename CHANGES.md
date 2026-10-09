@@ -5,6 +5,50 @@
 
 ---
 
+## [2026-10-08] `ConnectPlcDirect`가 실제 세이프티 CPU에서 MCP 서버 프로세스 전체를 죽이는 버그 수정
+
+Cowork 세션이 `vs_reference/DONE.md`에 버그 리포트: 실제 PLCSIM Advanced(CPU 1518F-3 PN, 세이프티
+CPU)에 `ConnectPlcDirect("192.168.0.1")`를 호출했더니 "Error: Connection closed"로 끊기고, 직후
+`GetState`가 TIA 연결까지 초기화된 걸로 봐서 **MCP 서버 프로세스 자체가 죽었다 재시작된 것으로
+보임**. PLCSIM Advanced(일반 S7-1500, 세이프티 아님)로 돌린 제 테스트는 성공했었음 - 세이프티
+CPU에서만 재현되는 것으로 추정.
+
+### 원인
+`S7CommPlusDriver`의 `S7Client.RunThread()`(소켓 수신 전용 백그라운드 `Thread`)에 예외 처리가
+전혀 없음 - `Connect()` 안에서 TCP 연결 직후 시작되고, TLS 핸드셰이크부터 이후 모든 응답까지
+이 스레드가 계속 수신·파싱함. .NET에서 **백그라운드 스레드의 처리되지 않은 예외는 호출부의
+try/catch와 무관하게 프로세스 전체를 즉시 종료시킴** - 제가 이미 `S7Diagnostics.cs`에 둔
+try/catch는 전부 메인 호출 스택에 있어서 이 스레드에서 터지는 예외는 애초에 잡을 수 없었음.
+세이프티 CPU는 PDU 구조가 일반 CPU와 달라서(추정) 드라이버의 역직렬화 로직이 처리 못 하는
+케이스에 걸렸을 가능성이 높음 - 직접 세이프티 CPU 환경이 없어서 재현은 못 했지만, 코드상 예외
+처리가 전혀 없다는 건 직접 확인한 사실이고 증상과 정확히 일치함.
+
+### 수정
+서브모듈(`third_party/S7CommPlusDriver/src/S7CommPlusDriver/Net/S7Client.cs`)에 **로컬
+패치**(업스트림 아님, `THIRD_PARTY_LICENSES.md`에 기록) - `RunThread()`의 루프 본문을
+try/catch로 감싸서, 예외가 나면 stderr에 로그만 남기고 그 스레드만 멈추도록 수정. 호출부는
+기존에 이미 있던 `WaitForNewS7plusReceived(timeout)` 타임아웃 경로로 자연스럽게 실패 처리됨 -
+프로세스는 안 죽고 정상적인 연결 실패 에러로 돌아옴.
+
+### 상태
+드라이버 DLL 재빌드 + `TiaMcpServer.exe` 재빌드 모두 완료. 일반(비세이프티) PLCSIM 인스턴스
+(192.168.0.1)로 회귀 테스트 - Connect/Read/Disconnect 전부 패치 전과 동일하게 정상 동작,
+사이드이펙트 없음 확인. 패치를 서브모듈 자체에도 로컬 커밋(`4ccdb00`, 업스트림 `dbd61e4` 위)
+으로 고정 - gitlink만 바꾸고 커밋 안 하면 `git submodule update` 한 번에 패치가 날아갈 수
+있어서 반드시 필요.
+
+Cowork가 재시험했을 때도 여전히 "Connection closed"가 났다고 보고했으나, 같은 세이프티 CPU
+인스턴스("2026 1008_001", 192.168.0.1)로 Cowork와 완전히 동일한 시퀀스(`ConnectPlcDirect`
+연속 2번, 중간 Disconnect 없음, TIA Openness Connect도 안 함)를 VS 쪽에서 패치된 빌드로 직접
+재현 시도 - **프로세스 안 죽고 둘 다 정상 응답**(1차 성공, 2차는 "Already connected" 정상
+에러). Cowork 쪽이 "서버가 죽었다"는 근거로 든 `GetState: isConnected=false, project "-"`는
+사실 TIA Openness Connect를 안 부르면 나오는 정상값(S7CommPlus 연결 상태와 무관)이라, 실제
+크래시 근거는 아니었을 가능성이 있음 - MCP 클라이언트가 세션 내내 같은 서버 프로세스를 재사용
+하는 경우가 많아서, 재시험 당시 떠 있던 프로세스가 재빌드 전 구버전이었을 가능성이 높다고
+결론. `vs_reference/DONE.md`에 재확인 요청 기록.
+
+---
+
 ## [2026-10-08] S7CommPlusDriver 직접 PLC 연결 (Phase 1) - 태그 값/활성 알람 읽기, 실험적
 
 "온라인에서 뭔가 데이터를 확인하거나 하는 툴은 지금 없는건가?" 질문에서 시작. Openness엔 라이브
