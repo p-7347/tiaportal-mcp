@@ -168,17 +168,18 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "ImportXmlType", Title = "Import type from XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Import one PLC data type from an XML file into a type group. An existing type of the same name is replaced; its previous XML is saved first and returned as 'backup'")]
+        [McpServerTool(Name = "ImportXmlType", Title = "Import type from XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Import one PLC data type from an XML file into a type group. An existing type of the same name is replaced; its previous XML is saved first and returned as 'backup'. Refused when that type was changed after the file was written, unless 'allowOlderFile'")]
         public static ResponseImportXmlType ImportXmlType(
             [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
             [Description("groupPath: type group that receives the type, relative to 'PLC data types' and '/'-separated; empty string for the PLC data types root")] string groupPath,
-            [Description("importPath: absolute path of the .xml file on the PC running this server, e.g. one written by 'ExportXmlType'")] string importPath)
+            [Description("importPath: absolute path of the .xml file on the PC running this server, e.g. one written by 'ExportXmlType'")] string importPath,
+            [Description("allowOlderFile: import even when the block or type it replaces was changed in TIA Portal after the file was last written (default false: refused, because that usually means an older copy of the file would undo a change)")] bool allowOlderFile = false)
         {
             WritePolicy.EnsureEnabled(nameof(ImportXmlType));
 
             try
             {
-                var backup = Portal.BackupTypeReplacedByImport(softwarePath, importPath, nameof(ImportXmlType));
+                var backup = Portal.BackupTypeReplacedByImport(softwarePath, importPath, nameof(ImportXmlType), allowOlderFile);
 
                 if (Portal.ImportXmlType(softwarePath, groupPath, importPath))
                 {
@@ -198,6 +199,10 @@ namespace TiaMcpServer.ModelContextProtocol
                 {
                     throw new McpException($"Failed importing type from '{importPath}' to '{groupPath}'");
                 }
+            }
+            catch (PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {

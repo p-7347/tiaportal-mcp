@@ -382,7 +382,7 @@ Use the ImportBlocksFromDocuments tool with these parameters:
         #region Import From Sources Templates
 
         [McpServerPrompt(Name = "ImportSources"), Description("Import a folder tree of source files (.db, .scl, .awl, .udt)")]
-        public static string ImportSources(string softwarePath, string importPath, string regexName = "", string keepOnError = "false")
+        public static string ImportSources(string softwarePath, string importPath, string regexName = "", string keepOnError = "false", string allowOlderFile = "false")
         {
             return $@"Import every block and PLC data type source file (.db, .awl, .scl, .udt) under a folder tree into PLC software (requires the server started with '--allow-write').
 
@@ -391,16 +391,18 @@ Common parameter values:
 - importPath: folder to walk recursively, typically the tree the ExportSources tool wrote. Each file goes into the block or PLC data type group its folder path implies; the group must already exist
 - regexName: empty for all, or e.g. 'FB_.*' to select files by base name (use one file name to import a single object)
 - keepOnError: Use false (default) to roll back a whole file on any error, true to keep the objects of a file that were generated successfully
+- allowOlderFile: Use false (default) to refuse the import when an object it would replace was changed in TIA Portal after the file was written (that import would undo the change), true to import anyway
 
 Use the ImportSources tool with these parameters:
 - softwarePath: {softwarePath}
 - importPath: {importPath}
 - regexName: {regexName}
-- keepOnError: {NormalizeBool(keepOnError)}";
+- keepOnError: {NormalizeBool(keepOnError)}
+- allowOlderFile: {NormalizeBool(allowOlderFile)}";
         }
 
         [McpServerPrompt(Name = "ImportSourceBlock"), Description("Import one block from a source file (.db, .scl or .awl)")]
-        public static string ImportSourceBlock(string softwarePath, string groupPath, string importPath, string keepOnError = "false")
+        public static string ImportSourceBlock(string softwarePath, string groupPath, string importPath, string keepOnError = "false", string allowOlderFile = "false")
         {
             return $@"Compile one block source file into a block group of PLC software (requires the server started with '--allow-write').
 
@@ -409,16 +411,18 @@ Common parameter values:
 - groupPath: block user group that receives the blocks, e.g. '0_OBs'. Empty for the source's default location; the 'Program blocks' root itself is not allowed
 - importPath: full path of the .db, .scl or .awl file, typically one the ExportSourceBlock tool wrote
 - keepOnError: Use false (default) to roll back the whole file on any error, true to keep the objects that were generated successfully
+- allowOlderFile: Use false (default) to refuse the import when an object it would replace was changed in TIA Portal after the file was written (that import would undo the change), true to import anyway
 
 Use the ImportSourceBlock tool with these parameters:
 - softwarePath: {softwarePath}
 - groupPath: {groupPath}
 - importPath: {importPath}
-- keepOnError: {NormalizeBool(keepOnError)}";
+- keepOnError: {NormalizeBool(keepOnError)}
+- allowOlderFile: {NormalizeBool(allowOlderFile)}";
         }
 
         [McpServerPrompt(Name = "ImportSourceType"), Description("Import one PLC data type from a .udt source file")]
-        public static string ImportSourceType(string softwarePath, string groupPath, string importPath, string keepOnError = "false")
+        public static string ImportSourceType(string softwarePath, string groupPath, string importPath, string keepOnError = "false", string allowOlderFile = "false")
         {
             return $@"Compile one '*.udt' source file into a PLC data type group of PLC software (requires the server started with '--allow-write').
 
@@ -427,16 +431,18 @@ Common parameter values:
 - groupPath: PLC data type user group that receives the types, e.g. 'Common'. Empty for the source's default location; the 'PLC data types' root itself is not allowed
 - importPath: full path of the .udt file, typically one the ExportSourceType tool wrote
 - keepOnError: Use false (default) to roll back the whole file on any error, true to keep the objects that were generated successfully
+- allowOlderFile: Use false (default) to refuse the import when an object it would replace was changed in TIA Portal after the file was written (that import would undo the change), true to import anyway
 
 Use the ImportSourceType tool with these parameters:
 - softwarePath: {softwarePath}
 - groupPath: {groupPath}
 - importPath: {importPath}
-- keepOnError: {NormalizeBool(keepOnError)}";
+- keepOnError: {NormalizeBool(keepOnError)}
+- allowOlderFile: {NormalizeBool(allowOlderFile)}";
         }
 
         [McpServerPrompt(Name = "ImportSourceBlocks"), Description("Import all block source files of a folder into a group")]
-        public static string ImportSourceBlocks(string softwarePath, string groupPath, string importPath, string regexName = "", string preservePath = "false", string keepOnError = "false")
+        public static string ImportSourceBlocks(string softwarePath, string groupPath, string importPath, string regexName = "", string preservePath = "false", string keepOnError = "false", string allowOlderFile = "false")
         {
             return $@"Compile every block source file (.db, .scl, .awl) of a folder into a block group of PLC software (requires the server started with '--allow-write'). A file that fails is reported and the rest are still imported.
 
@@ -447,6 +453,7 @@ Common parameter values:
 - regexName: empty for all, or e.g. 'FB_.*' to select files by base name
 - preservePath: Use false (default) to read only the files directly in importPath, true to also read its subfolders into the matching subgroups of groupPath (the groups must already exist)
 - keepOnError: Use false (default) to roll back a whole file on any error, true to keep the objects of a file that were generated successfully
+- allowOlderFile: Use false (default) to refuse the import when an object it would replace was changed in TIA Portal after the file was written (that import would undo the change), true to import anyway
 
 Use the ImportSources tool instead to import blocks and PLC data types in one go.
 
@@ -456,11 +463,12 @@ Use the ImportSourceBlocks tool with these parameters:
 - importPath: {importPath}
 - regexName: {regexName}
 - preservePath: {NormalizeBool(preservePath)}
-- keepOnError: {NormalizeBool(keepOnError)}";
+- keepOnError: {NormalizeBool(keepOnError)}
+- allowOlderFile: {NormalizeBool(allowOlderFile)}";
         }
 
         [McpServerPrompt(Name = "ImportSourceTypes"), Description("Import all .udt source files of a folder into a group")]
-        public static string ImportSourceTypes(string softwarePath, string groupPath, string importPath, string regexName = "", string preservePath = "false", string keepOnError = "false")
+        public static string ImportSourceTypes(string softwarePath, string groupPath, string importPath, string regexName = "", string preservePath = "false", string keepOnError = "false", string allowOlderFile = "false")
         {
             return $@"Compile every '*.udt' source file of a folder into a PLC data type group of PLC software (requires the server started with '--allow-write'). A file that fails is reported and the rest are still imported.
 
@@ -471,6 +479,7 @@ Common parameter values:
 - regexName: empty for all, or e.g. 'UDT_.*' to select files by base name
 - preservePath: Use false (default) to read only the files directly in importPath, true to also read its subfolders into the matching subgroups of groupPath (the groups must already exist)
 - keepOnError: Use false (default) to roll back a whole file on any error, true to keep the objects of a file that were generated successfully
+- allowOlderFile: Use false (default) to refuse the import when an object it would replace was changed in TIA Portal after the file was written (that import would undo the change), true to import anyway
 
 Use the ImportSources tool instead to import blocks and PLC data types in one go.
 
@@ -480,7 +489,8 @@ Use the ImportSourceTypes tool with these parameters:
 - importPath: {importPath}
 - regexName: {regexName}
 - preservePath: {NormalizeBool(preservePath)}
-- keepOnError: {NormalizeBool(keepOnError)}";
+- keepOnError: {NormalizeBool(keepOnError)}
+- allowOlderFile: {NormalizeBool(allowOlderFile)}";
         }
 
         [McpServerPrompt(Name = "ImportExternalSource"), Description("Compile an external source already in the project into blocks")]
@@ -825,7 +835,7 @@ Use the ExportXmlBlock tool with these parameters:
         }
 
         [McpServerPrompt(Name = "ImportXmlBlock"), Description("Import one block from an XML file")]
-        public static string ImportXmlBlock(string softwarePath, string groupPath, string importPath)
+        public static string ImportXmlBlock(string softwarePath, string groupPath, string importPath, string allowOlderFile = "false")
         {
             return $@"Import a block file to the software.
 
@@ -833,11 +843,13 @@ Common parameter values:
 - softwarePath: defines the path in the project structure to the software
 - groupPath: defines the path in the project structure to the group, where to import the block
 - importPath: defines the path of the xml file from where to import the block
+- allowOlderFile: Use false (default) to refuse the import when an object it would replace was changed in TIA Portal after the file was written (that import would undo the change), true to import anyway
 
 Use the ImportXmlBlock tool with these parameters:
 - softwarePath: {softwarePath}
 - groupPath: {groupPath}
-- importPath: {importPath}";
+- importPath: {importPath}
+- allowOlderFile: {NormalizeBool(allowOlderFile)}";
         }
 
         [McpServerPrompt(Name = "GetBlockInterface"), Description("List the members of a data block with type and attributes")]
@@ -1165,7 +1177,7 @@ Use the ExportXmlType tool with these parameters:
         }
 
         [McpServerPrompt(Name = "ImportXmlType"), Description("Import one PLC data type from an XML file")]
-        public static string ImportXmlType(string softwarePath, string groupPath, string importPath)
+        public static string ImportXmlType(string softwarePath, string groupPath, string importPath, string allowOlderFile = "false")
         {
             return $@"Import a type from file into the PLC software.
 
@@ -1173,11 +1185,13 @@ Common parameter values:
 - softwarePath: defines the path in the project structure to the PLC software
 - groupPath: defines the path in the project structure to the group, where to import the type
 - importPath: defines the path of the xml file from where to import the type
+- allowOlderFile: Use false (default) to refuse the import when an object it would replace was changed in TIA Portal after the file was written (that import would undo the change), true to import anyway
 
 Use the ImportXmlType tool with these parameters:
 - softwarePath: {softwarePath}
 - groupPath: {groupPath}
-- importPath: {importPath}";
+- importPath: {importPath}
+- allowOlderFile: {NormalizeBool(allowOlderFile)}";
         }
 
         [McpServerPrompt(Name = "CreateTypeGroup"), Description("Create a PLC data type group")]

@@ -1070,10 +1070,10 @@ namespace TiaMcpServer.Siemens
         /// ExportSources: skip-and-continue throughout, so one bad file does not lose the rest
         /// of the tree.
         /// </summary>
-        public ImportedSourcesResult ImportSources(string softwarePath, string importPath, string regexName = "", bool keepOnError = false)
+        public ImportedSourcesResult ImportSources(string softwarePath, string importPath, string regexName = "", bool keepOnError = false, bool allowOlderFile = false)
         {
             return Operation.Run(_logger, nameof(ImportSources), PortalErrorCode.ImportFailed,
-                () => ImportSourceFiles(softwarePath, importPath, string.Empty, regexName, keepOnError, preservePath: true, includeBlocks: true, includeTypes: true),
+                () => ImportSourceFiles(softwarePath, importPath, string.Empty, regexName, keepOnError, preservePath: true, includeBlocks: true, includeTypes: true, allowOlderFile, nameof(ImportSources)),
                 ("softwarePath", softwarePath), ("importPath", importPath), ("regexName", regexName));
         }
 
@@ -1084,10 +1084,10 @@ namespace TiaMcpServer.Siemens
         /// because the 'Program blocks' system root does not accept generated blocks. A file that
         /// uses data types or other blocks may generate several objects, all listed in the result.
         /// </summary>
-        public ImportedSourcesResult ImportSourceBlock(string softwarePath, string groupPath, string importPath, bool keepOnError = false)
+        public ImportedSourcesResult ImportSourceBlock(string softwarePath, string groupPath, string importPath, bool keepOnError = false, bool allowOlderFile = false)
         {
             return Operation.Run(_logger, nameof(ImportSourceBlock), PortalErrorCode.ImportFailed,
-                () => ImportSourceFile(softwarePath, groupPath, importPath, keepOnError, isType: false),
+                () => ImportSourceFile(softwarePath, groupPath, importPath, keepOnError, isType: false, allowOlderFile, nameof(ImportSourceBlock)),
                 ("softwarePath", softwarePath), ("groupPath", groupPath), ("importPath", importPath));
         }
 
@@ -1096,10 +1096,10 @@ namespace TiaMcpServer.Siemens
         /// counterpart to <see cref="ExportSourceType"/>; see <see cref="ImportSourceBlock"/> for
         /// the rules about <paramref name="groupPath"/>.
         /// </summary>
-        public ImportedSourcesResult ImportSourceType(string softwarePath, string groupPath, string importPath, bool keepOnError = false)
+        public ImportedSourcesResult ImportSourceType(string softwarePath, string groupPath, string importPath, bool keepOnError = false, bool allowOlderFile = false)
         {
             return Operation.Run(_logger, nameof(ImportSourceType), PortalErrorCode.ImportFailed,
-                () => ImportSourceFile(softwarePath, groupPath, importPath, keepOnError, isType: true),
+                () => ImportSourceFile(softwarePath, groupPath, importPath, keepOnError, isType: true, allowOlderFile, nameof(ImportSourceType)),
                 ("softwarePath", softwarePath), ("groupPath", groupPath), ("importPath", importPath));
         }
 
@@ -1113,7 +1113,7 @@ namespace TiaMcpServer.Siemens
         /// 'Program blocks' folder, as <see cref="ExportSourceBlocks"/> writes it, is dropped.
         /// Skip-and-continue: a file that fails is reported and the rest are still imported.
         /// </summary>
-        public ImportedSourcesResult ImportSourceBlocks(string softwarePath, string groupPath, string importPath, string regexName = "", bool preservePath = false, bool keepOnError = false)
+        public ImportedSourcesResult ImportSourceBlocks(string softwarePath, string groupPath, string importPath, string regexName = "", bool preservePath = false, bool keepOnError = false, bool allowOlderFile = false)
         {
             return Operation.Run(_logger, nameof(ImportSourceBlocks), PortalErrorCode.ImportFailed,
                 () =>
@@ -1121,7 +1121,7 @@ namespace TiaMcpServer.Siemens
                     // Fail once, before any file is touched, when the target group is wrong.
                     ResolveBlockUserGroupForGenerate(softwarePath, groupPath);
 
-                    return ImportSourceFiles(softwarePath, importPath, groupPath, regexName, keepOnError, preservePath, includeBlocks: true, includeTypes: false);
+                    return ImportSourceFiles(softwarePath, importPath, groupPath, regexName, keepOnError, preservePath, includeBlocks: true, includeTypes: false, allowOlderFile, nameof(ImportSourceBlocks));
                 },
                 ("softwarePath", softwarePath), ("groupPath", groupPath), ("importPath", importPath), ("regexName", regexName));
         }
@@ -1131,19 +1131,19 @@ namespace TiaMcpServer.Siemens
         /// <see cref="ExportSourceTypes"/>; see <see cref="ImportSourceBlocks"/> for the effect of
         /// <paramref name="preservePath"/>.
         /// </summary>
-        public ImportedSourcesResult ImportSourceTypes(string softwarePath, string groupPath, string importPath, string regexName = "", bool preservePath = false, bool keepOnError = false)
+        public ImportedSourcesResult ImportSourceTypes(string softwarePath, string groupPath, string importPath, string regexName = "", bool preservePath = false, bool keepOnError = false, bool allowOlderFile = false)
         {
             return Operation.Run(_logger, nameof(ImportSourceTypes), PortalErrorCode.ImportFailed,
                 () =>
                 {
                     ResolveTypeUserGroupForGenerate(softwarePath, groupPath);
 
-                    return ImportSourceFiles(softwarePath, importPath, groupPath, regexName, keepOnError, preservePath, includeBlocks: false, includeTypes: true);
+                    return ImportSourceFiles(softwarePath, importPath, groupPath, regexName, keepOnError, preservePath, includeBlocks: false, includeTypes: true, allowOlderFile, nameof(ImportSourceTypes));
                 },
                 ("softwarePath", softwarePath), ("groupPath", groupPath), ("importPath", importPath), ("regexName", regexName));
         }
 
-        private ImportedSourcesResult ImportSourceFile(string softwarePath, string groupPath, string importPath, bool keepOnError, bool isType)
+        private ImportedSourcesResult ImportSourceFile(string softwarePath, string groupPath, string importPath, bool keepOnError, bool isType, bool allowOlderFile, string toolName)
         {
             GetPlcSoftwareOrThrow(softwarePath);
 
@@ -1165,6 +1165,7 @@ namespace TiaMcpServer.Siemens
             var option = keepOnError ? GenerateBlockOption.KeepOnError : GenerateBlockOption.None;
             var result = new ImportedSourcesResult { Directory = Path.GetDirectoryName(Path.GetFullPath(importPath)) ?? string.Empty };
 
+            GuardAndBackUpSourceImport(softwarePath, importPath, isType, allowOlderFile, toolName, result);
             result.Items.AddRange(ImportOneSource(softwarePath, importPath, groupPath, option, isType));
 
             _logger?.LogInformation(
@@ -1186,7 +1187,9 @@ namespace TiaMcpServer.Siemens
             bool keepOnError,
             bool preservePath,
             bool includeBlocks,
-            bool includeTypes)
+            bool includeTypes,
+            bool allowOlderFile,
+            string toolName)
         {
             var software = GetPlcSoftwareOrThrow(softwarePath);
 
@@ -1231,6 +1234,7 @@ namespace TiaMcpServer.Siemens
                         groupPath = CombineGroupPath(targetGroupPath, below);
                     }
 
+                    GuardAndBackUpSourceImport(softwarePath, file, isType, allowOlderFile, toolName, result);
                     result.Items.AddRange(ImportOneSource(softwarePath, file, groupPath, option, isType));
                 }
                 catch (Exception ex)
@@ -1958,6 +1962,11 @@ namespace TiaMcpServer.Siemens
 
         /// <summary>Files that could not be imported, with the reason.</summary>
         public List<string> Failures { get; set; } = new List<string>();
+
+        /// <summary>Backups of the blocks and types the import replaced.</summary>
+        public List<string> Backups { get; set; } = new List<string>();
+
+        public List<string> BackupWarnings { get; set; } = new List<string>();
 
         /// <summary>Objects generated per area, so a caller need not count the list itself.</summary>
         public Dictionary<string, int> Written => new Dictionary<string, int>

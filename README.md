@@ -100,7 +100,7 @@ either, and gate themselves a different way:
 To enable write mode, add the argument to your client configuration, for example
 `"args": ["--allow-write"]`.
 
-Before `DeleteBlock`, `DeleteType`, `EditBlockNetwork`, `EditBlockInterface`, `EditTypeInterface`, `SetDbStartValue`, and an `ImportXmlBlock`/`ImportXmlType` that replaces an
+Before `DeleteBlock`, `DeleteType`, `EditBlockNetwork`, `EditBlockInterface`, `EditTypeInterface`, `SetDbStartValue`, and an `ImportXmlBlock`/`ImportXmlType` or source import (`ImportSourceBlock`, `ImportSources`, ...) that replaces an
 object of the same name, the current object is exported as XML to
 `<backup path>\<yyyyMMdd>\<time>_<tool>_<object>.xml` and the reply names the file (`backup`).
 Re-importing that file restores the old version even after the project was saved. An object TIA
@@ -108,6 +108,11 @@ will not export (inconsistent) is changed anyway and the reply says why there is
 WinCC Unified screens cannot be exported, so `SetHmiTagDynamization`, `SetHmiScriptDynamization`,
 `SetHmiFlashingDynamization` and `DeleteHmiDynamization` save the dynamization they change as a
 `.json` file in the same folder instead (and return it as `previous`).
+
+An import refuses to replace a block or PLC data type that was changed in TIA Portal after the
+import file was last written: importing that older file would silently undo the newer change. The
+error names both times. Export the object again and edit the new file, or pass `allowOlderFile`
+`true` when the older file is really meant to win.
 
 Every write tool call is also logged as one JSON line in `<backup path>\audit\<yyyyMMdd>.jsonl` (time,
 tool, arguments, ok or error, reply, backup file). `GetChangeLog` lists a day's entries, e.g. to write

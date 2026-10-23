@@ -4,6 +4,8 @@
 
 ### Changed
 
+- Import guard: `ImportXmlBlock`, `ImportXmlType`, `ImportSourceBlock`, `ImportSourceType`, `ImportSourceBlocks`, `ImportSourceTypes` and `ImportSources` refuse to replace a block or PLC data type that was changed in TIA Portal after the import file was last written, since that import would undo the newer change without a word. New optional argument `allowOlderFile` (at the end, default false) imports anyway. The source imports now also back up each block or type they replace (reply field `backup`, a list, plus `backupWarnings`), like the XML imports already did.
+- Change log (`GetChangeLog`): the `backup` field is now filled for tools that reply with plain JSON text (e.g. `ImportXmlBlock`), and a list of backups is joined with `; `.
 - `Doctor` compares the source with the branch the exe was built from on GitHub (e.g. `rebase/upstream-base`) instead of always `main`.
 - `EditBlockNetwork`: a replaced network keeps its title and comment when the new network has none. A network written with `sclFile` never has one, so replacing a network that way used to drop its title. New optional argument `title` (at the end) sets the title of a replaced or inserted network. Existing arguments are unchanged.
 - The server instructions (sent when the server starts) and `Connect` mention when the running server build is more than 7 days old (by the exe's file time) and says how to update (close the MCP client, run `install\install-tiaportal-mcp.ps1` again or `git pull` and rebuild). It only informs; nothing is blocked. The server instructions ask the client to pass this on to the user once. The response shape is unchanged.

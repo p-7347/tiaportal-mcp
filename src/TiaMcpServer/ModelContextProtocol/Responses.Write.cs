@@ -125,5 +125,10 @@ namespace TiaMcpServer.ModelContextProtocol
 
         /// <summary>Files that could not be imported, with the reason.</summary>
         public IEnumerable<string>? Failures { get; set; }
+
+        /// <summary>Backup files of the blocks and types the import replaced (named 'backup' so the change log finds them).</summary>
+        public IEnumerable<string>? Backup { get; set; }
+
+        public IEnumerable<string>? BackupWarnings { get; set; }
     }
 }
