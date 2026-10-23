@@ -916,7 +916,7 @@ Use the EditBlockNetwork tool with these parameters:
         }
 
         [McpServerPrompt(Name = "EditBlockInterface"), Description("Add, change or delete one member of a block interface")]
-        public static string EditBlockInterface(string softwarePath, string blockPath, string action, string section, string memberPath, string dataType = "", string startValue = "", string comment = "", string afterMember = "", string previewFile = "")
+        public static string EditBlockInterface(string softwarePath, string blockPath, string action, string section, string memberPath, string dataType = "", string startValue = "", string comment = "", string afterMember = "", string previewFile = "", string moreMembers = "", string compile = "false")
         {
             return $@"Change one variable in the interface of a program block (FB, FC, OB or global DB) without editing the whole block XML. The block is backed up first. Compile the block afterwards.
 
@@ -926,17 +926,20 @@ Common parameter values:
 - action: 'add', 'update' or 'delete'
 - section: Input, Output, InOut, Static, Temp or Constant
 - memberPath: '.'-separated into Structs, e.g. 'aux.bNew'
+- moreMembers: optional JSON array of further member edits done in the same import, one object each with action, section, memberPath, dataType, startValue, comment, afterMember; an item without action or section uses the call's
+- compile: true to compile the block right after the change and return the compiler result (default false)
 
 Use the EditBlockInterface tool with these parameters:
 - softwarePath: {softwarePath}
 - blockPath: {blockPath}
 - action: {action}
 - section: {section}
-- memberPath: {memberPath}{OptionalParameter("dataType", dataType)}{OptionalParameter("startValue", startValue)}{OptionalParameter("comment", comment)}{OptionalParameter("afterMember", afterMember)}{OptionalParameter("previewFile", previewFile)}";
+- memberPath: {memberPath}{OptionalParameter("dataType", dataType)}{OptionalParameter("startValue", startValue)}{OptionalParameter("comment", comment)}{OptionalParameter("afterMember", afterMember)}{OptionalParameter("previewFile", previewFile)}{OptionalParameter("moreMembers", moreMembers)}
+- compile: {NormalizeBool(compile)}";
         }
 
         [McpServerPrompt(Name = "EditTypeInterface"), Description("Add, change or delete one member of a PLC data type (UDT)")]
-        public static string EditTypeInterface(string softwarePath, string typePath, string action, string memberPath, string dataType = "", string startValue = "", string comment = "", string afterMember = "", string previewFile = "")
+        public static string EditTypeInterface(string softwarePath, string typePath, string action, string memberPath, string dataType = "", string startValue = "", string comment = "", string afterMember = "", string previewFile = "", string moreMembers = "", string compile = "false")
         {
             return $@"Change one member of a PLC data type (UDT) without editing the whole type XML. The type is backed up first. Compile the PLC software afterwards so the blocks using the type are updated.
 
@@ -945,12 +948,15 @@ Common parameter values:
 - typePath: root-relative path of the type in 'PLC data types'
 - action: 'add', 'update' or 'delete'
 - memberPath: '.'-separated into Structs, e.g. 'Speed.Creep'
+- moreMembers: optional JSON array of further member edits done in the same import, one object each with action, memberPath, dataType, startValue, comment, afterMember; an item without action uses the call's
+- compile: true to compile the type right after the change and return the compiler result (default false)
 
 Use the EditTypeInterface tool with these parameters:
 - softwarePath: {softwarePath}
 - typePath: {typePath}
 - action: {action}
-- memberPath: {memberPath}{OptionalParameter("dataType", dataType)}{OptionalParameter("startValue", startValue)}{OptionalParameter("comment", comment)}{OptionalParameter("afterMember", afterMember)}{OptionalParameter("previewFile", previewFile)}";
+- memberPath: {memberPath}{OptionalParameter("dataType", dataType)}{OptionalParameter("startValue", startValue)}{OptionalParameter("comment", comment)}{OptionalParameter("afterMember", afterMember)}{OptionalParameter("previewFile", previewFile)}{OptionalParameter("moreMembers", moreMembers)}
+- compile: {NormalizeBool(compile)}";
         }
 
         [McpServerPrompt(Name = "GetHmiTagUsage"), Description("Find where a PLC or HMI tag is used on a WinCC Unified HMI")]

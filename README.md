@@ -340,7 +340,7 @@ These are not gaps in this server - the underlying API offers no operation for t
   SCL/DB/STL source that TIA Portal compiles into blocks (`ImportSourceBlock`), or documents
   (`ImportFromDocuments`, V20+). To change an existing block there is no need to rebuild its
   XML by hand: `EditBlockNetwork` replaces, inserts or deletes one network (from XML or SCL
-  text), `EditBlockInterface` adds, changes or deletes one interface member (`EditTypeInterface` one UDT member), and `SetDbStartValue`
+  text), `EditBlockInterface` adds, changes or deletes interface members, several in one import with `moreMembers` and optionally compiled in the same call (`EditTypeInterface` the same for UDT members), and `SetDbStartValue`
   changes one DB start value.
 - __Read-only objects.__ System constants cannot be created or changed, the force table cannot
   be created or deleted (the system owns one per PLC), the default tag table cannot be deleted,
