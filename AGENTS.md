@@ -46,6 +46,8 @@ These rules apply to everyone (people and AI agents) working on `p-7347/tiaporta
 
 - The base branch is `rebase/upstream-base`. Never push to `main` or to the upstream repository
   (heilingbrunner/tiaportal-mcp).
+- Pull from this fork only, naming it: `git pull origin rebase/upstream-base`. Never pull from the upstream
+  repository; a plain `git pull` on a checkout that tracks upstream brings in its history and conflicts.
 - One backlog item per branch and pull request. Name the branch after the item, e.g. `c6-hmi-dynamization`,
   and open a draft pull request against `rebase/upstream-base` early, with the item id first in the title
   (`C6: ...`). The draft claims the item, so two people do not build the same thing.

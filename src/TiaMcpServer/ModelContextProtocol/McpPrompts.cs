@@ -953,6 +953,21 @@ Use the EditTypeInterface tool with these parameters:
 - memberPath: {memberPath}{OptionalParameter("dataType", dataType)}{OptionalParameter("startValue", startValue)}{OptionalParameter("comment", comment)}{OptionalParameter("afterMember", afterMember)}{OptionalParameter("previewFile", previewFile)}";
         }
 
+        [McpServerPrompt(Name = "GetHmiTagUsage"), Description("Find where a PLC or HMI tag is used on a WinCC Unified HMI")]
+        public static string GetHmiTagUsage(string softwarePath, string tag, string useRegex = "", string screenRegex = "", string includeScripts = "", string includeAlarms = "", string refreshIndex = "")
+        {
+            return $@"Find the HMI tags connected to a PLC tag (or an HMI tag by name) and every screen item, faceplate binding, script and alarm that uses them.
+
+Common parameter values:
+- softwarePath: the HMI device item, e.g. 'HMI_1/HMI_RT_1'
+- tag: e.g. 'SM_HMIData.SwLamp_S[10].Origin_Sw', or a DB name to find all its members
+- If the reply says the time budget was used up, call again with the same arguments; each call continues where the last stopped
+
+Use the GetHmiTagUsage tool with these parameters:
+- softwarePath: {softwarePath}
+- tag: {tag}{OptionalParameter("useRegex", useRegex)}{OptionalParameter("screenRegex", screenRegex)}{OptionalParameter("includeScripts", includeScripts)}{OptionalParameter("includeAlarms", includeAlarms)}{OptionalParameter("refreshIndex", refreshIndex)}";
+        }
+
         [McpServerPrompt(Name = "GetProjectStatus"), Description("Check for unsaved changes and read the project history")]
         public static string GetProjectStatus(string historyCount = "")
         {
