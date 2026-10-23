@@ -49,8 +49,8 @@ before delete or replacing import (A2), DB start values read/write (A3), V21 bui
 | D1 | Library types: list, compare, find instances, out-of-date instances | `Library.Types`, `LibraryTypeVersion.FindInstances`. Upstream added `GetOpenLibraries`/`GetReferencedLibraries` after our base; start from those. Also enables a native block copy from a master copy. |
 | D2 | Read SINAMICS drive parameters (Startdrive) | `MC.Drives`. Check that Startdrive is installed first. |
 | D3 | Create/delete single watch table entries | The entry composition only has a comment-row creator; find the right creation call on the live API. Today: export, edit, `ImportWatchTable`. |
-| D4 | Project history and unsaved-change flag | `HistoryEntries`, `IsModified`. Small. |
-| D5 | Compare the safety signature before and after a change | Extend `GetSafetyInfo`. |
+| D4 | Project history and unsaved-change flag (in progress) | `HistoryEntries`, `IsModified`. Small. |
+| D5 | Compare the safety signature before and after a change (in progress) | Extend `GetSafetyInfo`. |
 | D6 | Know-how protection handling | `PlcBlockProtectionProvider`. Passwords make this low priority. |
 | D7 | ProDiag supervision export/import | `SW.Supervision`. |
 | D8 | Read GRAPH and STL blocks as text | |
