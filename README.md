@@ -115,11 +115,11 @@ a change summary.
 
 ## Tools
 
-173 tools total. Read-only/ungated tools (96) are always available.
+174 tools total. Read-only/ungated tools (97) are always available.
 
 | Area                          | Tools                                                                                                                                                                                                  |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Portal and state              | `Connect`, `Disconnect`, `GetPortals`, `GetState`, `Doctor`, `GetChangeLog`                                                                                                                                          |
+| Portal and state              | `Connect`, `Disconnect`, `GetPortals`, `GetState`, `Doctor`, `GetChangeLog`, `GetProjectStatus`                                                                                                                                          |
 | Project and session           | `GetProject`, `OpenProject`, `SaveProject`, `SaveAsProject`, `ArchiveProject`, `CloseProject`                                                                                                                            |
 | Devices                       | `GetProjectTree`, `GetDevices`, `GetDeviceInfo`, `GetDeviceItemInfo`, `GetGsdDependencies`, `GetDeviceMasterCopies`, `FindHardwareCatalogEntries`                                                     |
 | Network topology              | `GetSubnets`, `GetNetworkInterfaceInfo`                                                                                                                                                               |
@@ -386,7 +386,7 @@ These are not gaps in this server - the underlying API offers no operation for t
 - Built on the [ModelContextProtocol](https://www.nuget.org/packages/ModelContextProtocol) .NET SDK **2.2.0**.
 - Protocol revisions negotiated during `initialize`: `2024-11-05`, `2025-03-26`, `2025-06-18`, `2025-11-25` (the SDK picks the highest the client also supports).
 - Every tool advertises a human-readable `title` and behaviour annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`).
-- 153 of the 173 tools publish an `outputSchema` and return `structuredContent` (81 of 96
+- 154 of the 174 tools publish an `outputSchema` and return `structuredContent` (82 of 97
   read-only, 72 of 77 write).
 - Long-running export/import tools report progress via `notifications/progress` when the client supplies a `progressToken`.
 - Independently of that, `GetState` can report the progress of another call still running on the
