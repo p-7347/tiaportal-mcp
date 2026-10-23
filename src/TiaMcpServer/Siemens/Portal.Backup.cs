@@ -67,7 +67,7 @@ namespace TiaMcpServer.Siemens
         }
 
         /// <summary>Backs up the block an import file would replace; nothing when no block of that name exists.</summary>
-        public BackupResult BackupBlockReplacedByImport(string softwarePath, string importPath, string toolName)
+        public BackupResult BackupBlockReplacedByImport(string softwarePath, string importPath, string toolName, bool allowOlderFile = true)
         {
             var name = ReadSimaticMlName(importPath, "SW.Blocks.");
             if (name == null)
@@ -78,25 +78,21 @@ namespace TiaMcpServer.Siemens
             return Operation.Run(_logger, "Backup", PortalErrorCode.ExportFailed,
                 () =>
                 {
-                    var root = GetPlcBlockGroupByPath(softwarePath, string.Empty);
-                    if (root == null)
+                    var block = FindBlockByName(softwarePath, name);
+                    if (block == null)
                     {
                         return new BackupResult();
                     }
 
-                    var list = new List<PlcBlock>();
-                    GetBlocksRecursive(root, list, "^" + Regex.Escape(name) + "$");
-                    var block = list.FirstOrDefault(b => string.Equals(b.Name, name, StringComparison.OrdinalIgnoreCase));
+                    EnsureImportNotOlder("block", GetBlockPath(block), block.ModifiedDate, importPath, allowOlderFile);
 
-                    return block == null
-                        ? new BackupResult()
-                        : WriteBackup(toolName, GetBlockPath(block), block.IsConsistent, file => block.Export(file, ExportOptions.None));
+                    return WriteBackup(toolName, GetBlockPath(block), block.IsConsistent, file => block.Export(file, ExportOptions.None));
                 },
                 ("softwarePath", softwarePath), ("importPath", importPath));
         }
 
         /// <summary>Backs up the type an import file would replace; nothing when no type of that name exists.</summary>
-        public BackupResult BackupTypeReplacedByImport(string softwarePath, string importPath, string toolName)
+        public BackupResult BackupTypeReplacedByImport(string softwarePath, string importPath, string toolName, bool allowOlderFile = true)
         {
             var name = ReadSimaticMlName(importPath, "SW.Types.");
             if (name == null)
@@ -107,19 +103,15 @@ namespace TiaMcpServer.Siemens
             return Operation.Run(_logger, "Backup", PortalErrorCode.ExportFailed,
                 () =>
                 {
-                    var root = GetPlcTypeGroupByPath(softwarePath, string.Empty);
-                    if (root == null)
+                    var type = FindTypeByName(softwarePath, name);
+                    if (type == null)
                     {
                         return new BackupResult();
                     }
 
-                    var list = new List<PlcType>();
-                    GetTypesRecursive(root, list, "^" + Regex.Escape(name) + "$");
-                    var type = list.FirstOrDefault(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase));
+                    EnsureImportNotOlder("type", GetTypePath(type), type.ModifiedDate, importPath, allowOlderFile);
 
-                    return type == null
-                        ? new BackupResult()
-                        : WriteBackup(toolName, GetTypePath(type), type.IsConsistent, file => type.Export(file, ExportOptions.None));
+                    return WriteBackup(toolName, GetTypePath(type), type.IsConsistent, file => type.Export(file, ExportOptions.None));
                 },
                 ("softwarePath", softwarePath), ("importPath", importPath));
         }

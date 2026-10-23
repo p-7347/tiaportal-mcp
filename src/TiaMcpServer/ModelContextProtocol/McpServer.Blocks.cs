@@ -329,17 +329,18 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "ImportXmlBlock", Title = "Import block from XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Use to bring in a whole block from XML; to change one network prefer 'EditBlockNetwork'. Import one program block from an XML file into a block group. An existing block of the same name is replaced; its previous XML is saved first and returned as 'backup'")]
+        [McpServerTool(Name = "ImportXmlBlock", Title = "Import block from XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Use to bring in a whole block from XML; to change one network prefer 'EditBlockNetwork'. Import one program block from an XML file into a block group. An existing block of the same name is replaced; its previous XML is saved first and returned as 'backup'. Refused when that block was changed after the file was written (e.g. an older copy of the file), unless 'allowOlderFile'")]
         public static ResponseImportXmlBlock ImportXmlBlock(
             [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
             [Description("groupPath: block group that receives the block, relative to 'Program blocks' and '/'-separated, e.g. '009_Servo/zGDBs'; empty string for the Program blocks root")] string groupPath,
-            [Description("importPath: absolute path of the .xml file on the PC running this server, e.g. one written by 'ExportXmlBlock'")] string importPath)
+            [Description("importPath: absolute path of the .xml file on the PC running this server, e.g. one written by 'ExportXmlBlock'")] string importPath,
+            [Description("allowOlderFile: import even when the block or type it replaces was changed in TIA Portal after the file was last written (default false: refused, because that usually means an older copy of the file would undo a change)")] bool allowOlderFile = false)
         {
             WritePolicy.EnsureEnabled(nameof(ImportXmlBlock));
 
             try
             {
-                var backup = Portal.BackupBlockReplacedByImport(softwarePath, importPath, nameof(ImportXmlBlock));
+                var backup = Portal.BackupBlockReplacedByImport(softwarePath, importPath, nameof(ImportXmlBlock), allowOlderFile);
 
                 if (Portal.ImportXmlBlock(softwarePath, groupPath, importPath))
                 {
@@ -359,6 +360,10 @@ namespace TiaMcpServer.ModelContextProtocol
                 {
                     throw new McpException($"Failed importing block from '{importPath}' to '{groupPath}'");
                 }
+            }
+            catch (PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {
