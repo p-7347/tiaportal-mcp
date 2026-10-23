@@ -34,6 +34,39 @@ namespace TiaMcpServer.ModelContextProtocol
         public string? StoppedReason { get; set; }
 
         public List<string>? Warnings { get; set; }
+
+        /// <summary>The 'saveFile' written, if any.</summary>
+        public string? SavedTo { get; set; }
+
+        /// <summary>With 'compareFile': the F-block signatures that differ from the saved ones.</summary>
+        public ResponseSafetyCompare? Comparison { get; set; }
+    }
+
+    public class ResponseSafetyCompare
+    {
+        /// <summary>When the compared file was saved.</summary>
+        public string? TakenAt { get; set; }
+
+        public string? SignatureHashBefore { get; set; }
+
+        public List<ResponseSafetySignatureChange> Changed { get; set; } = new List<ResponseSafetySignatureChange>();
+
+        /// <summary>F-blocks that are new since the saved file.</summary>
+        public List<string> Added { get; set; } = new List<string>();
+
+        /// <summary>F-blocks in the saved file that are no longer F-blocks or no longer exist (only when the walk was complete).</summary>
+        public List<string>? Removed { get; set; }
+
+        public int Unchanged { get; set; }
+    }
+
+    public class ResponseSafetySignatureChange
+    {
+        public string Path { get; set; } = string.Empty;
+
+        public string Before { get; set; } = string.Empty;
+
+        public string After { get; set; } = string.Empty;
     }
 
     public class ResponseSafetyRuntimeGroup

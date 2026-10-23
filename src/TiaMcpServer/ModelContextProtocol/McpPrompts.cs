@@ -955,6 +955,14 @@ Use the GetHmiTagUsage tool with these parameters:
 - tag: {tag}{OptionalParameter("useRegex", useRegex)}{OptionalParameter("screenRegex", screenRegex)}{OptionalParameter("includeScripts", includeScripts)}{OptionalParameter("includeAlarms", includeAlarms)}";
         }
 
+        [McpServerPrompt(Name = "GetProjectStatus"), Description("Check for unsaved changes and read the project history")]
+        public static string GetProjectStatus(string historyCount = "")
+        {
+            return $@"Check whether the open project has unsaved changes and list its most recent history entries, last modified time and user.
+
+Use the GetProjectStatus tool with these parameters:{OptionalParameter("historyCount", historyCount)}";
+        }
+
         [McpServerPrompt(Name = "GetChangeLog"), Description("List what this server changed in the project on a day")]
         public static string GetChangeLog(string day = "", string toolRegex = "")
         {
@@ -2475,16 +2483,17 @@ Use the SearchExports tool with these parameters:
         }
 
         [McpServerPrompt(Name = "GetSafetyInfo"), Description("Read the safety program status and the F-block signatures")]
-        public static string GetSafetyInfo(string softwarePath, string includeSignatures = "", string groupPath = "", string regexName = "")
+        public static string GetSafetyInfo(string softwarePath, string includeSignatures = "", string groupPath = "", string regexName = "", string saveFile = "", string compareFile = "")
         {
             return $@"Read the safety program status of an F-CPU without changing anything: password and login state, safety settings, runtime groups and the offline signature of every F-block. Keep 'signatureHash' to see later whether any F-block changed (it is not TIA's F-collective signature).
 
 Common parameter values:
 - softwarePath: defines the path in the project structure to the software
 - groupPath: optional block group, e.g. '005_Safety', to check only the safety folder
+- saveFile / compareFile: save the signatures before a change, compare after it (and a compile) to list the changed F-blocks
 
 Use the GetSafetyInfo tool with these parameters:
-- softwarePath: {softwarePath}{OptionalParameter("includeSignatures", includeSignatures)}{OptionalParameter("groupPath", groupPath)}{OptionalParameter("regexName", regexName)}";
+- softwarePath: {softwarePath}{OptionalParameter("includeSignatures", includeSignatures)}{OptionalParameter("groupPath", groupPath)}{OptionalParameter("regexName", regexName)}{OptionalParameter("saveFile", saveFile)}{OptionalParameter("compareFile", compareFile)}";
         }
 
         [McpServerPrompt(Name = "GetBlockFingerprints"), Description("Save block fingerprints and later list which blocks changed")]

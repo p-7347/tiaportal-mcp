@@ -19,6 +19,8 @@
 
 ### Added
 
+- `GetProjectStatus` (read): whether the open project has unsaved changes, its last modified time and user, and the newest project history entries (D4).
+- `GetSafetyInfo`: optional `saveFile` and `compareFile` keep the F-block signatures in a JSON file and later list which F-block signatures changed, were added or removed, e.g. before and after a change and compile (D5). Without them the reply is unchanged.
 - `GetHmiTagUsage` (read): from a PLC tag (or a DB or struct name, or an HMI tag name) to the HMI tags connected to it and every screen item dynamization, faceplate interface binding, event or dynamization script and alarm on a WinCC Unified HMI that uses them (A6).
 - `EditTypeInterface` (write): add, change or delete one member of a PLC data type (UDT), the same way `EditBlockInterface` does for blocks. Blocks using the type need a compile afterwards.
 - Change log: every write tool call is logged as one JSON line in `<backup path>\audit\<yyyyMMdd>.jsonl` (time, tool, arguments, ok or error, reply, backup file). `GetChangeLog` (read) lists a day's entries, optionally for one tool. A log line that cannot be written never fails the call. The log keeps the reply's message text, not the whole JSON reply.
