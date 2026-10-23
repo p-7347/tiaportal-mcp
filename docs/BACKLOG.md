@@ -5,7 +5,7 @@ request titled with its id (see "Contributing to this fork" in [AGENTS.md](../AG
 picks it up. Remove the item here in the same pull request that finishes it.
 
 Done so far: software checksum (A0), network-level block edit with LAD flow order and SCL text (A1), backup
-before delete or replacing import (A2), DB start values read/write (A3), V21 build switch (part of D12), HMI screen item dynamizations read/write (C6), block and UDT member add/change/delete (`EditBlockInterface`, `EditTypeInterface`), change log of write calls (B4, `GetChangeLog`).
+before delete or replacing import (A2), DB start values read/write (A3), V21 build switch (part of D12), HMI screen item dynamizations read/write (C6), block and UDT member add/change/delete (`EditBlockInterface`, `EditTypeInterface`), change log of write calls (B4, `GetChangeLog`), unsaved-change flag and project history (D4, `GetProjectStatus`), safety signature compare (D5, `GetSafetyInfo` saveFile/compareFile).
 
 ## C. HMI (WinCC Unified), alarms, texts - current priority
 
@@ -49,8 +49,6 @@ before delete or replacing import (A2), DB start values read/write (A3), V21 bui
 | D1 | Library types: list, compare, find instances, out-of-date instances | `Library.Types`, `LibraryTypeVersion.FindInstances`. Upstream added `GetOpenLibraries`/`GetReferencedLibraries` after our base; start from those. Also enables a native block copy from a master copy. |
 | D2 | Read SINAMICS drive parameters (Startdrive) | `MC.Drives`. Check that Startdrive is installed first. |
 | D3 | Create/delete single watch table entries | The entry composition only has a comment-row creator; find the right creation call on the live API. Today: export, edit, `ImportWatchTable`. |
-| D4 | Project history and unsaved-change flag | `HistoryEntries`, `IsModified`. Small. |
-| D5 | Compare the safety signature before and after a change | Extend `GetSafetyInfo`. |
 | D6 | Know-how protection handling | `PlcBlockProtectionProvider`. Passwords make this low priority. |
 | D7 | ProDiag supervision export/import | `SW.Supervision`. |
 | D8 | Read GRAPH and STL blocks as text | |
