@@ -4,6 +4,7 @@
 
 ### Changed
 
+- `EditBlockInterface` and `EditTypeInterface`: new optional arguments at the end. `moreMembers` takes a JSON array of further member edits (same fields as the call; an item without `action` or `section` uses the call's) that go into the same export, backup and import, so several new variables need one call and one compile instead of a compile between each. `compile` true compiles the block (or the type) right after the change and returns the compiler result in `compile`; the change stays even when the compile reports errors. The reply lists every edit in `edits` when there is more than one. Existing arguments and fields are unchanged.
 - Import guard: `ImportXmlBlock`, `ImportXmlType`, `ImportSourceBlock`, `ImportSourceType`, `ImportSourceBlocks`, `ImportSourceTypes` and `ImportSources` refuse to replace a block or PLC data type that was changed in TIA Portal after the import file was last written, since that import would undo the newer change without a word. New optional argument `allowOlderFile` (at the end, default false) imports anyway. The source imports now also back up each block or type they replace (reply field `backup`, a list, plus `backupWarnings`), like the XML imports already did.
 - Change log (`GetChangeLog`): the `backup` field is now filled for tools that reply with plain JSON text (e.g. `ImportXmlBlock`), and a list of backups is joined with `; `.
 - `Doctor` compares the source with the branch the exe was built from on GitHub (e.g. `rebase/upstream-base`) instead of always `main`.

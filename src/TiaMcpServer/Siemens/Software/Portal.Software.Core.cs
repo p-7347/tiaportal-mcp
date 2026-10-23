@@ -108,6 +108,30 @@ namespace TiaMcpServer.Siemens
         }
 
         /// <summary>
+        /// Compiles one PLC data type (UDT), e.g. right after its members were changed. Blocks
+        /// that use it still need their own compile. Same failure reporting as CompileCodeBlock.
+        /// </summary>
+        public CompilerResult? CompileType(string softwarePath, string typePath)
+        {
+            _logger?.LogInformation($"Compiling type '{typePath}' in {softwarePath}");
+
+            return Operation.Run(_logger, nameof(CompileType), PortalErrorCode.InvalidState,
+                () =>
+                {
+                    var softwareContainer = GetSoftwareContainer(softwarePath)
+                        ?? throw new PortalException(PortalErrorCode.NotFound,
+                            $"No software found at '{softwarePath}'. 'GetProjectTree' lists the valid software paths.");
+
+                    var type = GetType(softwarePath, typePath)
+                        ?? throw new PortalException(PortalErrorCode.NotFound,
+                            $"No PLC data type found at '{typePath}' in '{softwarePath}'. 'GetTypes' lists the type paths.");
+
+                    return Compile(type, typePath, softwareContainer);
+                },
+                ("softwarePath", softwarePath), ("typePath", typePath));
+        }
+
+        /// <summary>
         /// Logs on to the safety offline program when a password is given and the device has
         /// one; throws with TIA's reason when the login fails.
         /// </summary>

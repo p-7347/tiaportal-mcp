@@ -1,11 +1,13 @@
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
+using Siemens.Engineering.Compiler;
 using Siemens.Engineering.SW.Blocks;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -701,7 +703,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "EditBlockInterface", Title = "Add, change or delete a block interface member", Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true),
-         Description("Use to add, change or delete one variable in the interface of an FB, FC, OB or global DB (Input, Output, InOut, Static, Temp, Constant) instead of editing the whole block XML, e.g. a new Static Bool before writing a network that uses it. The block is exported, the one member changed, backed up and imported again. Instance DBs follow their FB: change the FB and compile it. Use 'previewFile' to only write the edited block XML. The block must be consistent (compile it first); compile it afterwards ('CompileCodeBlock')")]
+         Description("Use to add, change or delete one variable in the interface of an FB, FC, OB or global DB (Input, Output, InOut, Static, Temp, Constant) instead of editing the whole block XML, e.g. a new Static Bool before writing a network that uses it. The block is exported, the one member changed, backed up and imported again. Instance DBs follow their FB: change the FB and compile it. Several members go in one call with 'moreMembers' (one export, backup and import). Use 'previewFile' to only write the edited block XML. The block must be consistent (compile it first); compile it afterwards ('CompileCodeBlock'), or pass 'compile' true to do it in the same call")]
         public static ResponseInterfaceEdit EditBlockInterface(
             [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
             [Description("blockPath: root-relative path of the block, e.g. 009_Servo/FB_PitchHome_Inch")] string blockPath,
@@ -712,7 +714,9 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("startValue: optional start value (constant value for Constant), e.g. 'false', '10', '1.5'")] string startValue = "",
             [Description("comment: optional member comment, e.g. 'Homing done'")] string comment = "",
             [Description("afterMember: add only, optional name of the member to insert after (same level), e.g. 'Result_Data_Quantity'; empty appends at the end")] string afterMember = "",
-            [Description("previewFile: optional absolute path; the edited block XML is written there and nothing is imported")] string previewFile = "")
+            [Description("previewFile: optional absolute path; the edited block XML is written there and nothing is imported")] string previewFile = "",
+            [Description("moreMembers: optional JSON array of further member edits done in the same import, one object each with the fields above, e.g. '[{\"memberPath\":\"bDone\",\"dataType\":\"Bool\"},{\"action\":\"delete\",\"section\":\"Temp\",\"memberPath\":\"tOld\"}]'; an item without action or section uses this call's")] string moreMembers = "",
+            [Description("compile: compile the block right after the change and return the compiler result in 'compile' (default false). The change stays even if the compile reports errors")] bool compile = false)
         {
             WritePolicy.EnsureEnabled(nameof(EditBlockInterface));
 
@@ -723,8 +727,15 @@ namespace TiaMcpServer.ModelContextProtocol
                     Operation.RequireAbsolutePath(previewFile, nameof(previewFile));
                 }
 
-                var result = Portal.EditBlockInterface(softwarePath, blockPath, action, section, memberPath, dataType, startValue, comment, afterMember, previewFile);
-                return InterfaceEdited(result, action, "block", "Compile the block ('CompileCodeBlock'); callers of an FB/FC and code using a deleted member may need it too.");
+                var result = Portal.EditBlockInterface(softwarePath, blockPath, action, section, memberPath, dataType, startValue, comment, afterMember, previewFile,
+                    ParseMoreMembers(moreMembers));
+                var (compiled, compileError) = CompileAfterEdit(compile && result.PreviewFile == null,
+                    () => Portal.CompileCodeBlock(softwarePath, result.BlockPath));
+                return InterfaceEdited(result, action, "block",
+                    compiled == null
+                        ? "Compile the block ('CompileCodeBlock'); callers of an FB/FC and code using a deleted member may need it too."
+                        : "Callers of an FB/FC and code using a deleted member may need a compile too.",
+                    compiled, compileError);
             }
             catch (PortalException pex)
             {
@@ -738,7 +749,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "EditTypeInterface", Title = "Add, change or delete a UDT member", Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true),
-         Description("Use to add, change or delete one member of a PLC data type (UDT) instead of editing the whole type XML, e.g. a new field in a settings struct. The type is exported, the one member changed, backed up and imported again. Blocks and DBs that use the type become inconsistent until compiled ('CompileSoftware'). Use 'previewFile' to only write the edited type XML")]
+         Description("Use to add, change or delete one member of a PLC data type (UDT) instead of editing the whole type XML, e.g. a new field in a settings struct. The type is exported, the one member changed, backed up and imported again. Blocks and DBs that use the type become inconsistent until compiled ('CompileSoftware'). Several members go in one call with 'moreMembers'; 'compile' true compiles the type in the same call. Use 'previewFile' to only write the edited type XML")]
         public static ResponseInterfaceEdit EditTypeInterface(
             [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
             [Description("typePath: root-relative path of the type in 'PLC data types', e.g. 'Servo/UDT_Origin'")] string typePath,
@@ -748,7 +759,9 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("startValue: optional default value, e.g. '2.0', 'false'")] string startValue = "",
             [Description("comment: optional member comment, e.g. 'Offset after homing [mm]'")] string comment = "",
             [Description("afterMember: add only, optional name of the member to insert after (same level), e.g. 'OriginOffset'; empty appends at the end")] string afterMember = "",
-            [Description("previewFile: optional absolute path; the edited type XML is written there and nothing is imported")] string previewFile = "")
+            [Description("previewFile: optional absolute path; the edited type XML is written there and nothing is imported")] string previewFile = "",
+            [Description("moreMembers: optional JSON array of further member edits done in the same import, one object each with the fields above, e.g. '[{\"memberPath\":\"Speed\",\"dataType\":\"Real\"},{\"action\":\"delete\",\"memberPath\":\"Old\"}]'; an item without action uses this call's")] string moreMembers = "",
+            [Description("compile: compile the type right after the change and return the compiler result in 'compile' (default false). Blocks using the type still need a compile")] bool compile = false)
         {
             WritePolicy.EnsureEnabled(nameof(EditTypeInterface));
 
@@ -759,8 +772,12 @@ namespace TiaMcpServer.ModelContextProtocol
                     Operation.RequireAbsolutePath(previewFile, nameof(previewFile));
                 }
 
-                var result = Portal.EditTypeInterface(softwarePath, typePath, action, memberPath, dataType, startValue, comment, afterMember, previewFile);
-                return InterfaceEdited(result, action, "type", "Compile the PLC software ('CompileSoftware') so the blocks and DBs using the type are updated.");
+                var result = Portal.EditTypeInterface(softwarePath, typePath, action, memberPath, dataType, startValue, comment, afterMember, previewFile,
+                    ParseMoreMembers(moreMembers));
+                var (compiled, compileError) = CompileAfterEdit(compile && result.PreviewFile == null,
+                    () => Portal.CompileType(softwarePath, result.BlockPath));
+                return InterfaceEdited(result, action, "type", "Compile the PLC software ('CompileSoftware') so the blocks and DBs using the type are updated.",
+                    compiled, compileError);
             }
             catch (PortalException pex)
             {
@@ -772,7 +789,52 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        private static ResponseInterfaceEdit InterfaceEdited(Portal.InterfaceEditResult result, string action, string what, string compileHint)
+        /// <summary>The 'moreMembers' JSON array of an interface edit tool; empty gives none.</summary>
+        private static List<Portal.InterfaceEditSpec>? ParseMoreMembers(string moreMembers)
+        {
+            if (string.IsNullOrWhiteSpace(moreMembers))
+            {
+                return null;
+            }
+
+            try
+            {
+                return JsonSerializer.Deserialize<List<Portal.InterfaceEditSpec>>(moreMembers,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                    ?? new List<Portal.InterfaceEditSpec>();
+            }
+            catch (JsonException ex)
+            {
+                throw new McpException(
+                    $"'moreMembers' is not a JSON array of member edits ({ex.Message}). Example: " +
+                    "[{\"memberPath\":\"bDone\",\"dataType\":\"Bool\"},{\"action\":\"delete\",\"memberPath\":\"tOld\"}]", ex);
+            }
+        }
+
+        /// <summary>
+        /// The optional compile after an interface edit. The edit is already imported, so a
+        /// refused compile is reported with the edit instead of failing the call.
+        /// </summary>
+        private static (CompilerResult? Result, string? Error) CompileAfterEdit(bool compile, Func<CompilerResult?> run)
+        {
+            if (!compile)
+            {
+                return (null, null);
+            }
+
+            try
+            {
+                var result = run();
+                return (result, result == null ? "TIA Portal returned no compiler result." : null);
+            }
+            catch (PortalException ex)
+            {
+                return (null, ex.Message);
+            }
+        }
+
+        private static ResponseInterfaceEdit InterfaceEdited(Portal.InterfaceEditResult result, string action, string what, string compileHint,
+            CompilerResult? compiled = null, string? compileError = null)
         {
             var verb = action.Trim().ToLowerInvariant() switch
             {
@@ -787,9 +849,21 @@ namespace TiaMcpServer.ModelContextProtocol
 
             var section = result.Section == "None" ? "Member" : $"{result.Section} member";
 
+            var edited = result.Edits.Count > 1
+                ? $"{result.Edits.Count} member edits in {what} '{result.BlockPath}': " +
+                  string.Join("; ", result.Edits.Select(e => $"{e.Action} {(e.Section == "None" ? string.Empty : e.Section + " ")}" +
+                      (e.Before != null && e.After != null ? $"'{e.Before}' -> '{e.After}'" : $"'{e.After ?? e.Before}'")))
+                : $"{section} {change} {verb} in {what} '{result.BlockPath}'";
+
+            var compileResponse = compiled == null ? null : BuildCompileResponse(compiled, result.BlockPath);
+            var compileNote = compiled == null
+                ? (compileError == null ? compileHint : $"Not compiled: {compileError} {compileHint}")
+                : $"Compiled: {compiled.State}, {compiled.ErrorCount} error(s), {compiled.WarningCount} warning(s)" +
+                  (compiled.State == CompilerResultState.Error ? "; the change was kept, fix the errors listed in 'compile'. " : ". ") + compileHint;
+
             var message = result.PreviewFile != null
-                ? $"Preview: {section} {change} {verb} in {what} '{result.BlockPath}', written to '{result.PreviewFile}'. Nothing was imported."
-                : $"{section} {change} {verb} in {what} '{result.BlockPath}'. {compileHint} {SaveHint}";
+                ? $"Preview: {edited}, written to '{result.PreviewFile}'. Nothing was imported."
+                : $"{edited}. {compileNote} {SaveHint}";
 
             var backup = new Portal.BackupResult { Path = result.Backup, Warning = result.BackupWarning };
 
@@ -804,6 +878,8 @@ namespace TiaMcpServer.ModelContextProtocol
                 Backup = result.Backup,
                 BackupWarning = result.BackupWarning,
                 PreviewFile = result.PreviewFile,
+                Edits = result.Edits.Count > 1 ? result.Edits : null,
+                Compile = compileResponse,
                 Message = message + BackupNote(backup),
                 Meta = result.PreviewFile != null
                     ? new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
