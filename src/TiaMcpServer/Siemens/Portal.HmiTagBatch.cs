@@ -194,7 +194,7 @@ namespace TiaMcpServer.Siemens
                             continue;
                         }
 
-                        if (!string.IsNullOrWhiteSpace(spec.PlcTag) && string.IsNullOrWhiteSpace(spec.Connection) && string.IsNullOrEmpty(tag.Connection))
+                        if (!string.IsNullOrWhiteSpace(spec.PlcTag) && string.IsNullOrWhiteSpace(spec.Connection) && IsInternalHmiTag(tag))
                         {
                             problems.Add($"'{name}': is an internal tag; give 'connection' with 'plcTag'");
                             continue;
@@ -230,11 +230,15 @@ namespace TiaMcpServer.Siemens
                 ("softwarePath", softwarePath), ("count", tags.Count.ToString()));
         }
 
+        /// <summary>An internal tag has no connection; TIA reports it as '&lt;Internal tag&gt;'.</summary>
+        private static bool IsInternalHmiTag(HmiTag tag) =>
+            string.IsNullOrEmpty(tag.Connection) || tag.Connection.StartsWith("<", StringComparison.Ordinal);
+
         private static HmiTagState DescribeHmiTagState(HmiTag tag) => new HmiTagState
         {
             Name = tag.Name,
             DataType = tag.DataType,
-            Connection = string.IsNullOrEmpty(tag.Connection) ? null : tag.Connection,
+            Connection = IsInternalHmiTag(tag) ? null : tag.Connection,
             PlcTag = string.IsNullOrEmpty(tag.PlcTag) ? null : tag.PlcTag
         };
 
