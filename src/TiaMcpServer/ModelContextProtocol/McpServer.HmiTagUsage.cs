@@ -28,7 +28,11 @@ namespace TiaMcpServer.ModelContextProtocol
                 var complete = usage.StoppedReason == null;
 
                 string message;
-                if (usage.Tags.Count == 0)
+                if (usage.Tags.Count == 0 && !complete)
+                {
+                    message = $"No matching HMI tag found so far in '{softwarePath}' - INCOMPLETE: {usage.StoppedReason}.";
+                }
+                else if (usage.Tags.Count == 0)
                 {
                     message = $"No HMI tag in '{softwarePath}' is named '{tag}' or connected to it, so nothing on the HMI uses it.";
                 }

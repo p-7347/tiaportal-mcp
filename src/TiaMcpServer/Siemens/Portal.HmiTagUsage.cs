@@ -75,8 +75,16 @@ namespace TiaMcpServer.Siemens
                     var result = new HmiTagUsageResult();
                     var matches = TagMatcher(tag, useRegex);
 
+                    // Tag tables are read straight from the object model (no path lookup), so tables
+                    // with '/' in their name, e.g. 'I/O', are included too.
                     foreach (var table in GetHmiTagTables(softwarePath))
                     {
+                        if (clock.Elapsed > budget)
+                        {
+                            result.StoppedReason = $"stopped after {budget.TotalSeconds:0} s while reading HMI tag table '{table.Name}'; the screens were not searched. Give the full PLC tag or HMI tag name, or narrow with 'useRegex'";
+                            return result;
+                        }
+
                         foreach (var hmiTag in table.Tags)
                         {
                             var plcTag = ReadPart(() => hmiTag.PlcTag, "PlcTag", result.Warnings);
