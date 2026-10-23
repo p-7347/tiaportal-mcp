@@ -13,6 +13,9 @@ namespace TiaMcpServer.ModelContextProtocol
 
         public int ScreensSearched { get; set; }
 
+        /// <summary>Screens read from TIA Portal in this call; the others came from the server's index.</summary>
+        public int ScreensReadNow { get; set; }
+
         public int AlarmsSearched { get; set; }
 
         public string? StoppedReason { get; set; }

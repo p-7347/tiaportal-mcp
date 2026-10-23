@@ -1,5 +1,4 @@
 using Siemens.Engineering.HmiUnified;
-using Siemens.Engineering.HmiUnified.HmiTags;
 using Siemens.Engineering.HmiUnified.UI.Base;
 using Siemens.Engineering.HmiUnified.UI.Controls;
 using Siemens.Engineering.HmiUnified.UI.Dynamization;
@@ -22,7 +21,13 @@ namespace TiaMcpServer.Siemens
         //    screen items, faceplate interface bindings, script code (event handlers of items and
         //    screens, script dynamizations) that names the tag in quotes, and alarm trigger and
         //    acknowledgement tags.
-        // Read-only. Screens are walked with a time budget; 'screenRegex' narrows a big HMI.
+        //
+        // Reading screens through Openness is slow (about one second per screen on a real HMI), so
+        // every reference found is kept in an index per HMI software. A call that runs out of time
+        // keeps what it read and the next call continues; once the index is complete any tag is
+        // found at once. The index lives until the server restarts, another project is opened, or
+        // 'refreshIndex' is given - screens changed after they were read are searched as they were.
+        // Read-only.
 
         public sealed class HmiTagUsageTag
         {
@@ -54,13 +59,37 @@ namespace TiaMcpServer.Siemens
             public List<HmiTagUse> Uses { get; } = new List<HmiTagUse>();
             public int ScreensTotal { get; set; }
             public int ScreensSearched { get; set; }
+            /// <summary>Screens read in this call (the rest came from the index).</summary>
+            public int ScreensReadNow { get; set; }
             public int AlarmsSearched { get; set; }
             public string? StoppedReason { get; set; }
             public List<string> Warnings { get; } = new List<string>();
         }
 
+        /// <summary>One place that names a tag: a tag reference, or script text to search.</summary>
+        private sealed class HmiReference
+        {
+            public string Kind { get; set; } = string.Empty;
+            public string? Screen { get; set; }
+            public string? Item { get; set; }
+            public string? Where { get; set; }
+            public string? Reference { get; set; }
+            public string? Script { get; set; }
+        }
+
+        private sealed class HmiUsageIndex
+        {
+            public string Key { get; set; } = string.Empty;
+            public List<HmiTagUsageTag>? Tags { get; set; }
+            public List<HmiReference>? Alarms { get; set; }
+            public int AlarmCount { get; set; }
+            public Dictionary<string, List<HmiReference>> Screens { get; } = new Dictionary<string, List<HmiReference>>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static readonly Dictionary<string, HmiUsageIndex> HmiUsageIndexes = new Dictionary<string, HmiUsageIndex>(StringComparer.OrdinalIgnoreCase);
+
         public HmiTagUsageResult GetHmiTagUsage(string softwarePath, string tag, bool useRegex, string screenRegex,
-            bool includeScripts, bool includeAlarms, TimeSpan budget)
+            bool includeScripts, bool includeAlarms, bool refreshIndex, TimeSpan budget)
         {
             return Operation.Run(_logger, nameof(GetHmiTagUsage), PortalErrorCode.NotFound,
                 () =>
@@ -72,25 +101,27 @@ namespace TiaMcpServer.Siemens
 
                     var clock = Stopwatch.StartNew();
                     var hmi = RequireHmiSoftware(softwarePath);
-                    var result = new HmiTagUsageResult();
                     var matches = TagMatcher(tag, useRegex);
+                    var result = new HmiTagUsageResult();
 
-                    // Tag tables are read straight from the object model (no path lookup), so tables
-                    // with '/' in their name, e.g. 'I/O', are included too.
-                    foreach (var table in GetHmiTagTables(softwarePath))
+                    var key = (_project?.Path?.FullName ?? string.Empty) + "|" + softwarePath;
+                    if (refreshIndex || !HmiUsageIndexes.TryGetValue(key, out var index))
                     {
-                        if (clock.Elapsed > budget)
-                        {
-                            result.StoppedReason = $"stopped after {budget.TotalSeconds:0} s while reading HMI tag table '{table.Name}'; the screens were not searched. Give the full PLC tag or HMI tag name, or narrow with 'useRegex'";
-                            return result;
-                        }
+                        index = new HmiUsageIndex { Key = key };
+                        HmiUsageIndexes[key] = index;
+                    }
 
-                        foreach (var hmiTag in table.Tags)
+                    // 1. HMI tags. Tag tables are read straight from the object model (no path
+                    //    lookup), so tables with '/' in their name, e.g. 'I/O', are included too.
+                    if (index.Tags == null)
+                    {
+                        var tags = new List<HmiTagUsageTag>();
+                        foreach (var table in GetHmiTagTables(softwarePath))
                         {
-                            var plcTag = ReadPart(() => hmiTag.PlcTag, "PlcTag", result.Warnings);
-                            if (matches(hmiTag.Name) || (!string.IsNullOrEmpty(plcTag) && matches(plcTag!)))
+                            foreach (var hmiTag in table.Tags)
                             {
-                                result.Tags.Add(new HmiTagUsageTag
+                                var plcTag = ReadPart(() => hmiTag.PlcTag, "PlcTag", result.Warnings);
+                                tags.Add(new HmiTagUsageTag
                                 {
                                     Name = hmiTag.Name,
                                     TagTable = table.Name,
@@ -99,57 +130,66 @@ namespace TiaMcpServer.Siemens
                                 });
                             }
                         }
+
+                        index.Tags = tags;
                     }
 
+                    result.Tags.AddRange(index.Tags.Where(t => matches(t.Name) || (t.PlcTag != null && matches(t.PlcTag))));
                     if (result.Tags.Count == 0)
                     {
                         return result;
                     }
 
-                    var names = result.Tags.Select(t => t.Name).ToList();
+                    var names = result.Tags.Select(t => t.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
                     var scriptPattern = new Regex("[\"'](" + string.Join("|", names.Select(Regex.Escape)) + @")(?=[""'.\[])",
                         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
-                    if (includeAlarms)
-                    {
-                        SearchAlarms(hmi, names, result);
-                    }
-
+                    // 2. Screens first (what people ask about most), then alarms, all within the budget.
                     var screens = GetHmiScreens(softwarePath, screenRegex);
                     result.ScreensTotal = screens.Count;
 
                     foreach (var screen in screens)
                     {
-                        if (clock.Elapsed > budget)
+                        if (!index.Screens.TryGetValue(screen.Name, out var references))
                         {
-                            result.StoppedReason = $"stopped after {budget.TotalSeconds:0} s at screen {result.ScreensSearched + 1} of {screens.Count}; narrow 'screenRegex' for the rest";
-                            break;
-                        }
-
-                        result.ScreensSearched++;
-
-                        if (includeScripts)
-                        {
-                            AddScriptUses(DescribeHmiEvents(screen).Select(e => (e.EventType, e.ScriptCode, e.GlobalDefinitionAreaScriptCode)),
-                                "ScreenEvent", screen.Name, null, scriptPattern, names, result);
-                        }
-
-                        foreach (var item in screen.ScreenItems)
-                        {
-                            if (item == null)
+                            if (clock.Elapsed > budget)
                             {
                                 continue;
                             }
 
-                            try
-                            {
-                                SearchItem(screen.Name, item, names, includeScripts, scriptPattern, result);
-                            }
-                            catch (Exception ex)
-                            {
-                                result.Warnings.Add($"{screen.Name}/{item.Name}: not readable ({ex.Message})");
-                            }
+                            references = ReadScreenReferences(screen, result.Warnings);
+                            index.Screens[screen.Name] = references;
+                            result.ScreensReadNow++;
                         }
+
+                        result.ScreensSearched++;
+                        Match(references, names, includeScripts, scriptPattern, result);
+                    }
+
+                    if (includeAlarms)
+                    {
+                        if (index.Alarms == null && clock.Elapsed <= budget)
+                        {
+                            index.Alarms = ReadAlarmReferences(hmi, result.Warnings, out var count);
+                            index.AlarmCount = count;
+                        }
+
+                        if (index.Alarms != null)
+                        {
+                            result.AlarmsSearched = index.AlarmCount;
+                            Match(index.Alarms, names, false, scriptPattern, result);
+                        }
+                    }
+
+                    var screensLeft = result.ScreensTotal - result.ScreensSearched;
+                    var alarmsLeft = includeAlarms && index.Alarms == null;
+                    if (screensLeft > 0 || alarmsLeft)
+                    {
+                        result.StoppedReason = $"time budget of {budget.TotalSeconds:0} s used up: " +
+                            (screensLeft > 0 ? $"{screensLeft} of {result.ScreensTotal} screen(s)" : string.Empty) +
+                            (screensLeft > 0 && alarmsLeft ? " and " : string.Empty) +
+                            (alarmsLeft ? "the alarms" : string.Empty) +
+                            " not read yet. Call again with the same arguments to continue; what was read is kept, so each call gets further";
                     }
 
                     return result;
@@ -202,68 +242,31 @@ namespace TiaMcpServer.Siemens
             return names.FirstOrDefault(name => IsSameOrMember(text, name));
         }
 
-        private static void SearchItem(string screenName, HmiScreenItemBase item, List<string> names, bool includeScripts, Regex scriptPattern, HmiTagUsageResult result)
+        private static void Match(List<HmiReference> references, List<string> names, bool includeScripts, Regex scriptPattern, HmiTagUsageResult result)
         {
-            foreach (var dynamization in item.Dynamizations)
+            foreach (var reference in references)
             {
-                if (dynamization == null)
+                if (reference.Script == null)
+                {
+                    var owner = OwnerTag(reference.Reference, names);
+                    if (owner != null)
+                    {
+                        result.Uses.Add(new HmiTagUse { Kind = reference.Kind, Screen = reference.Screen, Item = reference.Item, Where = reference.Where, Reference = reference.Reference!, HmiTag = owner });
+                    }
+
+                    continue;
+                }
+
+                if (!includeScripts)
                 {
                     continue;
                 }
 
-                string? reference = dynamization switch
-                {
-                    TagDynamization tagDynamization => tagDynamization.Tag,
-                    ResourceListDynamization resourceList => resourceList.Tag,
-                    TagParameterDynamization tagParameter => tagParameter.DynamicTagName,
-                    _ => null
-                };
-
-                var owner = OwnerTag(reference, names);
-                if (owner != null)
-                {
-                    result.Uses.Add(new HmiTagUse { Kind = "Dynamization", Screen = screenName, Item = item.Name, Where = dynamization.PropertyName, Reference = reference!, HmiTag = owner });
-                }
-
-                if (includeScripts && dynamization is ScriptDynamization script)
-                {
-                    AddScriptUses(new (string, string?, string?)[] { (dynamization.PropertyName, script.ScriptCode, script.GlobalDefinitionAreaScriptCode) },
-                        "ScriptDynamization", screenName, item.Name, scriptPattern, names, result);
-                }
-            }
-
-            if (item is HmiFaceplateContainer faceplate)
-            {
-                foreach (var property in faceplate.Interface)
-                {
-                    foreach (var binding in property.Dynamizations.OfType<TagDynamization>())
-                    {
-                        var owner = OwnerTag(binding.Tag, names);
-                        if (owner != null)
-                        {
-                            result.Uses.Add(new HmiTagUse { Kind = "FaceplateInterface", Screen = screenName, Item = item.Name, Where = property.PropertyName, Reference = binding.Tag, HmiTag = owner });
-                        }
-                    }
-                }
-            }
-
-            if (includeScripts)
-            {
-                AddScriptUses(DescribeHmiEvents(item).Select(e => (e.EventType, e.ScriptCode, e.GlobalDefinitionAreaScriptCode)),
-                    "ItemEvent", screenName, item.Name, scriptPattern, names, result);
-            }
-        }
-
-        /// <summary>One use per script and tag; 'Line' is the first line that names the tag in quotes.</summary>
-        private static void AddScriptUses(IEnumerable<(string Where, string? Code, string? GlobalCode)> scripts, string kind, string screenName, string? itemName,
-            Regex scriptPattern, List<string> names, HmiTagUsageResult result)
-        {
-            foreach (var (where, code, globalCode) in scripts)
-            {
-                var text = (globalCode ?? string.Empty) + "\n" + (code ?? string.Empty);
+                // One use per script and tag; 'Line' is the first line that names the tag in quotes.
+                var text = reference.Script;
                 var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-                foreach (Match match in scriptPattern.Matches(text))
+                foreach (System.Text.RegularExpressions.Match match in scriptPattern.Matches(text))
                 {
                     var owner = names.First(n => n.Equals(match.Groups[1].Value, StringComparison.OrdinalIgnoreCase));
                     if (!seen.Add(owner))
@@ -277,10 +280,10 @@ namespace TiaMcpServer.Siemens
 
                     result.Uses.Add(new HmiTagUse
                     {
-                        Kind = kind,
-                        Screen = screenName,
-                        Item = itemName,
-                        Where = where,
+                        Kind = reference.Kind,
+                        Screen = reference.Screen,
+                        Item = reference.Item,
+                        Where = reference.Where,
                         Reference = match.Groups[1].Value,
                         HmiTag = owner,
                         Line = line.Length > 200 ? line.Substring(0, 200) + "..." : line
@@ -289,30 +292,131 @@ namespace TiaMcpServer.Siemens
             }
         }
 
-        private void SearchAlarms(HmiSoftware hmi, List<string> names, HmiTagUsageResult result)
+        /// <summary>Every tag reference and script of one screen and its items.</summary>
+        private static List<HmiReference> ReadScreenReferences(global::Siemens.Engineering.HmiUnified.UI.Screens.HmiScreen screen, List<string> warnings)
         {
-            void Check(string alarm, string where, string? reference)
+            var references = new List<HmiReference>();
+
+            void AddScripts(IEnumerable<HmiEventDescription> events, string kind, string? itemName)
             {
-                var owner = OwnerTag(reference, names);
-                if (owner != null)
+                foreach (var e in events)
                 {
-                    result.Uses.Add(new HmiTagUse { Kind = "Alarm", Item = alarm, Where = where, Reference = reference!, HmiTag = owner });
+                    references.Add(new HmiReference
+                    {
+                        Kind = kind,
+                        Screen = screen.Name,
+                        Item = itemName,
+                        Where = e.EventType,
+                        Script = (e.GlobalDefinitionAreaScriptCode ?? string.Empty) + "\n" + (e.ScriptCode ?? string.Empty)
+                    });
+                }
+            }
+
+            try
+            {
+                AddScripts(DescribeHmiEvents(screen), "ScreenEvent", null);
+            }
+            catch (Exception ex)
+            {
+                warnings.Add($"{screen.Name}: screen events not readable ({ex.Message})");
+            }
+
+            foreach (var item in screen.ScreenItems)
+            {
+                if (item == null)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    foreach (var dynamization in item.Dynamizations)
+                    {
+                        if (dynamization == null)
+                        {
+                            continue;
+                        }
+
+                        string? reference = dynamization switch
+                        {
+                            TagDynamization tagDynamization => tagDynamization.Tag,
+                            ResourceListDynamization resourceList => resourceList.Tag,
+                            TagParameterDynamization tagParameter => tagParameter.DynamicTagName,
+                            _ => null
+                        };
+
+                        if (!string.IsNullOrEmpty(reference))
+                        {
+                            references.Add(new HmiReference { Kind = "Dynamization", Screen = screen.Name, Item = item.Name, Where = dynamization.PropertyName, Reference = reference });
+                        }
+
+                        if (dynamization is ScriptDynamization script)
+                        {
+                            references.Add(new HmiReference
+                            {
+                                Kind = "ScriptDynamization",
+                                Screen = screen.Name,
+                                Item = item.Name,
+                                Where = dynamization.PropertyName,
+                                Script = (script.GlobalDefinitionAreaScriptCode ?? string.Empty) + "\n" + (script.ScriptCode ?? string.Empty)
+                            });
+                        }
+                    }
+
+                    if (item is HmiFaceplateContainer faceplate)
+                    {
+                        foreach (var property in faceplate.Interface)
+                        {
+                            foreach (var binding in property.Dynamizations.OfType<TagDynamization>())
+                            {
+                                if (!string.IsNullOrEmpty(binding.Tag))
+                                {
+                                    references.Add(new HmiReference { Kind = "FaceplateInterface", Screen = screen.Name, Item = item.Name, Where = property.PropertyName, Reference = binding.Tag });
+                                }
+                            }
+                        }
+                    }
+
+                    AddScripts(DescribeHmiEvents(item), "ItemEvent", item.Name);
+                }
+                catch (Exception ex)
+                {
+                    warnings.Add($"{screen.Name}/{item.Name}: not readable ({ex.Message})");
+                }
+            }
+
+            return references;
+        }
+
+        private static List<HmiReference> ReadAlarmReferences(HmiSoftware hmi, List<string> warnings, out int count)
+        {
+            var references = new List<HmiReference>();
+            var alarms = 0;
+
+            void Add(string alarm, string where, string? reference)
+            {
+                if (!string.IsNullOrEmpty(reference))
+                {
+                    references.Add(new HmiReference { Kind = "Alarm", Item = alarm, Where = where, Reference = reference });
                 }
             }
 
             foreach (var alarm in hmi.DiscreteAlarms)
             {
-                result.AlarmsSearched++;
-                Check(alarm.Name, "RaisedStateTag", ReadPart(() => alarm.RaisedStateTag, "RaisedStateTag", result.Warnings));
-                Check(alarm.Name, "AcknowledgmentControlTag", ReadPart(() => alarm.AcknowledgmentControlTag, "AcknowledgmentControlTag", result.Warnings));
-                Check(alarm.Name, "AcknowledgmentStateTag", ReadPart(() => alarm.AcknowledgmentStateTag, "AcknowledgmentStateTag", result.Warnings));
+                alarms++;
+                Add(alarm.Name, "RaisedStateTag", ReadPart(() => alarm.RaisedStateTag, "RaisedStateTag", warnings));
+                Add(alarm.Name, "AcknowledgmentControlTag", ReadPart(() => alarm.AcknowledgmentControlTag, "AcknowledgmentControlTag", warnings));
+                Add(alarm.Name, "AcknowledgmentStateTag", ReadPart(() => alarm.AcknowledgmentStateTag, "AcknowledgmentStateTag", warnings));
             }
 
             foreach (var alarm in hmi.AnalogAlarms)
             {
-                result.AlarmsSearched++;
-                Check(alarm.Name, "RaisedStateTag", ReadPart(() => alarm.RaisedStateTag, "RaisedStateTag", result.Warnings));
+                alarms++;
+                Add(alarm.Name, "RaisedStateTag", ReadPart(() => alarm.RaisedStateTag, "RaisedStateTag", warnings));
             }
+
+            count = alarms;
+            return references;
         }
     }
 }
