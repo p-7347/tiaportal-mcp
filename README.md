@@ -120,7 +120,7 @@ a change summary.
 
 ## Tools
 
-175 tools total. Read-only/ungated tools (98) are always available.
+177 tools total. Read-only/ungated tools (98) are always available.
 
 | Area                          | Tools                                                                                                                                                                                                  |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -162,7 +162,7 @@ don't, and why).
 | Type documents (V21+)      | `ImportTypeFromDocuments`, `ImportTypesFromDocuments`                                                                                                                                           |
 | Devices and network        | `CreateDevice`, `CreateDeviceWithItem`, `DeleteDevice`, `CreateDeviceGroup`, `DeleteDeviceGroup`, `SetIpAddress`, `ConnectToSubnet`, `DisconnectFromSubnet`                                      |
 | CAx (AutomationML)         | `ImportCax`                                                                                                                                                                                     |
-| HMI, WinCC Unified (write) | `CreateHmiScreen`, `DeleteHmiScreen`, `CreateHmiScreenItem`, `UpdateHmiScreenItem`, `DeleteHmiScreenItem`, `BindHmiTag`, `SetHmiTagDynamization`, `SetHmiScriptDynamization`, `SetHmiFlashingDynamization`, `DeleteHmiDynamization`, `CreateHmiFaceplate`, `SetHmiFaceplateInterface`, `CopyHmiScreen`, `CopyHmiScreens`, `CreateHmiTag` |
+| HMI, WinCC Unified (write) | `CreateHmiScreen`, `DeleteHmiScreen`, `CreateHmiScreenItem`, `UpdateHmiScreenItem`, `DeleteHmiScreenItem`, `BindHmiTag`, `SetHmiTagDynamization`, `SetHmiScriptDynamization`, `SetHmiFlashingDynamization`, `DeleteHmiDynamization`, `CreateHmiFaceplate`, `SetHmiFaceplateInterface`, `CopyHmiScreen`, `CopyHmiScreens`, `CreateHmiTag`, `CreateHmiTags`, `UpdateHmiTags` |
 
 `GetSoftwareTree` accepts a `sections` argument - any comma separated subset of
 `blocks,types,tags,watch,sources`, default `all` - to keep the output small on a large PLC.
@@ -391,7 +391,7 @@ These are not gaps in this server - the underlying API offers no operation for t
 - Built on the [ModelContextProtocol](https://www.nuget.org/packages/ModelContextProtocol) .NET SDK **2.2.0**.
 - Protocol revisions negotiated during `initialize`: `2024-11-05`, `2025-03-26`, `2025-06-18`, `2025-11-25` (the SDK picks the highest the client also supports).
 - Every tool advertises a human-readable `title` and behaviour annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`).
-- 155 of the 175 tools publish an `outputSchema` and return `structuredContent` (83 of 98
+- 157 of the 177 tools publish an `outputSchema` and return `structuredContent` (83 of 98
   read-only, 72 of 77 write).
 - Long-running export/import tools report progress via `notifications/progress` when the client supplies a `progressToken`.
 - Independently of that, `GetState` can report the progress of another call still running on the

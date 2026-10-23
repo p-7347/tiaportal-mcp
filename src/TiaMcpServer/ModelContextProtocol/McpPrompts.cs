@@ -2413,6 +2413,39 @@ Use the CreateHmiTag tool with these parameters:
 - name: {name}{OptionalParameter("dataType", dataType)}{OptionalParameter("connection", connection)}{OptionalParameter("plcTag", plcTag)}";
         }
 
+        [McpServerPrompt(Name = "CreateHmiTags"), Description("Create many WinCC Unified HMI tags at once")]
+        public static string CreateHmiTags(string softwarePath, string tagTablePath, string tags = "", string tagsFile = "", string connection = "", string skipExisting = "false")
+        {
+            return $@"Create many HMI tags in one WinCC Unified tag table in one call. Every entry is checked first; nothing is created when one is wrong.
+
+Common parameter values:
+- softwarePath: path of the WinCC Unified HMI software, e.g. 'HMI_1/HMI_RT_1'
+- tagTablePath: name or path of the HMI tag table, e.g. 'Default tag table'
+- tags: JSON array of tags, each with 'name' and optionally 'dataType', 'connection' and 'plcTag'; empty when using tagsFile
+- tagsFile: optional absolute path of a .json file with that array, or a .csv/.txt file with a header line 'name;dataType;connection;plcTag'
+- connection: optional HMI connection for entries with a plcTag but no connection, e.g. 'HMI_Connection_1'
+- skipExisting: true to skip names that already exist instead of creating nothing (default false)
+
+Use the CreateHmiTags tool with these parameters:
+- softwarePath: {softwarePath}
+- tagTablePath: {tagTablePath}{OptionalParameter("tags", tags)}{OptionalParameter("tagsFile", tagsFile)}{OptionalParameter("connection", connection)}
+- skipExisting: {NormalizeBool(skipExisting)}";
+        }
+
+        [McpServerPrompt(Name = "UpdateHmiTags"), Description("Relink existing WinCC Unified HMI tags to other PLC tags")]
+        public static string UpdateHmiTags(string softwarePath, string tags = "", string tagsFile = "")
+        {
+            return $@"Change the PLC tag, connection or data type of existing HMI tags without deleting them, so everything bound to the tag names keeps working. The previous values are backed up.
+
+Common parameter values:
+- softwarePath: path of the WinCC Unified HMI software, e.g. 'HMI_1/HMI_RT_1'
+- tags: JSON array of changes, each with 'name' and the new 'plcTag', 'connection' and/or 'dataType'; empty fields keep their value; empty when using tagsFile
+- tagsFile: optional absolute path of a .json file with that array, or a .csv/.txt file with a header line 'name;dataType;connection;plcTag'
+
+Use the UpdateHmiTags tool with these parameters:
+- softwarePath: {softwarePath}{OptionalParameter("tags", tags)}{OptionalParameter("tagsFile", tagsFile)}";
+        }
+
         [McpServerPrompt(Name = "CopyHmiScreen"), Description("Copy a WinCC Unified screen with text replacement")]
         public static string CopyHmiScreen(string softwarePath, string screenName, string newScreenName, string replace = "", string screenNumber = "")
         {
