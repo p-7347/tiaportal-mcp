@@ -24,7 +24,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 var message = $"Project '{status.Name}' {(status.IsModified ? "HAS unsaved changes" : "has no unsaved changes")}";
                 if (status.LastModified != null)
                 {
-                    message += $", last modified {status.LastModified:yyyy-MM-dd HH:mm}" +
+                    message += $", last modified {status.LastModified.Value.ToLocalTime():yyyy-MM-dd HH:mm} (local time)" +
                                (string.IsNullOrEmpty(status.LastModifiedBy) ? string.Empty : $" by {status.LastModifiedBy}");
                 }
 
