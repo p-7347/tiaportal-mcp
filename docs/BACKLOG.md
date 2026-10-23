@@ -5,7 +5,7 @@ request titled with its id (see "Contributing to this fork" in [AGENTS.md](../AG
 picks it up. Remove the item here in the same pull request that finishes it.
 
 Done so far: software checksum (A0), network-level block edit with LAD flow order and SCL text (A1), backup
-before delete or replacing import (A2), DB start values read/write (A3), V21 build switch (part of D12), HMI screen item dynamizations read/write (C6), block and UDT member add/change/delete (`EditBlockInterface`, `EditTypeInterface`), change log of write calls (B4, `GetChangeLog`).
+before delete or replacing import (A2), DB start values read/write (A3), V21 build switch (part of D12), HMI screen item dynamizations read/write (C6), block and UDT member add/change/delete (`EditBlockInterface`, `EditTypeInterface`), change log of write calls (B4, `GetChangeLog`), HMI tag usage search (A6, `GetHmiTagUsage`).
 
 ## C. HMI (WinCC Unified), alarms, texts - current priority
 
@@ -30,7 +30,6 @@ before delete or replacing import (A2), DB start values read/write (A3), V21 bui
 | -- | ---- | ----- |
 | A4 | Read the CPU diagnostic buffer | Direct S7CommPlus connection, next to `GetActivePlcAlarmsDirect`. Shows why a CPU went to STOP or why an axis reports a limit alarm without opening TIA Portal online. Needs a real PLC to test. |
 | A5 | Simple value trace | Read a list of tags every N ms, M times, and report only the moments a value changed. Builds on `ReadPlcTagValuesDirect`. |
-| A6 | HMI tag usage search (in progress) | PLC tag -> HMI tags -> screens, screen items and event scripts that use them. |
 | A7 | I/O map | Address <-> PLC tag <-> hardware module and channel, as one table. Openness "addresses" and "channels of device items". |
 
 ## B. Useful, with risk (separate flag)
