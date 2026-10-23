@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace TiaMcpServer.ModelContextProtocol
 {
@@ -66,6 +66,33 @@ namespace TiaMcpServer.ModelContextProtocol
     public class ResponseHmiAlarms : ResponseMessage
     {
         public IEnumerable<ResponseHmiAlarmInfo>? Items { get; set; }
+    }
+
+    public class ResponseHmiAlarmStateInfo
+    {
+        public string? BackColor { get; set; }
+        public string? TextColor { get; set; }
+        public bool? Flashing { get; set; }
+    }
+
+    public class ResponseHmiAlarmClassInfo
+    {
+        public string? Name { get; set; }
+        public uint? Id { get; set; }
+        public bool? IsSystem { get; set; }
+        public byte? Priority { get; set; }
+        public string? StateMachine { get; set; }
+        public string? Log { get; set; }
+        public string? CommonAlarmClass { get; set; }
+        public ResponseHmiAlarmStateInfo? RaisedState { get; set; }
+        public ResponseHmiAlarmStateInfo? AcknowledgedState { get; set; }
+        public ResponseHmiAlarmStateInfo? ClearedState { get; set; }
+        public ResponseHmiAlarmStateInfo? AcknowledgedClearedState { get; set; }
+    }
+
+    public class ResponseHmiAlarmClasses : ResponseMessage
+    {
+        public IEnumerable<ResponseHmiAlarmClassInfo>? Items { get; set; }
     }
 
     public class ResponseHmiTextListInfo

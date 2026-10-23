@@ -1,4 +1,4 @@
-using ModelContextProtocol.Server;
+﻿using ModelContextProtocol.Server;
 using System.ComponentModel;
 
 namespace TiaMcpServer.ModelContextProtocol
@@ -2858,6 +2858,18 @@ Common parameter values:
 - softwarePath: path to the HMI device/device item, e.g. 'HMI_1/HMI_RT_1'{OptionalParameter("regexName", regexName)}
 
 Use the GetHmiAnalogAlarms tool with these parameters:
+- softwarePath: {softwarePath}";
+        }
+
+        [McpServerPrompt(Name = "GetHmiAlarmClasses"), Description("List alarm classes of a Unified Comfort/Advanced panel")]
+        public static string GetHmiAlarmClasses(string softwarePath, string regexName = "")
+        {
+            return $@"Get a list of alarm classes from a device's HMI software (Unified Comfort/Advanced Panels only), including priority, state machine, acknowledgment and state colors.
+
+Common parameter values:
+- softwarePath: path to the HMI device/device item, e.g. 'HMI_1/HMI_RT_1'{OptionalParameter("regexName", regexName)}
+
+Use the GetHmiAlarmClasses tool with these parameters:
 - softwarePath: {softwarePath}";
         }
 

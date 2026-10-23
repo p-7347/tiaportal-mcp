@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using Siemens.Engineering.HmiUnified;
 using Siemens.Engineering.HmiUnified.HmiAlarm;
 using Siemens.Engineering.HmiUnified.HmiTags;
@@ -343,6 +343,49 @@ namespace TiaMcpServer.Siemens
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "GetHmiAnalogAlarms failed for {SoftwarePath}", softwarePath);
+                throw;
+            }
+
+            return list;
+        }
+
+        public List<HmiAlarmClass> GetHmiAlarmClasses(string softwarePath, string regexName = "")
+        {
+            _logger?.LogInformation("Getting HMI alarm classes...");
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            var list = new List<HmiAlarmClass>();
+
+            try
+            {
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is HmiSoftware hmiSoftware)
+                {
+                    foreach (var alarmClass in hmiSoftware.AlarmClasses)
+                    {
+                        try
+                        {
+                            if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(alarmClass.Name, regexName, RegexOptions.IgnoreCase))
+                            {
+                                continue;
+                            }
+                        }
+                        catch (Exception)
+                        {
+                            continue;
+                        }
+
+                        list.Add(alarmClass);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "GetHmiAlarmClasses failed for {SoftwarePath}", softwarePath);
                 throw;
             }
 

@@ -1,4 +1,4 @@
-# Change Log
+﻿# Change Log
 
 ## [Unreleased]
 
@@ -19,6 +19,7 @@
 
 ### Added
 
+- `GetHmiAlarmClasses` (read): list alarm classes defined in an HMI software (Unified Comfort/Advanced Panels only), including priority, state machine, acknowledgment and state colors (raised, acknowledged, cleared, acknowledged-cleared).
 - `EditTypeInterface` (write): add, change or delete one member of a PLC data type (UDT), the same way `EditBlockInterface` does for blocks. Blocks using the type need a compile afterwards.
 - Change log: every write tool call is logged as one JSON line in `<backup path>\audit\<yyyyMMdd>.jsonl` (time, tool, arguments, ok or error, reply, backup file). `GetChangeLog` (read) lists a day's entries, optionally for one tool. A log line that cannot be written never fails the call. The log keeps the reply's message text, not the whole JSON reply.
 - `EditBlockInterface` reports a start value given for a Temp member or an FC parameter before it checks that the block is compiled.
