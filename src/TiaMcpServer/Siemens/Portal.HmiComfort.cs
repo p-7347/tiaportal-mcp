@@ -70,10 +70,10 @@ namespace TiaMcpServer.Siemens
             public int? Width { get; set; }
             public int? Height { get; set; }
 
-            /// <summary>The main text (Text, else the first text), plain, in the first project language found.</summary>
+            /// <summary>The text the item shows (Text, or TextOff for buttons and switches), plain, English when present.</summary>
             public string? Text { get; set; }
 
-            /// <summary>Every multilingual text of the item by composition name (Text, TextOn, TextOff, ToolTipText, ...), when there is more than one.</summary>
+            /// <summary>Every multilingual text of the item by composition name (Text, TextOn, TextOff, HelpText, ToolTipText, ...), unless 'text' is the only one.</summary>
             public Dictionary<string, string>? Texts { get; set; }
 
             /// <summary>Names the item refers to: tags, text lists, graphic lists, faceplate types, ...</summary>
@@ -387,8 +387,11 @@ namespace TiaMcpServer.Siemens
 
             if (texts.Count > 0)
             {
-                item.Text = texts.TryGetValue("Text", out var main) ? main : texts.Values.First();
-                item.Texts = texts.Count > 1 ? texts : null;
+                // Help and tooltip texts are not what the item shows, so they never become 'text'.
+                item.Text = texts.TryGetValue("Text", out var main) ? main
+                          : texts.TryGetValue("TextOff", out var off) ? off
+                          : null;
+                item.Texts = texts.Count > 1 || item.Text == null ? texts : null;
             }
 
             if (attributes.TryGetValue("Text", out var plainText) && item.Text == null)
