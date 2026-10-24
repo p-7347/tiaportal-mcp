@@ -33,7 +33,9 @@ namespace TiaMcpServer.Siemens
         private static readonly HashSet<string> StyleExcluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "Name", "Left", "Top", "Width", "Height", "TabIndex", "ContainedType", "ProcessValue",
-            "Text", "ToolTipText", "Visible", "Enabled", "Authorization", "ScreenName", "Screen"
+            "Text", "ToolTipText", "Visible", "Enabled", "Authorization", "ScreenName", "Screen",
+            // The style class names the item type (HmiRectangle, HmiTextBox); copying it across kinds breaks the look.
+            "StyleItemClass"
         };
 
         public sealed class HmiItemPropertyInfo
