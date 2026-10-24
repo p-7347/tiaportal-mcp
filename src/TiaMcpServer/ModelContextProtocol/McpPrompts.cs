@@ -2941,6 +2941,51 @@ Use the GetComfortScreenItems tool with these parameters:
 - screenName: {screenName}";
         }
 
+        [McpServerPrompt(Name = "GetHmiScreenItemProperties"), Description("List the settable properties of a WinCC Unified screen item")]
+        public static string GetHmiScreenItemProperties(string softwarePath, string screenName, string itemName, string regexName = "")
+        {
+            return $@"List the settable properties (colors, border, font, formats, ...) of one WinCC Unified screen item with their current values, e.g. to find names for 'SetHmiScreenItemProperties'.
+
+Common parameter values:
+- softwarePath: the HMI software, e.g. 'HMI_1/HMI_RT_1'
+- regexName: e.g. 'Color|Font' to see only those{OptionalParameter("regexName", regexName)}
+
+Use the GetHmiScreenItemProperties tool with these parameters:
+- softwarePath: {softwarePath}
+- screenName: {screenName}
+- itemName: {itemName}";
+        }
+
+        [McpServerPrompt(Name = "SetHmiScreenItemProperties"), Description("Set colors, fonts or formats of WinCC Unified screen items")]
+        public static string SetHmiScreenItemProperties(string softwarePath, string screenName, string properties, string itemNames = "", string itemRegex = "")
+        {
+            return $@"Set static properties of one or many WinCC Unified screen items in one call.
+
+Common parameter values:
+- properties: JSON object, e.g. '{{""BackColor"":""#FFFFFF"",""Font.Size"":20,""OutputFormat"":""{{I}}""}}'
+- itemNames: comma separated item names, or itemRegex: a regular expression over the names{OptionalParameter("itemNames", itemNames)}{OptionalParameter("itemRegex", itemRegex)}
+
+Use the SetHmiScreenItemProperties tool with these parameters:
+- softwarePath: {softwarePath}
+- screenName: {screenName}
+- properties: {properties}";
+        }
+
+        [McpServerPrompt(Name = "CopyHmiItemStyle"), Description("Copy the style of one WinCC Unified screen item to others")]
+        public static string CopyHmiItemStyle(string softwarePath, string screenName, string sourceItem, string targetItems = "", string targetRegex = "", string properties = "", string targetScreenName = "")
+        {
+            return $@"Give WinCC Unified screen items the look of another item (colors, border, font, formats; not position, size, texts or tag bindings).
+
+Common parameter values:
+- targetItems: comma separated names, or targetRegex: a regular expression over the names
+- properties: optional, e.g. 'BackColor, ForeColor, Font.Size' to copy only those{OptionalParameter("targetItems", targetItems)}{OptionalParameter("targetRegex", targetRegex)}{OptionalParameter("properties", properties)}{OptionalParameter("targetScreenName", targetScreenName)}
+
+Use the CopyHmiItemStyle tool with these parameters:
+- softwarePath: {softwarePath}
+- screenName: {screenName}
+- sourceItem: {sourceItem}";
+        }
+
         [McpServerPrompt(Name = "GetHmiDiscreteAlarms"), Description("List discrete alarms of a Unified Comfort/Advanced panel")]
         public static string GetHmiDiscreteAlarms(string softwarePath, string regexName = "")
         {

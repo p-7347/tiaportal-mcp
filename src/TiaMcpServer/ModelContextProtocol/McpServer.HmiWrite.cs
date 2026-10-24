@@ -116,7 +116,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "UpdateHmiScreenItem", Title = "Update HMI screen item", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Change the position, size, text or visibility of an item on a WinCC Unified screen. Every argument left empty keeps the current value. Returns the item as read back")]
+         Description("Change the position, size, text or visibility of an item on a WinCC Unified screen. Every argument left empty keeps the current value. Returns the item as read back. For colors, border, font or output format use 'SetHmiScreenItemProperties'")]
         public static ResponseHmiScreenItemWrite UpdateHmiScreenItem(
             [Description(HmiPathDescription)] string softwarePath,
             [Description("screenName: name of the screen")] string screenName,
