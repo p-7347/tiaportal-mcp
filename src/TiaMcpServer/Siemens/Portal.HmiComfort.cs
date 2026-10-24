@@ -38,8 +38,6 @@ namespace TiaMcpServer.Siemens
 
             /// <summary>User folder path, e.g. 'Production/Reports'; empty at the root.</summary>
             public string Folder { get; set; } = string.Empty;
-
-            public int? ScreenNumber { get; set; }
         }
 
         public sealed class ComfortScreenRead
@@ -47,6 +45,7 @@ namespace TiaMcpServer.Siemens
             public string Name { get; set; } = string.Empty;
             public string Kind { get; set; } = string.Empty;
             public string? Template { get; set; }
+            public int? ScreenNumber { get; set; }
             public int? Width { get; set; }
             public int? Height { get; set; }
             public Dictionary<string, string>? Attributes { get; set; }
@@ -129,13 +128,7 @@ namespace TiaMcpServer.Siemens
                     {
                         if (regex == null || regex.IsMatch(screen.Name))
                         {
-                            list.Add(new ComfortScreenInfo
-                            {
-                                Name = screen.Name,
-                                Kind = ComfortKindScreen,
-                                Folder = folder,
-                                ScreenNumber = ComfortScreenNumber(screen)
-                            });
+                            list.Add(new ComfortScreenInfo { Name = screen.Name, Kind = ComfortKindScreen, Folder = folder });
                         }
                     }
 
@@ -292,6 +285,7 @@ namespace TiaMcpServer.Siemens
                 Name = name,
                 Kind = kind,
                 Template = ComfortLinks(root).FirstOrDefault(l => l.Link == "Template").Target,
+                ScreenNumber = ComfortInt(attributes, "Number"),
                 Width = ComfortInt(attributes, "Width"),
                 Height = ComfortInt(attributes, "Height"),
                 Attributes = includeAttributes ? attributes : null
@@ -364,7 +358,9 @@ namespace TiaMcpServer.Siemens
             {
                 item.Dynamizations.Add(new ComfortLinkDescription
                 {
-                    PropertyName = path.Length == 0 ? link : path + "/" + link,
+                    // A tag on a dynamic is named after the property it drives ('ProcessValue');
+                    // other links keep their own name ('TextList', 'Visibility/Tag').
+                    PropertyName = path.Length == 0 ? link : link == "Tag" && owner == "Dynamic.TagConnectionDynamic" ? path : path + "/" + link,
                     Type = owner,
                     Tag = target
                 });
@@ -491,8 +487,14 @@ namespace TiaMcpServer.Siemens
                         continue;
                     }
 
-                    var name = (string?)child.Attribute("CompositionName") ?? child.Name.LocalName;
-                    stack.Push((child, path.Length == 0 ? name : path + "/" + name));
+                    // A property object ('Properties') is named by its Name attribute ('ProcessValue');
+                    // the 'Dynamic' composition below it adds nothing to the path.
+                    var composition = (string?)child.Attribute("CompositionName") ?? child.Name.LocalName;
+                    var name = child.Name.LocalName == "Hmi.Screen.Property" && ComfortAttributes(child).TryGetValue("Name", out var property)
+                        ? property
+                        : composition;
+
+                    stack.Push((child, composition == "Dynamic" ? path : path.Length == 0 ? name : path + "/" + name));
                 }
             }
         }
@@ -511,7 +513,9 @@ namespace TiaMcpServer.Siemens
                 var attributes = ComfortAttributes(child);
                 var description = new ComfortEventDescription
                 {
-                    EventType = attributes.TryGetValue("EventType", out var type) ? type : ((string?)child.Attribute("CompositionName") ?? child.Name.LocalName)
+                    EventType = attributes.TryGetValue("Name", out var named) ? named
+                              : attributes.TryGetValue("EventType", out var type) ? type
+                              : ((string?)child.Attribute("CompositionName") ?? child.Name.LocalName)
                 };
 
                 foreach (var call in child.Descendants().Where(IsComfortInvocation))
@@ -528,18 +532,22 @@ namespace TiaMcpServer.Siemens
             return result;
         }
 
+        // V20 exports a function list as Hmi.Event.FunctionListEntry (Name = function, Type =
+        // SystemFunction or Script) with Hmi.Event.FunctionListEntryParameter children.
         private static bool IsComfortInvocation(XElement element)
         {
-            return element.Name.LocalName.StartsWith("Hmi.", StringComparison.Ordinal) &&
-                   element.Name.LocalName.EndsWith("Invocation", StringComparison.Ordinal);
+            var type = element.Name.LocalName;
+
+            return type == "Hmi.Event.FunctionListEntry" ||
+                   (type.StartsWith("Hmi.", StringComparison.Ordinal) && type.EndsWith("Invocation", StringComparison.Ordinal));
         }
 
-        /// <summary>'Function(param, param)': the called function from the invocation's links, its parameters in order.</summary>
+        /// <summary>'Function(name=value, ...)': the called function, its parameters in order.</summary>
         private static string DescribeComfortInvocation(XElement call)
         {
-            var links = ComfortLinks(call).ToList();
-            var function = links.Select(l => l.Target).FirstOrDefault(t => !string.IsNullOrEmpty(t))
-                ?? (ComfortAttributes(call).TryGetValue("Name", out var named) ? named : call.Name.LocalName.Substring(4));
+            var function = (ComfortAttributes(call).TryGetValue("Name", out var named) ? named : null)
+                ?? ComfortLinks(call).Select(l => l.Target).FirstOrDefault(t => !string.IsNullOrEmpty(t))
+                ?? call.Name.LocalName.Substring(4);
 
             var parameters = new List<string>();
 
@@ -621,19 +629,6 @@ namespace TiaMcpServer.Siemens
             {
                 throw new PortalException(PortalErrorCode.InvalidParams,
                     $"'{regexName}' is not a valid regular expression: {ex.Message}", null, ex);
-            }
-        }
-
-        private static int? ComfortScreenNumber(Screen screen)
-        {
-            try
-            {
-                return screen.GetAttribute("Number") is object value ? Convert.ToInt32(value, System.Globalization.CultureInfo.InvariantCulture) : (int?)null;
-            }
-            catch (Exception)
-            {
-                // Not every panel type has screen numbers.
-                return null;
             }
         }
 

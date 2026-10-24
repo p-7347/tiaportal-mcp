@@ -15,6 +15,8 @@ namespace TiaMcpServer.ModelContextProtocol
         /// <summary>The template the screen is based on (screens only).</summary>
         public string? Template { get; set; }
 
+        public int? ScreenNumber { get; set; }
+
         public int? Width { get; set; }
         public int? Height { get; set; }
 

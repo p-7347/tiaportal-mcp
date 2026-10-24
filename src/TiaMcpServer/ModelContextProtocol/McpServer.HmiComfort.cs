@@ -16,7 +16,7 @@ namespace TiaMcpServer.ModelContextProtocol
         private const string ComfortPathDescription = "softwarePath: path of the classic WinCC (Comfort/Basic panel) HMI software, e.g. 'HMI_1/HMI_RT_1'; 'GetProjectTree' shows it as 'HmiTarget'";
 
         [McpServerTool(Name = "GetComfortScreens", Title = "Get Comfort screens", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
-         Description("List the screens, screen templates and pop-up screens of a classic WinCC HMI (Comfort/Basic panels), including those in subfolders, with their folder and screen number. For WinCC Unified use 'GetHmiScreens'")]
+         Description("List the screens, screen templates and pop-up screens of a classic WinCC HMI (Comfort/Basic panels), including those in subfolders, with their folder. For WinCC Unified use 'GetHmiScreens'")]
         public static ResponseComfortScreens GetComfortScreens(
             [Description(ComfortPathDescription)] string softwarePath,
             [Description("regexName: optional name or regular expression to filter the screens. Empty (default) lists all")] string regexName = "")
@@ -64,6 +64,7 @@ namespace TiaMcpServer.ModelContextProtocol
                               (read.ExportFile != null ? $"; export kept at '{read.ExportFile}'" : string.Empty),
                     Kind = read.Kind,
                     Template = read.Template,
+                    ScreenNumber = read.ScreenNumber,
                     Width = read.Width,
                     Height = read.Height,
                     Attributes = read.Attributes,
