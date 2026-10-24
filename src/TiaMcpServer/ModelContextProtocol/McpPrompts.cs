@@ -2914,6 +2914,33 @@ Use the GetHmiScreens tool with these parameters:
 - softwarePath: {softwarePath}";
         }
 
+        [McpServerPrompt(Name = "GetComfortScreens"), Description("List screens, templates and pop-ups of a classic WinCC Comfort/Basic panel")]
+        public static string GetComfortScreens(string softwarePath, string regexName = "")
+        {
+            return $@"List the screens, screen templates and pop-up screens of a classic WinCC HMI (Comfort/Basic panels), including subfolders.
+
+Common parameter values:
+- softwarePath: the classic HMI software, e.g. 'HMI_1/HMI_RT_1' ('GetProjectTree' shows it as 'HmiTarget'){OptionalParameter("regexName", regexName)}
+
+Use the GetComfortScreens tool with these parameters:
+- softwarePath: {softwarePath}";
+        }
+
+        [McpServerPrompt(Name = "GetComfortScreenItems"), Description("List the items of a classic WinCC Comfort/Basic screen")]
+        public static string GetComfortScreenItems(string softwarePath, string screenName, string kind = "", string regexName = "", string includeAttributes = "", string keepExportPath = "")
+        {
+            return $@"List the items of one classic WinCC screen, template or pop-up with position, size, texts, linked tags and event functions, e.g. to rebuild it in WinCC Unified.
+
+Common parameter values:
+- softwarePath: the classic HMI software, e.g. 'HMI_1/HMI_RT_1'
+- screenName: as 'GetComfortScreens' lists it; 'Folder/Name' when the name is not unique
+- kind: Screen, Template or Popup (optional){OptionalParameter("kind", kind)}{OptionalParameter("regexName", regexName)}{OptionalParameter("includeAttributes", includeAttributes)}{OptionalParameter("keepExportPath", keepExportPath)}
+
+Use the GetComfortScreenItems tool with these parameters:
+- softwarePath: {softwarePath}
+- screenName: {screenName}";
+        }
+
         [McpServerPrompt(Name = "GetHmiDiscreteAlarms"), Description("List discrete alarms of a Unified Comfort/Advanced panel")]
         public static string GetHmiDiscreteAlarms(string softwarePath, string regexName = "")
         {
