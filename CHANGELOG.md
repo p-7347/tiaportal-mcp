@@ -22,6 +22,7 @@
 
 ### Added
 
+- `GetComfortScreens` and `GetComfortScreenItems` (read): screens, templates and pop-up screens of a classic WinCC HMI (Comfort/Basic panels, `HmiTarget`), including subfolders, and the items of one of them: kind, layer, position, size, texts, linked tags, text lists and graphic lists, and the functions each event calls, read from an XML export of the screen since Openness has no object model for classic screen items. Optional `includeAttributes` adds every plain attribute (colors, fonts, formats), `keepExportPath` keeps the export file. Meant for rebuilding Comfort screens in WinCC Unified.
 - `GetProjectStatus` (read): whether the open project has unsaved changes, its last modified time and user, and the newest project history entries (D4).
 - `GetSafetyInfo`: optional `saveFile` and `compareFile` keep the F-block signatures in a JSON file and later list which F-block signatures changed, were added or removed, e.g. before and after a change and compile (D5). Without them the reply is unchanged.
 - `GetHmiTagUsage` (read): from a PLC tag (or a DB or struct name, or an HMI tag name) to the HMI tags connected to it and every screen item dynamization, faceplate interface binding, event or dynamization script and alarm on a WinCC Unified HMI that uses them (A6).
