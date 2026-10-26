@@ -1,10 +1,12 @@
-using ModelContextProtocol;
+﻿using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using System;
 using System.ComponentModel;
 using System.Linq;
 using System.Text.Json.Nodes;
 using TiaMcpServer.Siemens;
+using Siemens.Engineering.HmiUnified.HmiAlarm;
+using Siemens.Engineering.HmiUnified.HmiAlarm.HmiAlarmCommon;
 
 namespace TiaMcpServer.ModelContextProtocol
 {
@@ -191,6 +193,72 @@ namespace TiaMcpServer.ModelContextProtocol
             {
                 throw new McpException($"Unexpected error retrieving HMI analog alarms with regex '{regexName}' in '{softwarePath}': {ex.Message}", ex);
             }
+        }
+
+        [McpServerTool(Name = "GetHmiAlarmClasses", Title = "Get HMI alarm classes", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Use to list the alarm classes defined in an HMI software. Get a list of alarm classes (Unified Comfort/Advanced Panels only), including priority, state machine, acknowledgment and state colors")]
+        public static ResponseHmiAlarmClasses GetHmiAlarmClasses(
+            [Description("softwarePath: defines the path in the project structure to the HMI device/device item, e.g. 'HMI_1/HMI_RT_1'")] string softwarePath,
+            [Description("regexName: defines the name or regular expression to find the alarm class. Use empty string (default) to find all")] string regexName = "")
+        {
+            try
+            {
+                var list = Portal.GetHmiAlarmClasses(softwarePath, regexName);
+
+                var responseList = list
+                    .Where(alarmClass => alarmClass != null)
+                    .Select(alarmClass => new ResponseHmiAlarmClassInfo
+                    {
+                        Name = alarmClass.Name,
+                        Id = alarmClass.Id,
+                        IsSystem = alarmClass.IsSystem,
+                        Priority = alarmClass.Priority,
+                        StateMachine = alarmClass.StateMachine.ToString(),
+                        Log = alarmClass.Log,
+                        CommonAlarmClass = alarmClass.CommonAlarmClass,
+                        RaisedState = ToAlarmStateInfo(alarmClass.RaisedState),
+                        AcknowledgedState = ToAlarmStateInfo(alarmClass.AcknowledgedState),
+                        ClearedState = ToAlarmStateInfo(alarmClass.ClearedState),
+                        AcknowledgedClearedState = ToAlarmStateInfo(alarmClass.AcknowledgedClearedState)
+                    })
+                    .ToList();
+
+                return new ResponseHmiAlarmClasses
+                {
+                    Message = $"HMI alarm classes with regex '{regexName}' retrieved from '{softwarePath}'",
+                    Items = responseList,
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving HMI alarm classes with regex '{regexName}' in '{softwarePath}': {ex.Message}", ex);
+            }
+        }
+
+        private static ResponseHmiAlarmStateInfo? ToAlarmStateInfo(AlarmStatusVisuals? visuals)
+        {
+            if (visuals == null) return null;
+            try
+            {
+                return new ResponseHmiAlarmStateInfo
+                {
+                    BackColor = FormatAlarmColor(visuals.BackColor),
+                    TextColor = FormatAlarmColor(visuals.TextColor),
+                    Flashing = visuals.Flashing
+                };
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static string? FormatAlarmColor(System.Drawing.Color color)
+        {
+            if (color.IsEmpty) return null;
+            return color.A == 255
+                ? $"#{color.R:X2}{color.G:X2}{color.B:X2}"
+                : $"#{color.A:X2}{color.R:X2}{color.G:X2}{color.B:X2}";
         }
 
         [McpServerTool(Name = "GetHmiTextLists", Title = "Get HMI text lists", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get a list of text list names from a device's HMI software (Unified Comfort/Advanced Panels only). Names only - this Openness version has no way to read individual text list entries/values.")]

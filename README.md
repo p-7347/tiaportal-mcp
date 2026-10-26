@@ -1,4 +1,4 @@
-# TIA-Portal MCP-Server
+﻿# TIA-Portal MCP-Server
 
 A MCP server which connects to Siemens TIA Portal.
 
@@ -120,7 +120,7 @@ a change summary.
 
 ## Tools
 
-184 tools total. Read-only/ungated tools (101) are always available.
+185 tools total. Read-only/ungated tools (102) are always available.
 
 | Area                          | Tools                                                                                                                                                                                                  |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -142,7 +142,7 @@ a change summary.
 | Cross references              | `GetCrossReferences`                                                                                                                                                                                   |
 | Block documents (V20+)        | `ExportAsDocuments`, `ExportBlocksAsDocuments`                                                                                                                                                         |
 | Type documents (V21+)         | `ExportTypeAsDocuments`, `ExportTypesAsDocuments`                                                                                                                                                      |
-| HMI, WinCC Unified (read)     | `GetHmiTagTables`, `GetHmiTags`, `GetHmiScreens`, `GetHmiScreenItems`, `GetHmiDynamizations`, `GetHmiDiscreteAlarms`, `GetHmiAnalogAlarms`, `GetHmiTextLists`, `CompareHmiScreens`, `GetHmiTagUsage`, `GetHmiScreenItemProperties`                                      |
+| HMI, WinCC Unified (read)     | `GetHmiTagTables`, `GetHmiTags`, `GetHmiScreens`, `GetHmiScreenItems`, `GetHmiDynamizations`, `GetHmiDiscreteAlarms`, `GetHmiAnalogAlarms`, `GetHmiAlarmClasses`, `GetHmiTextLists`, `CompareHmiScreens`, `GetHmiTagUsage`, `GetHmiScreenItemProperties`                                      |
 | HMI, classic WinCC (read)     | `GetComfortScreens`, `GetComfortScreenItems` (Comfort/Basic panels; items read from an XML export of the screen)                                                                                        |
 | Understand and read (comfort) | `GetPlcSummary`, `ResolveObjectPath`, `WhereUsed`, `FindInCode`, `GetBlockSource`, `GetNetworkSource`, `GetTypeSource`, `PreviewImport`, `OpenTiaProject`, `ExportPlcAsDocuments`, `CompareExports`, `SearchExports`    |
 
@@ -392,7 +392,7 @@ These are not gaps in this server - the underlying API offers no operation for t
 - Built on the [ModelContextProtocol](https://www.nuget.org/packages/ModelContextProtocol) .NET SDK **2.2.0**.
 - Protocol revisions negotiated during `initialize`: `2024-11-05`, `2025-03-26`, `2025-06-18`, `2025-11-25` (the SDK picks the highest the client also supports).
 - Every tool advertises a human-readable `title` and behaviour annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`).
-- 164 of the 184 tools publish an `outputSchema` and return `structuredContent` (86 of 101
+- 165 of the 185 tools publish an `outputSchema` and return `structuredContent` (87 of 102
   read-only, 78 of 83 write).
 - Long-running export/import tools report progress via `notifications/progress` when the client supplies a `progressToken`.
 - Independently of that, `GetState` can report the progress of another call still running on the

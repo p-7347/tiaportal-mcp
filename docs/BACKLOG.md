@@ -1,11 +1,11 @@
-# Backlog
+﻿# Backlog
 
 Open work for this fork, in priority order within each group. The HMI group (C) comes first right now. Before starting an item, open a draft pull
 request titled with its id (see "Contributing to this fork" in [AGENTS.md](../AGENTS.md)) so nobody else
 picks it up. Remove the item here in the same pull request that finishes it.
 
 Done so far: software checksum (A0), network-level block edit with LAD flow order and SCL text (A1), backup
-before delete or replacing import (A2), DB start values read/write (A3), V21 build switch (part of D12), HMI screen item dynamizations read/write (C6), block and UDT member add/change/delete (`EditBlockInterface`, `EditTypeInterface`), change log of write calls (B4, `GetChangeLog`), unsaved-change flag and project history (D4, `GetProjectStatus`), safety signature compare (D5, `GetSafetyInfo` saveFile/compareFile), HMI tag usage search (A6, `GetHmiTagUsage`).
+before delete or replacing import (A2), DB start values read/write (A3), V21 build switch (part of D12), HMI screen item dynamizations read/write (C6), block and UDT member add/change/delete (`EditBlockInterface`, `EditTypeInterface`), change log of write calls (B4, `GetChangeLog`), unsaved-change flag and project history (D4, `GetProjectStatus`), safety signature compare (D5, `GetSafetyInfo` saveFile/compareFile), HMI tag usage search (A6, `GetHmiTagUsage`), HMI alarm classes read (C8, `GetHmiAlarmClasses`).
 
 ## C. HMI (WinCC Unified), alarms, texts - current priority
 
@@ -13,7 +13,6 @@ before delete or replacing import (A2), DB start values read/write (A3), V21 bui
 | -- | ---- | ----- |
 | C1 | Write Unified alarms, alarm classes and text lists | Reading exists already. `HmiUnified.HmiAlarm`, `HmiUnified.TextGraphicList`. Next C item to do. |
 | C7 | Read global script modules | The shared functions screen events call; item event scripts are already readable. `HmiUnified.Scripts.HmiScriptModule`. |
-| C8 | Read alarm classes | Color, acknowledgement. `HmiUnified.HmiAlarm.HmiAlarmClass`. Pairs with C1. |
 | C2 | Export/import PLC alarm texts and text lists as xlsx | `SW.Alarm.PlcAlarmTextProvider`, `PlcAlarmTextListProvider`. |
 | C3 | HMI connections, tag acquisition cycles, logging tags | `HmiUnified.HmiConnections`. |
 | C4 | HMI compile result | Check whether `CompileSoftware` already covers HMI software. |
