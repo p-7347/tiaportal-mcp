@@ -58,6 +58,12 @@ namespace TiaMcpServer.ModelContextProtocol
         public string? Backup { get; set; }
         public string? BackupWarning { get; set; }
         public string? PreviewFile { get; set; }
+
+        /// <summary>Every member edit, in order, when 'moreMembers' added more than one; null otherwise.</summary>
+        public System.Collections.Generic.List<TiaMcpServer.Siemens.Portal.InterfaceEditItem>? Edits { get; set; }
+
+        /// <summary>The compiler result when 'compile' was true; null otherwise.</summary>
+        public ResponseCompileSoftware? Compile { get; set; }
     }
 
     public class ResponseChangeLog : ResponseMessage
@@ -125,5 +131,10 @@ namespace TiaMcpServer.ModelContextProtocol
 
         /// <summary>Files that could not be imported, with the reason.</summary>
         public IEnumerable<string>? Failures { get; set; }
+
+        /// <summary>Backup files of the blocks and types the import replaced (named 'backup' so the change log finds them).</summary>
+        public IEnumerable<string>? Backup { get; set; }
+
+        public IEnumerable<string>? BackupWarnings { get; set; }
     }
 }

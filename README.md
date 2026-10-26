@@ -100,7 +100,7 @@ either, and gate themselves a different way:
 To enable write mode, add the argument to your client configuration, for example
 `"args": ["--allow-write"]`.
 
-Before `DeleteBlock`, `DeleteType`, `EditBlockNetwork`, `EditBlockInterface`, `EditTypeInterface`, `SetDbStartValue`, and an `ImportXmlBlock`/`ImportXmlType` that replaces an
+Before `DeleteBlock`, `DeleteType`, `EditBlockNetwork`, `EditBlockInterface`, `EditTypeInterface`, `SetDbStartValue`, and an `ImportXmlBlock`/`ImportXmlType` or source import (`ImportSourceBlock`, `ImportSources`, ...) that replaces an
 object of the same name, the current object is exported as XML to
 `<backup path>\<yyyyMMdd>\<time>_<tool>_<object>.xml` and the reply names the file (`backup`).
 Re-importing that file restores the old version even after the project was saved. An object TIA
@@ -109,17 +109,22 @@ WinCC Unified screens cannot be exported, so `SetHmiTagDynamization`, `SetHmiScr
 `SetHmiFlashingDynamization` and `DeleteHmiDynamization` save the dynamization they change as a
 `.json` file in the same folder instead (and return it as `previous`).
 
+An import refuses to replace a block or PLC data type that was changed in TIA Portal after the
+import file was last written: importing that older file would silently undo the newer change. The
+error names both times. Export the object again and edit the new file, or pass `allowOlderFile`
+`true` when the older file is really meant to win.
+
 Every write tool call is also logged as one JSON line in `<backup path>\audit\<yyyyMMdd>.jsonl` (time,
 tool, arguments, ok or error, reply, backup file). `GetChangeLog` lists a day's entries, e.g. to write
 a change summary.
 
 ## Tools
 
-174 tools total. Read-only/ungated tools (97) are always available.
+185 tools total. Read-only/ungated tools (102) are always available.
 
 | Area                          | Tools                                                                                                                                                                                                  |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Portal and state              | `Connect`, `Disconnect`, `GetPortals`, `GetState`, `Doctor`, `GetChangeLog`                                                                                                                                          |
+| Portal and state              | `Connect`, `Disconnect`, `GetPortals`, `GetState`, `Doctor`, `GetChangeLog`, `GetProjectStatus`                                                                                                                                          |
 | Project and session           | `GetProject`, `OpenProject`, `SaveProject`, `SaveAsProject`, `ArchiveProject`, `CloseProject`                                                                                                                            |
 | Devices                       | `GetProjectTree`, `GetDevices`, `GetDeviceInfo`, `GetDeviceItemInfo`, `GetGsdDependencies`, `GetDeviceMasterCopies`, `FindHardwareCatalogEntries`                                                     |
 | Network topology              | `GetSubnets`, `GetNetworkInterfaceInfo`                                                                                                                                                               |
@@ -137,10 +142,11 @@ a change summary.
 | Cross references              | `GetCrossReferences`                                                                                                                                                                                   |
 | Block documents (V20+)        | `ExportAsDocuments`, `ExportBlocksAsDocuments`                                                                                                                                                         |
 | Type documents (V21+)         | `ExportTypeAsDocuments`, `ExportTypesAsDocuments`                                                                                                                                                      |
-| HMI, WinCC Unified (read)     | `GetHmiTagTables`, `GetHmiTags`, `GetHmiScreens`, `GetHmiScreenItems`, `GetHmiDynamizations`, `GetHmiDiscreteAlarms`, `GetHmiAnalogAlarms`, `GetHmiAlarmClasses`, `GetHmiTextLists`, `CompareHmiScreens`                                          |
+| HMI, WinCC Unified (read)     | `GetHmiTagTables`, `GetHmiTags`, `GetHmiScreens`, `GetHmiScreenItems`, `GetHmiDynamizations`, `GetHmiDiscreteAlarms`, `GetHmiAnalogAlarms`, `GetHmiAlarmClasses`, `GetHmiTextLists`, `CompareHmiScreens`, `GetHmiTagUsage`, `GetHmiScreenItemProperties`                                      |
+| HMI, classic WinCC (read)     | `GetComfortScreens`, `GetComfortScreenItems` (Comfort/Basic panels; items read from an XML export of the screen)                                                                                        |
 | Understand and read (comfort) | `GetPlcSummary`, `ResolveObjectPath`, `WhereUsed`, `FindInCode`, `GetBlockSource`, `GetNetworkSource`, `GetTypeSource`, `PreviewImport`, `OpenTiaProject`, `ExportPlcAsDocuments`, `CompareExports`, `SearchExports`    |
 
-Write tools (77) require `--allow-write` (see [Write mode](#write-mode) for the handful that
+Write tools (83) require `--allow-write` (see [Write mode](#write-mode) for the handful that
 don't, and why).
 
 | Area                       | Tools                                                                                                                                                                                          |
@@ -157,7 +163,7 @@ don't, and why).
 | Type documents (V21+)      | `ImportTypeFromDocuments`, `ImportTypesFromDocuments`                                                                                                                                           |
 | Devices and network        | `CreateDevice`, `CreateDeviceWithItem`, `DeleteDevice`, `CreateDeviceGroup`, `DeleteDeviceGroup`, `SetIpAddress`, `ConnectToSubnet`, `DisconnectFromSubnet`                                      |
 | CAx (AutomationML)         | `ImportCax`                                                                                                                                                                                     |
-| HMI, WinCC Unified (write) | `CreateHmiScreen`, `DeleteHmiScreen`, `CreateHmiScreenItem`, `UpdateHmiScreenItem`, `DeleteHmiScreenItem`, `BindHmiTag`, `SetHmiTagDynamization`, `SetHmiScriptDynamization`, `SetHmiFlashingDynamization`, `DeleteHmiDynamization`, `CreateHmiFaceplate`, `SetHmiFaceplateInterface`, `CopyHmiScreen`, `CopyHmiScreens`, `CreateHmiTag` |
+| HMI, WinCC Unified (write) | `CreateHmiScreen`, `DeleteHmiScreen`, `CreateHmiScreenItem`, `UpdateHmiScreenItem`, `SetHmiScreenItemProperties`, `CopyHmiItemStyle`, `SetHmiItemEventScript`, `DeleteHmiItemEventScript`, `DeleteHmiScreenItem`, `BindHmiTag`, `SetHmiTagDynamization`, `SetHmiScriptDynamization`, `SetHmiFlashingDynamization`, `DeleteHmiDynamization`, `CreateHmiFaceplate`, `SetHmiFaceplateInterface`, `CopyHmiScreen`, `CopyHmiScreens`, `CreateHmiTag`, `CreateHmiTags`, `UpdateHmiTags` |
 
 `GetSoftwareTree` accepts a `sections` argument - any comma separated subset of
 `blocks,types,tags,watch,sources`, default `all` - to keep the output small on a large PLC.
@@ -335,7 +341,7 @@ These are not gaps in this server - the underlying API offers no operation for t
   SCL/DB/STL source that TIA Portal compiles into blocks (`ImportSourceBlock`), or documents
   (`ImportFromDocuments`, V20+). To change an existing block there is no need to rebuild its
   XML by hand: `EditBlockNetwork` replaces, inserts or deletes one network (from XML or SCL
-  text), `EditBlockInterface` adds, changes or deletes one interface member (`EditTypeInterface` one UDT member), and `SetDbStartValue`
+  text), `EditBlockInterface` adds, changes or deletes interface members, several in one import with `moreMembers` and optionally compiled in the same call (`EditTypeInterface` the same for UDT members), and `SetDbStartValue`
   changes one DB start value.
 - __Read-only objects.__ System constants cannot be created or changed, the force table cannot
   be created or deleted (the system owns one per PLC), the default tag table cannot be deleted,
@@ -386,8 +392,8 @@ These are not gaps in this server - the underlying API offers no operation for t
 - Built on the [ModelContextProtocol](https://www.nuget.org/packages/ModelContextProtocol) .NET SDK **2.2.0**.
 - Protocol revisions negotiated during `initialize`: `2024-11-05`, `2025-03-26`, `2025-06-18`, `2025-11-25` (the SDK picks the highest the client also supports).
 - Every tool advertises a human-readable `title` and behaviour annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`).
-- 154 of the 174 tools publish an `outputSchema` and return `structuredContent` (82 of 97
-  read-only, 72 of 77 write).
+- 165 of the 185 tools publish an `outputSchema` and return `structuredContent` (87 of 102
+  read-only, 78 of 83 write).
 - Long-running export/import tools report progress via `notifications/progress` when the client supplies a `progressToken`.
 - Independently of that, `GetState` can report the progress of another call still running on the
   same TIA Portal instance (tool name, processed/total, current object, time since last progress)

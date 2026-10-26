@@ -390,10 +390,11 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
             [Description("groupPath: root-relative block user group that receives the blocks, e.g. '0_OBs'. Empty uses the source's default location; the 'Program blocks' root itself is not allowed")] string groupPath,
             [Description("importPath: full path of the *.db, *.awl or *.scl file on the machine running this server")] string importPath,
-            [Description("keepOnError: keep successfully generated objects even when others in the file fail. Default false, which rolls back the whole file on any error")] bool keepOnError = false)
+            [Description("keepOnError: keep successfully generated objects even when others in the file fail. Default false, which rolls back the whole file on any error")] bool keepOnError = false,
+            [Description("allowOlderFile: import even when a block or type it replaces was changed in TIA Portal after the file was last written (default false: refused, because that usually means an older copy of the file would undo a change)")] bool allowOlderFile = false)
         {
             return Guarded(nameof(ImportSourceBlock), () =>
-                ImportedSources(Portal.ImportSourceBlock(softwarePath, groupPath, importPath, keepOnError), importPath, keepOnError));
+                ImportedSources(Portal.ImportSourceBlock(softwarePath, groupPath, importPath, keepOnError, allowOlderFile), importPath, keepOnError));
         }
 
         [WriteTool]
@@ -403,10 +404,11 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
             [Description("groupPath: root-relative PLC data type user group that receives the types, e.g. 'Common'. Empty uses the source's default location; the 'PLC data types' root itself is not allowed")] string groupPath,
             [Description("importPath: full path of the *.udt file on the machine running this server")] string importPath,
-            [Description("keepOnError: keep successfully generated objects even when others in the file fail. Default false, which rolls back the whole file on any error")] bool keepOnError = false)
+            [Description("keepOnError: keep successfully generated objects even when others in the file fail. Default false, which rolls back the whole file on any error")] bool keepOnError = false,
+            [Description("allowOlderFile: import even when a block or type it replaces was changed in TIA Portal after the file was last written (default false: refused, because that usually means an older copy of the file would undo a change)")] bool allowOlderFile = false)
         {
             return Guarded(nameof(ImportSourceType), () =>
-                ImportedSources(Portal.ImportSourceType(softwarePath, groupPath, importPath, keepOnError), importPath, keepOnError));
+                ImportedSources(Portal.ImportSourceType(softwarePath, groupPath, importPath, keepOnError, allowOlderFile), importPath, keepOnError));
         }
 
         [WriteTool]
@@ -418,10 +420,11 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("importPath: directory on this machine that holds the *.db, *.awl and *.scl files")] string importPath,
             [Description("regexName: optional regular expression, imports only files whose base name matches. Empty means all")] string regexName = "",
             [Description("preservePath: also read the subfolders of importPath and put each file into the matching subgroup of groupPath, as 'ExportSourceBlocks' with preservePath writes them; a missing subgroup fails that file. Default false, which reads only importPath itself")] bool preservePath = false,
-            [Description("keepOnError: keep successfully generated objects even when others in a file fail. Default false, which rolls back a whole file on any error")] bool keepOnError = false)
+            [Description("keepOnError: keep successfully generated objects even when others in a file fail. Default false, which rolls back a whole file on any error")] bool keepOnError = false,
+            [Description("allowOlderFile: import even when a block or type it replaces was changed in TIA Portal after the file was last written (default false: refused, because that usually means an older copy of the file would undo a change)")] bool allowOlderFile = false)
         {
             return Guarded(nameof(ImportSourceBlocks), () =>
-                ImportedSources(Portal.ImportSourceBlocks(softwarePath, groupPath, importPath, regexName, preservePath, keepOnError), importPath, keepOnError));
+                ImportedSources(Portal.ImportSourceBlocks(softwarePath, groupPath, importPath, regexName, preservePath, keepOnError, allowOlderFile), importPath, keepOnError));
         }
 
         [WriteTool]
@@ -433,10 +436,11 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("importPath: directory on this machine that holds the *.udt files")] string importPath,
             [Description("regexName: optional regular expression, imports only files whose base name matches. Empty means all")] string regexName = "",
             [Description("preservePath: also read the subfolders of importPath and put each file into the matching subgroup of groupPath, as 'ExportSourceTypes' with preservePath writes them; a missing subgroup fails that file. Default false, which reads only importPath itself")] bool preservePath = false,
-            [Description("keepOnError: keep successfully generated objects even when others in a file fail. Default false, which rolls back a whole file on any error")] bool keepOnError = false)
+            [Description("keepOnError: keep successfully generated objects even when others in a file fail. Default false, which rolls back a whole file on any error")] bool keepOnError = false,
+            [Description("allowOlderFile: import even when a block or type it replaces was changed in TIA Portal after the file was last written (default false: refused, because that usually means an older copy of the file would undo a change)")] bool allowOlderFile = false)
         {
             return Guarded(nameof(ImportSourceTypes), () =>
-                ImportedSources(Portal.ImportSourceTypes(softwarePath, groupPath, importPath, regexName, preservePath, keepOnError), importPath, keepOnError));
+                ImportedSources(Portal.ImportSourceTypes(softwarePath, groupPath, importPath, regexName, preservePath, keepOnError, allowOlderFile), importPath, keepOnError));
         }
 
         [WriteTool]
@@ -446,10 +450,11 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
             [Description("importPath: directory on this machine to walk recursively for *.db, *.awl, *.scl and *.udt files")] string importPath,
             [Description("regexName: optional regular expression, imports only files whose base name matches. Empty means all")] string regexName = "",
-            [Description("keepOnError: keep successfully generated objects from a file even when others in it fail; TIA Portal then reports no per-object success/failure for that file. Default false, which rolls back a whole file on any error")] bool keepOnError = false)
+            [Description("keepOnError: keep successfully generated objects from a file even when others in it fail; TIA Portal then reports no per-object success/failure for that file. Default false, which rolls back a whole file on any error")] bool keepOnError = false,
+            [Description("allowOlderFile: import even when a block or type it replaces was changed in TIA Portal after the file was last written (default false: refused, because that usually means an older copy of the file would undo a change)")] bool allowOlderFile = false)
         {
             return Guarded(nameof(ImportSources), () =>
-                ImportedSources(Portal.ImportSources(softwarePath, importPath, regexName, keepOnError), importPath, keepOnError));
+                ImportedSources(Portal.ImportSources(softwarePath, importPath, regexName, keepOnError, allowOlderFile), importPath, keepOnError));
         }
 
         /// <summary>Shared response shaping for the five source import tools.</summary>
@@ -466,7 +471,10 @@ namespace TiaMcpServer.ModelContextProtocol
                     Kind = i.Kind
                 }).ToList(),
                 Failures = result.Failures,
-                Message = $"{result.Items.Count} object(s) imported from '{importPath}', {result.Failures.Count} failed. {SaveHint}",
+                Backup = result.Backups.Count > 0 ? result.Backups : null,
+                BackupWarnings = result.BackupWarnings.Count > 0 ? result.BackupWarnings : null,
+                Message = $"{result.Items.Count} object(s) imported from '{importPath}', {result.Failures.Count} failed. {SaveHint}" +
+                          (result.Backups.Count > 0 ? $" Replaced object(s) backed up first: {string.Join(", ", result.Backups)}." : string.Empty),
                 Meta = new JsonObject
                 {
                     ["timestamp"] = DateTime.Now,

@@ -36,6 +36,30 @@ namespace TiaMcpServer.Siemens
             public string? Backup { get; set; }
             public string? BackupWarning { get; set; }
             public string? PreviewFile { get; set; }
+
+            /// <summary>Every member edit of the call, in order; the first one is also in Section/MemberPath/Before/After.</summary>
+            public List<InterfaceEditItem> Edits { get; set; } = new List<InterfaceEditItem>();
+        }
+
+        /// <summary>One further member edit applied in the same export/import as the first one.</summary>
+        public sealed class InterfaceEditSpec
+        {
+            public string Action { get; set; } = string.Empty;
+            public string Section { get; set; } = string.Empty;
+            public string MemberPath { get; set; } = string.Empty;
+            public string DataType { get; set; } = string.Empty;
+            public string StartValue { get; set; } = string.Empty;
+            public string Comment { get; set; } = string.Empty;
+            public string AfterMember { get; set; } = string.Empty;
+        }
+
+        public sealed class InterfaceEditItem
+        {
+            public string Action { get; set; } = string.Empty;
+            public string Section { get; set; } = string.Empty;
+            public string MemberPath { get; set; } = string.Empty;
+            public string? Before { get; set; }
+            public string? After { get; set; }
         }
 
         private static readonly string[] InterfaceSections = { "Input", "Output", "InOut", "Static", "Temp", "Constant", "Return" };
@@ -49,36 +73,13 @@ namespace TiaMcpServer.Siemens
         /// <param name="afterMember">add: optional sibling to insert after; empty appends at the end of the section or Struct.</param>
         /// <param name="previewFile">When set, the edited block XML is written there and nothing is imported.</param>
         public InterfaceEditResult EditBlockInterface(string softwarePath, string blockPath, string action, string section, string memberPath,
-            string dataType = "", string startValue = "", string comment = "", string afterMember = "", string previewFile = "")
+            string dataType = "", string startValue = "", string comment = "", string afterMember = "", string previewFile = "",
+            IReadOnlyList<InterfaceEditSpec>? moreEdits = null)
         {
             return Operation.Run(_logger, nameof(EditBlockInterface), PortalErrorCode.ImportFailed,
                 () =>
                 {
-                    var mode = (action ?? string.Empty).Trim().ToLowerInvariant();
-                    if (mode != "add" && mode != "update" && mode != "delete")
-                    {
-                        throw new PortalException(PortalErrorCode.InvalidParams, $"Unknown action '{action}'. Use 'add', 'update' or 'delete'.");
-                    }
-
-                    var sectionName = InterfaceSections.FirstOrDefault(s => string.Equals(s, (section ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase))
-                        ?? throw new PortalException(PortalErrorCode.InvalidParams,
-                            $"Unknown section '{section}'. Use one of: {string.Join(", ", InterfaceSections)}.");
-
-                    var path = SplitMemberPath(memberPath);
-                    if (mode == "add" && string.IsNullOrWhiteSpace(dataType))
-                    {
-                        throw new PortalException(PortalErrorCode.InvalidParams, "'dataType' is required to add a member, e.g. 'Bool' or 'Array[1..10] of Int'.");
-                    }
-
-                    if (mode == "update" && string.IsNullOrWhiteSpace(dataType) && string.IsNullOrEmpty(startValue) && string.IsNullOrEmpty(comment))
-                    {
-                        throw new PortalException(PortalErrorCode.InvalidParams, "Nothing to update: give 'dataType', 'startValue' or 'comment'.");
-                    }
-
-                    if (mode != "update" && sectionName == "Return")
-                    {
-                        throw new PortalException(PortalErrorCode.InvalidParams, "An FC has exactly one return value; only 'update' (its data type) is possible.");
-                    }
+                    var edits = CheckInterfaceEdits(action, section, memberPath, dataType, startValue, comment, afterMember, moreEdits, isType: false);
 
                     var block = GetBlock(softwarePath, blockPath)
                         ?? throw new PortalException(PortalErrorCode.NotFound,
@@ -92,11 +93,14 @@ namespace TiaMcpServer.Siemens
 
                     // TIA keeps no start values for temporary data, nor for an FC's parameters; checked before the
                     // consistency check so a wrong argument is reported without a compile first.
-                    if (!string.IsNullOrEmpty(startValue) && (sectionName == "Temp" || sectionName == "Return"
-                        || (block is FC && (sectionName == "Input" || sectionName == "Output" || sectionName == "InOut"))))
+                    foreach (var edit in edits.Where(e => !string.IsNullOrEmpty(e.StartValue)))
                     {
-                        throw new PortalException(PortalErrorCode.InvalidParams,
-                            $"A {sectionName} member of {(block is FC ? "an FC" : "this block")} has no start value; leave 'startValue' empty.");
+                        if (edit.Section == "Temp" || edit.Section == "Return"
+                            || (block is FC && (edit.Section == "Input" || edit.Section == "Output" || edit.Section == "InOut")))
+                        {
+                            throw new PortalException(PortalErrorCode.InvalidParams,
+                                $"A {edit.Section} member of {(block is FC ? "an FC" : "this block")} has no start value ('{edit.MemberPath}'); leave 'startValue' empty.");
+                        }
                     }
 
                     if (!block.IsConsistent)
@@ -112,14 +116,14 @@ namespace TiaMcpServer.Siemens
 
                     EnsureNotKnowHowProtected(block);
 
-                    var result = new InterfaceEditResult { BlockPath = GetBlockPath(block), Section = sectionName, MemberPath = memberPath.Trim() };
+                    var result = new InterfaceEditResult { BlockPath = GetBlockPath(block) };
 
                     using var scope = new SourceScope(_logger);
                     var exportFile = Path.Combine(scope.Directory, $"{FileNames.Safe(block.Name)}.xml");
                     block.Export(new FileInfo(exportFile), ExportOptions.None);
 
                     var doc = XDocument.Load(exportFile);
-                    (result.Before, result.After) = EditInterfaceMember(doc, $"Block '{block.Name}'", mode, sectionName, path, memberPath, dataType, startValue, comment, afterMember);
+                    ApplyInterfaceEdits(doc, $"Block '{block.Name}'", edits, result);
 
                     if (!string.IsNullOrWhiteSpace(previewFile))
                     {
@@ -155,27 +159,13 @@ namespace TiaMcpServer.Siemens
         /// they are compiled.
         /// </summary>
         public InterfaceEditResult EditTypeInterface(string softwarePath, string typePath, string action, string memberPath,
-            string dataType = "", string startValue = "", string comment = "", string afterMember = "", string previewFile = "")
+            string dataType = "", string startValue = "", string comment = "", string afterMember = "", string previewFile = "",
+            IReadOnlyList<InterfaceEditSpec>? moreEdits = null)
         {
             return Operation.Run(_logger, nameof(EditTypeInterface), PortalErrorCode.ImportFailed,
                 () =>
                 {
-                    var mode = (action ?? string.Empty).Trim().ToLowerInvariant();
-                    if (mode != "add" && mode != "update" && mode != "delete")
-                    {
-                        throw new PortalException(PortalErrorCode.InvalidParams, $"Unknown action '{action}'. Use 'add', 'update' or 'delete'.");
-                    }
-
-                    var path = SplitMemberPath(memberPath);
-                    if (mode == "add" && string.IsNullOrWhiteSpace(dataType))
-                    {
-                        throw new PortalException(PortalErrorCode.InvalidParams, "'dataType' is required to add a member, e.g. 'Bool' or 'Array[1..10] of Int'.");
-                    }
-
-                    if (mode == "update" && string.IsNullOrWhiteSpace(dataType) && string.IsNullOrEmpty(startValue) && string.IsNullOrEmpty(comment))
-                    {
-                        throw new PortalException(PortalErrorCode.InvalidParams, "Nothing to update: give 'dataType', 'startValue' or 'comment'.");
-                    }
+                    var edits = CheckInterfaceEdits(action, "None", memberPath, dataType, startValue, comment, afterMember, moreEdits, isType: true);
 
                     var type = GetType(softwarePath, typePath)
                         ?? throw new PortalException(PortalErrorCode.NotFound,
@@ -194,14 +184,14 @@ namespace TiaMcpServer.Siemens
 
                     EnsureNotKnowHowProtected(type);
 
-                    var result = new InterfaceEditResult { BlockPath = GetTypePath(type), Section = "None", MemberPath = memberPath.Trim() };
+                    var result = new InterfaceEditResult { BlockPath = GetTypePath(type) };
 
                     using var scope = new SourceScope(_logger);
                     var exportFile = Path.Combine(scope.Directory, $"{FileNames.Safe(type.Name)}.xml");
                     type.Export(new FileInfo(exportFile), ExportOptions.None);
 
                     var doc = XDocument.Load(exportFile);
-                    (result.Before, result.After) = EditInterfaceMember(doc, $"Type '{type.Name}'", mode, "None", path, memberPath, dataType, startValue, comment, afterMember);
+                    ApplyInterfaceEdits(doc, $"Type '{type.Name}'", edits, result);
 
                     if (!string.IsNullOrWhiteSpace(previewFile))
                     {
@@ -229,6 +219,100 @@ namespace TiaMcpServer.Siemens
                     return result;
                 },
                 ("softwarePath", softwarePath), ("typePath", typePath), ("action", action), ("memberPath", memberPath));
+        }
+
+        /// <summary>
+        /// The first edit (the call's own arguments) followed by 'moreEdits', each checked and
+        /// normalized: lower-case action, canonical section name. An edit in 'moreEdits' without
+        /// action or section takes the first edit's. Nothing is exported before all edits pass.
+        /// </summary>
+        private static List<InterfaceEditSpec> CheckInterfaceEdits(string action, string section, string memberPath, string dataType,
+            string startValue, string comment, string afterMember, IReadOnlyList<InterfaceEditSpec>? moreEdits, bool isType)
+        {
+            var first = new InterfaceEditSpec
+            {
+                Action = action ?? string.Empty,
+                Section = section ?? string.Empty,
+                MemberPath = memberPath ?? string.Empty,
+                DataType = dataType ?? string.Empty,
+                StartValue = startValue ?? string.Empty,
+                Comment = comment ?? string.Empty,
+                AfterMember = afterMember ?? string.Empty
+            };
+
+            var edits = new List<InterfaceEditSpec> { first };
+            edits.AddRange((moreEdits ?? Array.Empty<InterfaceEditSpec>()).Select(e => new InterfaceEditSpec
+            {
+                Action = string.IsNullOrWhiteSpace(e.Action) ? first.Action : e.Action,
+                Section = isType || string.IsNullOrWhiteSpace(e.Section) ? first.Section : e.Section,
+                MemberPath = e.MemberPath ?? string.Empty,
+                DataType = e.DataType ?? string.Empty,
+                StartValue = e.StartValue ?? string.Empty,
+                Comment = e.Comment ?? string.Empty,
+                AfterMember = e.AfterMember ?? string.Empty
+            }));
+
+            for (var i = 0; i < edits.Count; i++)
+            {
+                var edit = edits[i];
+                var where = i == 0 ? string.Empty : $" (moreMembers item {i})";
+
+                edit.Action = edit.Action.Trim().ToLowerInvariant();
+                if (edit.Action != "add" && edit.Action != "update" && edit.Action != "delete")
+                {
+                    throw new PortalException(PortalErrorCode.InvalidParams, $"Unknown action '{edit.Action}'{where}. Use 'add', 'update' or 'delete'.");
+                }
+
+                if (!isType)
+                {
+                    edit.Section = InterfaceSections.FirstOrDefault(s => string.Equals(s, edit.Section.Trim(), StringComparison.OrdinalIgnoreCase))
+                        ?? throw new PortalException(PortalErrorCode.InvalidParams,
+                            $"Unknown section '{edit.Section}'{where}. Use one of: {string.Join(", ", InterfaceSections)}.");
+                }
+
+                SplitMemberPath(edit.MemberPath);
+                if (edit.Action == "add" && string.IsNullOrWhiteSpace(edit.DataType))
+                {
+                    throw new PortalException(PortalErrorCode.InvalidParams, $"'dataType' is required to add a member{where}, e.g. 'Bool' or 'Array[1..10] of Int'.");
+                }
+
+                if (edit.Action == "update" && string.IsNullOrWhiteSpace(edit.DataType) && string.IsNullOrEmpty(edit.StartValue) && string.IsNullOrEmpty(edit.Comment))
+                {
+                    throw new PortalException(PortalErrorCode.InvalidParams, $"Nothing to update{where}: give 'dataType', 'startValue' or 'comment'.");
+                }
+
+                if (edit.Action != "update" && edit.Section == "Return")
+                {
+                    throw new PortalException(PortalErrorCode.InvalidParams, "An FC has exactly one return value; only 'update' (its data type) is possible.");
+                }
+            }
+
+            return edits;
+        }
+
+        /// <summary>Applies the edits in order to one exported document and records each one.</summary>
+        private static void ApplyInterfaceEdits(XDocument doc, string owner, List<InterfaceEditSpec> edits, InterfaceEditResult result)
+        {
+            foreach (var edit in edits)
+            {
+                var (before, after) = EditInterfaceMember(doc, owner, edit.Action, edit.Section, SplitMemberPath(edit.MemberPath),
+                    edit.MemberPath, edit.DataType, edit.StartValue, edit.Comment, edit.AfterMember);
+
+                result.Edits.Add(new InterfaceEditItem
+                {
+                    Action = edit.Action,
+                    Section = edit.Section,
+                    MemberPath = edit.MemberPath.Trim(),
+                    Before = before,
+                    After = after
+                });
+            }
+
+            var first = result.Edits[0];
+            result.Section = first.Section;
+            result.MemberPath = first.MemberPath;
+            result.Before = first.Before;
+            result.After = first.After;
         }
 
         /// <summary>

@@ -279,12 +279,20 @@ namespace TiaMcpServer.Siemens
             uint? width = null,
             uint? height = null,
             string? text = null,
-            string? tag = null)
+            string? tag = null,
+            string? eventType = null,
+            string? scriptCode = null)
         {
             return Operation.Run(_logger, nameof(CreateHmiScreenItem), PortalErrorCode.CreateFailed,
                 () =>
                 {
                     EnsureValidName(name);
+
+                    if (string.IsNullOrWhiteSpace(eventType) != string.IsNullOrWhiteSpace(scriptCode))
+                    {
+                        throw new PortalException(PortalErrorCode.InvalidParams,
+                            "'eventType' and 'scriptCode' go together: give both to add an event script, e.g. 'Tapped' with the script body.");
+                    }
 
                     if (!HmiItemKinds.ContainsKey(kind))
                     {
@@ -320,6 +328,11 @@ namespace TiaMcpServer.Siemens
                         }
 
                         BindTag(item, "ProcessValue", tag!);
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(scriptCode))
+                    {
+                        SetEventScript(item, name, eventType!, scriptCode!);
                     }
 
                     return item;

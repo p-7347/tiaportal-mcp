@@ -94,7 +94,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "CreateHmiScreenItem", Title = "Create HMI screen item", Destructive = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Add an item to a WinCC Unified screen: Button, IOField, Label, Text or Rectangle. Optionally set its position, size and text, and for an IOField bind its ProcessValue to an HMI tag. Returns the item as read back")]
+         Description("Add an item to a WinCC Unified screen: Button, IOField, Label, Text or Rectangle. Optionally set its position, size and text, for an IOField bind its ProcessValue to an HMI tag, and add one event script ('eventType' + 'scriptCode'). Returns the item as read back")]
         public static ResponseHmiScreenItemWrite CreateHmiScreenItem(
             [Description(HmiPathDescription)] string softwarePath,
             [Description("screenName: name of the screen")] string screenName,
@@ -105,18 +105,20 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("width: optional width in pixels")] uint? width = null,
             [Description("height: optional height in pixels")] uint? height = null,
             [Description("text: optional text for a Button, Label or Text, written to every project language. Plain text is stored as '<body><p>...</p></body>'; pass '<body>...' yourself for formatted text")] string? text = null,
-            [Description("tag: optional HMI tag to bind to an IOField's ProcessValue. For other properties use 'BindHmiTag'")] string? tag = null)
+            [Description("tag: optional HMI tag to bind to an IOField's ProcessValue. For other properties use 'BindHmiTag'")] string? tag = null,
+            [Description("eventType: optional event for 'scriptCode', e.g. 'Tapped' (click), 'Down' (press), 'Up' (release). For more events or many items use 'SetHmiItemEventScript'")] string? eventType = null,
+            [Description("scriptCode: optional JavaScript body of the 'eventType' script, e.g. 'Tags(\"Btn_Sel\").Write(1);'")] string? scriptCode = null)
         {
             return Guarded(nameof(CreateHmiScreenItem), () =>
             {
-                var item = Portal.CreateHmiScreenItem(softwarePath, screenName, kind, name, left, top, width, height, text, tag);
+                var item = Portal.CreateHmiScreenItem(softwarePath, screenName, kind, name, left, top, width, height, text, tag, eventType, scriptCode);
                 return HmiItemWritten(MissingTagWarning(softwarePath, tag) + $"{kind} '{name}' created on screen '{screenName}'.", item);
             });
         }
 
         [WriteTool]
         [McpServerTool(Name = "UpdateHmiScreenItem", Title = "Update HMI screen item", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Change the position, size, text or visibility of an item on a WinCC Unified screen. Every argument left empty keeps the current value. Returns the item as read back")]
+         Description("Change the position, size, text or visibility of an item on a WinCC Unified screen. Every argument left empty keeps the current value. Returns the item as read back. For colors, border, font or output format use 'SetHmiScreenItemProperties'")]
         public static ResponseHmiScreenItemWrite UpdateHmiScreenItem(
             [Description(HmiPathDescription)] string softwarePath,
             [Description("screenName: name of the screen")] string screenName,

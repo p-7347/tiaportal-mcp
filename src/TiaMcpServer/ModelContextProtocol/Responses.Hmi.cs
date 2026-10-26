@@ -120,6 +120,21 @@ namespace TiaMcpServer.ModelContextProtocol
     }
 
     /// <summary>Result of an HMI tag write: the tag as read back after the change.</summary>
+    public class ResponseHmiTagBatch : ResponseMessage
+    {
+        /// <summary>CreateHmiTags: the tags as read back after creating them.</summary>
+        public List<TiaMcpServer.Siemens.Portal.HmiTagState>? Created { get; set; }
+
+        /// <summary>CreateHmiTags with skipExisting: names that already existed.</summary>
+        public List<string>? Skipped { get; set; }
+
+        /// <summary>UpdateHmiTags: each tag before and after.</summary>
+        public List<TiaMcpServer.Siemens.Portal.HmiTagUpdate>? Updated { get; set; }
+
+        public string? Backup { get; set; }
+        public string? BackupWarning { get; set; }
+    }
+
     public class ResponseHmiTagWrite : ResponseMessage
     {
         public ResponseHmiTagInfo? Tag { get; set; }

@@ -60,24 +60,39 @@ namespace TiaMcpServer.ModelContextProtocol
         private static string? MessageOf(CallToolResult result) =>
             FieldOf(result, "message") ?? result.Content?.OfType<TextContentBlock>().Select(t => t.Text).FirstOrDefault();
 
-        /// <summary>The 'backup' field of the structured reply, when the tool has one.</summary>
+        /// <summary>The 'backup' field of the reply (a path, or several joined by '; '), when the tool has one.</summary>
         private static string? BackupOf(CallToolResult result) => FieldOf(result, "backup");
 
         private static string? FieldOf(CallToolResult result, string field)
         {
             try
             {
-                if (result.StructuredContent == null)
+                // Tools without structured output (e.g. ImportXmlBlock) return the same JSON as text.
+                JsonElement element;
+                if (result.StructuredContent != null)
+                {
+                    element = JsonSerializer.SerializeToElement(result.StructuredContent);
+                }
+                else if (result.Content?.OfType<TextContentBlock>().FirstOrDefault()?.Text is { } text && text.TrimStart().StartsWith("{", StringComparison.Ordinal))
+                {
+                    element = JsonDocument.Parse(text).RootElement;
+                }
+                else
                 {
                     return null;
                 }
 
-                var element = JsonSerializer.SerializeToElement(result.StructuredContent);
-                return element.ValueKind == JsonValueKind.Object
-                       && element.TryGetProperty(field, out var value)
-                       && value.ValueKind == JsonValueKind.String
-                    ? value.GetString()
-                    : null;
+                if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(field, out var value))
+                {
+                    return null;
+                }
+
+                return value.ValueKind switch
+                {
+                    JsonValueKind.String => value.GetString(),
+                    JsonValueKind.Array => string.Join("; ", value.EnumerateArray().Where(v => v.ValueKind == JsonValueKind.String).Select(v => v.GetString())),
+                    _ => null
+                };
             }
             catch
             {

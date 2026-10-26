@@ -174,7 +174,7 @@ namespace TiaMcpServer
                             "and import fail while online); read the block ('GetBlockSource', 'GetNetworkSource', for LAD XML " +
                             "'ExportXmlBlock'); 'GetBlockFingerprints' with 'saveFile'; change it with the smallest tool - " +
                             "'EditBlockNetwork' for one network (LAD/FBD from an XML file, preview with 'previewFile' first; SCL " +
-                            "statements via 'sclFile'), 'SetDbStartValue' for one DB start value, 'EditBlockInterface' to add, change or delete one interface variable ('EditTypeInterface' for a UDT member); then 'CompileCodeBlock' for " +
+                            "statements via 'sclFile'), 'SetDbStartValue' for one DB start value, 'EditBlockInterface' to add, change or delete interface variables (several at once with 'moreMembers'; 'EditTypeInterface' for UDT members); then 'CompileCodeBlock' for " +
                             "that block only; on an error fix once from its message; finally 'GetBlockFingerprints' with " +
                             "'compareFile' and report what changed and the backup path. Do not hand-rewrite and re-import a " +
                             "whole block's XML, do not compile the whole PLC again and again, do not repeat a failing call " +

@@ -382,7 +382,7 @@ Use the ImportBlocksFromDocuments tool with these parameters:
         #region Import From Sources Templates
 
         [McpServerPrompt(Name = "ImportSources"), Description("Import a folder tree of source files (.db, .scl, .awl, .udt)")]
-        public static string ImportSources(string softwarePath, string importPath, string regexName = "", string keepOnError = "false")
+        public static string ImportSources(string softwarePath, string importPath, string regexName = "", string keepOnError = "false", string allowOlderFile = "false")
         {
             return $@"Import every block and PLC data type source file (.db, .awl, .scl, .udt) under a folder tree into PLC software (requires the server started with '--allow-write').
 
@@ -391,16 +391,18 @@ Common parameter values:
 - importPath: folder to walk recursively, typically the tree the ExportSources tool wrote. Each file goes into the block or PLC data type group its folder path implies; the group must already exist
 - regexName: empty for all, or e.g. 'FB_.*' to select files by base name (use one file name to import a single object)
 - keepOnError: Use false (default) to roll back a whole file on any error, true to keep the objects of a file that were generated successfully
+- allowOlderFile: Use false (default) to refuse the import when an object it would replace was changed in TIA Portal after the file was written (that import would undo the change), true to import anyway
 
 Use the ImportSources tool with these parameters:
 - softwarePath: {softwarePath}
 - importPath: {importPath}
 - regexName: {regexName}
-- keepOnError: {NormalizeBool(keepOnError)}";
+- keepOnError: {NormalizeBool(keepOnError)}
+- allowOlderFile: {NormalizeBool(allowOlderFile)}";
         }
 
         [McpServerPrompt(Name = "ImportSourceBlock"), Description("Import one block from a source file (.db, .scl or .awl)")]
-        public static string ImportSourceBlock(string softwarePath, string groupPath, string importPath, string keepOnError = "false")
+        public static string ImportSourceBlock(string softwarePath, string groupPath, string importPath, string keepOnError = "false", string allowOlderFile = "false")
         {
             return $@"Compile one block source file into a block group of PLC software (requires the server started with '--allow-write').
 
@@ -409,16 +411,18 @@ Common parameter values:
 - groupPath: block user group that receives the blocks, e.g. '0_OBs'. Empty for the source's default location; the 'Program blocks' root itself is not allowed
 - importPath: full path of the .db, .scl or .awl file, typically one the ExportSourceBlock tool wrote
 - keepOnError: Use false (default) to roll back the whole file on any error, true to keep the objects that were generated successfully
+- allowOlderFile: Use false (default) to refuse the import when an object it would replace was changed in TIA Portal after the file was written (that import would undo the change), true to import anyway
 
 Use the ImportSourceBlock tool with these parameters:
 - softwarePath: {softwarePath}
 - groupPath: {groupPath}
 - importPath: {importPath}
-- keepOnError: {NormalizeBool(keepOnError)}";
+- keepOnError: {NormalizeBool(keepOnError)}
+- allowOlderFile: {NormalizeBool(allowOlderFile)}";
         }
 
         [McpServerPrompt(Name = "ImportSourceType"), Description("Import one PLC data type from a .udt source file")]
-        public static string ImportSourceType(string softwarePath, string groupPath, string importPath, string keepOnError = "false")
+        public static string ImportSourceType(string softwarePath, string groupPath, string importPath, string keepOnError = "false", string allowOlderFile = "false")
         {
             return $@"Compile one '*.udt' source file into a PLC data type group of PLC software (requires the server started with '--allow-write').
 
@@ -427,16 +431,18 @@ Common parameter values:
 - groupPath: PLC data type user group that receives the types, e.g. 'Common'. Empty for the source's default location; the 'PLC data types' root itself is not allowed
 - importPath: full path of the .udt file, typically one the ExportSourceType tool wrote
 - keepOnError: Use false (default) to roll back the whole file on any error, true to keep the objects that were generated successfully
+- allowOlderFile: Use false (default) to refuse the import when an object it would replace was changed in TIA Portal after the file was written (that import would undo the change), true to import anyway
 
 Use the ImportSourceType tool with these parameters:
 - softwarePath: {softwarePath}
 - groupPath: {groupPath}
 - importPath: {importPath}
-- keepOnError: {NormalizeBool(keepOnError)}";
+- keepOnError: {NormalizeBool(keepOnError)}
+- allowOlderFile: {NormalizeBool(allowOlderFile)}";
         }
 
         [McpServerPrompt(Name = "ImportSourceBlocks"), Description("Import all block source files of a folder into a group")]
-        public static string ImportSourceBlocks(string softwarePath, string groupPath, string importPath, string regexName = "", string preservePath = "false", string keepOnError = "false")
+        public static string ImportSourceBlocks(string softwarePath, string groupPath, string importPath, string regexName = "", string preservePath = "false", string keepOnError = "false", string allowOlderFile = "false")
         {
             return $@"Compile every block source file (.db, .scl, .awl) of a folder into a block group of PLC software (requires the server started with '--allow-write'). A file that fails is reported and the rest are still imported.
 
@@ -447,6 +453,7 @@ Common parameter values:
 - regexName: empty for all, or e.g. 'FB_.*' to select files by base name
 - preservePath: Use false (default) to read only the files directly in importPath, true to also read its subfolders into the matching subgroups of groupPath (the groups must already exist)
 - keepOnError: Use false (default) to roll back a whole file on any error, true to keep the objects of a file that were generated successfully
+- allowOlderFile: Use false (default) to refuse the import when an object it would replace was changed in TIA Portal after the file was written (that import would undo the change), true to import anyway
 
 Use the ImportSources tool instead to import blocks and PLC data types in one go.
 
@@ -456,11 +463,12 @@ Use the ImportSourceBlocks tool with these parameters:
 - importPath: {importPath}
 - regexName: {regexName}
 - preservePath: {NormalizeBool(preservePath)}
-- keepOnError: {NormalizeBool(keepOnError)}";
+- keepOnError: {NormalizeBool(keepOnError)}
+- allowOlderFile: {NormalizeBool(allowOlderFile)}";
         }
 
         [McpServerPrompt(Name = "ImportSourceTypes"), Description("Import all .udt source files of a folder into a group")]
-        public static string ImportSourceTypes(string softwarePath, string groupPath, string importPath, string regexName = "", string preservePath = "false", string keepOnError = "false")
+        public static string ImportSourceTypes(string softwarePath, string groupPath, string importPath, string regexName = "", string preservePath = "false", string keepOnError = "false", string allowOlderFile = "false")
         {
             return $@"Compile every '*.udt' source file of a folder into a PLC data type group of PLC software (requires the server started with '--allow-write'). A file that fails is reported and the rest are still imported.
 
@@ -471,6 +479,7 @@ Common parameter values:
 - regexName: empty for all, or e.g. 'UDT_.*' to select files by base name
 - preservePath: Use false (default) to read only the files directly in importPath, true to also read its subfolders into the matching subgroups of groupPath (the groups must already exist)
 - keepOnError: Use false (default) to roll back a whole file on any error, true to keep the objects of a file that were generated successfully
+- allowOlderFile: Use false (default) to refuse the import when an object it would replace was changed in TIA Portal after the file was written (that import would undo the change), true to import anyway
 
 Use the ImportSources tool instead to import blocks and PLC data types in one go.
 
@@ -480,7 +489,8 @@ Use the ImportSourceTypes tool with these parameters:
 - importPath: {importPath}
 - regexName: {regexName}
 - preservePath: {NormalizeBool(preservePath)}
-- keepOnError: {NormalizeBool(keepOnError)}";
+- keepOnError: {NormalizeBool(keepOnError)}
+- allowOlderFile: {NormalizeBool(allowOlderFile)}";
         }
 
         [McpServerPrompt(Name = "ImportExternalSource"), Description("Compile an external source already in the project into blocks")]
@@ -825,7 +835,7 @@ Use the ExportXmlBlock tool with these parameters:
         }
 
         [McpServerPrompt(Name = "ImportXmlBlock"), Description("Import one block from an XML file")]
-        public static string ImportXmlBlock(string softwarePath, string groupPath, string importPath)
+        public static string ImportXmlBlock(string softwarePath, string groupPath, string importPath, string allowOlderFile = "false")
         {
             return $@"Import a block file to the software.
 
@@ -833,11 +843,13 @@ Common parameter values:
 - softwarePath: defines the path in the project structure to the software
 - groupPath: defines the path in the project structure to the group, where to import the block
 - importPath: defines the path of the xml file from where to import the block
+- allowOlderFile: Use false (default) to refuse the import when an object it would replace was changed in TIA Portal after the file was written (that import would undo the change), true to import anyway
 
 Use the ImportXmlBlock tool with these parameters:
 - softwarePath: {softwarePath}
 - groupPath: {groupPath}
-- importPath: {importPath}";
+- importPath: {importPath}
+- allowOlderFile: {NormalizeBool(allowOlderFile)}";
         }
 
         [McpServerPrompt(Name = "GetBlockInterface"), Description("List the members of a data block with type and attributes")]
@@ -904,7 +916,7 @@ Use the EditBlockNetwork tool with these parameters:
         }
 
         [McpServerPrompt(Name = "EditBlockInterface"), Description("Add, change or delete one member of a block interface")]
-        public static string EditBlockInterface(string softwarePath, string blockPath, string action, string section, string memberPath, string dataType = "", string startValue = "", string comment = "", string afterMember = "", string previewFile = "")
+        public static string EditBlockInterface(string softwarePath, string blockPath, string action, string section, string memberPath, string dataType = "", string startValue = "", string comment = "", string afterMember = "", string previewFile = "", string moreMembers = "", string compile = "false")
         {
             return $@"Change one variable in the interface of a program block (FB, FC, OB or global DB) without editing the whole block XML. The block is backed up first. Compile the block afterwards.
 
@@ -914,17 +926,20 @@ Common parameter values:
 - action: 'add', 'update' or 'delete'
 - section: Input, Output, InOut, Static, Temp or Constant
 - memberPath: '.'-separated into Structs, e.g. 'aux.bNew'
+- moreMembers: optional JSON array of further member edits done in the same import, one object each with action, section, memberPath, dataType, startValue, comment, afterMember; an item without action or section uses the call's
+- compile: true to compile the block right after the change and return the compiler result (default false)
 
 Use the EditBlockInterface tool with these parameters:
 - softwarePath: {softwarePath}
 - blockPath: {blockPath}
 - action: {action}
 - section: {section}
-- memberPath: {memberPath}{OptionalParameter("dataType", dataType)}{OptionalParameter("startValue", startValue)}{OptionalParameter("comment", comment)}{OptionalParameter("afterMember", afterMember)}{OptionalParameter("previewFile", previewFile)}";
+- memberPath: {memberPath}{OptionalParameter("dataType", dataType)}{OptionalParameter("startValue", startValue)}{OptionalParameter("comment", comment)}{OptionalParameter("afterMember", afterMember)}{OptionalParameter("previewFile", previewFile)}{OptionalParameter("moreMembers", moreMembers)}
+- compile: {NormalizeBool(compile)}";
         }
 
         [McpServerPrompt(Name = "EditTypeInterface"), Description("Add, change or delete one member of a PLC data type (UDT)")]
-        public static string EditTypeInterface(string softwarePath, string typePath, string action, string memberPath, string dataType = "", string startValue = "", string comment = "", string afterMember = "", string previewFile = "")
+        public static string EditTypeInterface(string softwarePath, string typePath, string action, string memberPath, string dataType = "", string startValue = "", string comment = "", string afterMember = "", string previewFile = "", string moreMembers = "", string compile = "false")
         {
             return $@"Change one member of a PLC data type (UDT) without editing the whole type XML. The type is backed up first. Compile the PLC software afterwards so the blocks using the type are updated.
 
@@ -933,12 +948,38 @@ Common parameter values:
 - typePath: root-relative path of the type in 'PLC data types'
 - action: 'add', 'update' or 'delete'
 - memberPath: '.'-separated into Structs, e.g. 'Speed.Creep'
+- moreMembers: optional JSON array of further member edits done in the same import, one object each with action, memberPath, dataType, startValue, comment, afterMember; an item without action uses the call's
+- compile: true to compile the type right after the change and return the compiler result (default false)
 
 Use the EditTypeInterface tool with these parameters:
 - softwarePath: {softwarePath}
 - typePath: {typePath}
 - action: {action}
-- memberPath: {memberPath}{OptionalParameter("dataType", dataType)}{OptionalParameter("startValue", startValue)}{OptionalParameter("comment", comment)}{OptionalParameter("afterMember", afterMember)}{OptionalParameter("previewFile", previewFile)}";
+- memberPath: {memberPath}{OptionalParameter("dataType", dataType)}{OptionalParameter("startValue", startValue)}{OptionalParameter("comment", comment)}{OptionalParameter("afterMember", afterMember)}{OptionalParameter("previewFile", previewFile)}{OptionalParameter("moreMembers", moreMembers)}
+- compile: {NormalizeBool(compile)}";
+        }
+
+        [McpServerPrompt(Name = "GetHmiTagUsage"), Description("Find where a PLC or HMI tag is used on a WinCC Unified HMI")]
+        public static string GetHmiTagUsage(string softwarePath, string tag, string useRegex = "", string screenRegex = "", string includeScripts = "", string includeAlarms = "", string refreshIndex = "")
+        {
+            return $@"Find the HMI tags connected to a PLC tag (or an HMI tag by name) and every screen item, faceplate binding, script and alarm that uses them.
+
+Common parameter values:
+- softwarePath: the HMI device item, e.g. 'HMI_1/HMI_RT_1'
+- tag: e.g. 'SM_HMIData.SwLamp_S[10].Origin_Sw', or a DB name to find all its members
+- If the reply says the time budget was used up, call again with the same arguments; each call continues where the last stopped
+
+Use the GetHmiTagUsage tool with these parameters:
+- softwarePath: {softwarePath}
+- tag: {tag}{OptionalParameter("useRegex", useRegex)}{OptionalParameter("screenRegex", screenRegex)}{OptionalParameter("includeScripts", includeScripts)}{OptionalParameter("includeAlarms", includeAlarms)}{OptionalParameter("refreshIndex", refreshIndex)}";
+        }
+
+        [McpServerPrompt(Name = "GetProjectStatus"), Description("Check for unsaved changes and read the project history")]
+        public static string GetProjectStatus(string historyCount = "")
+        {
+            return $@"Check whether the open project has unsaved changes and list its most recent history entries, last modified time and user.
+
+Use the GetProjectStatus tool with these parameters:{OptionalParameter("historyCount", historyCount)}";
         }
 
         [McpServerPrompt(Name = "GetChangeLog"), Description("List what this server changed in the project on a day")]
@@ -1142,7 +1183,7 @@ Use the ExportXmlType tool with these parameters:
         }
 
         [McpServerPrompt(Name = "ImportXmlType"), Description("Import one PLC data type from an XML file")]
-        public static string ImportXmlType(string softwarePath, string groupPath, string importPath)
+        public static string ImportXmlType(string softwarePath, string groupPath, string importPath, string allowOlderFile = "false")
         {
             return $@"Import a type from file into the PLC software.
 
@@ -1150,11 +1191,13 @@ Common parameter values:
 - softwarePath: defines the path in the project structure to the PLC software
 - groupPath: defines the path in the project structure to the group, where to import the type
 - importPath: defines the path of the xml file from where to import the type
+- allowOlderFile: Use false (default) to refuse the import when an object it would replace was changed in TIA Portal after the file was written (that import would undo the change), true to import anyway
 
 Use the ImportXmlType tool with these parameters:
 - softwarePath: {softwarePath}
 - groupPath: {groupPath}
-- importPath: {importPath}";
+- importPath: {importPath}
+- allowOlderFile: {NormalizeBool(allowOlderFile)}";
         }
 
         [McpServerPrompt(Name = "CreateTypeGroup"), Description("Create a PLC data type group")]
@@ -2151,7 +2194,7 @@ Use the DeleteHmiScreen tool with these parameters:
         }
 
         [McpServerPrompt(Name = "CreateHmiScreenItem"), Description("Create an item on a WinCC Unified screen")]
-        public static string CreateHmiScreenItem(string softwarePath, string screenName, string kind, string name, string left = "", string top = "", string width = "", string height = "", string text = "", string tag = "")
+        public static string CreateHmiScreenItem(string softwarePath, string screenName, string kind, string name, string left = "", string top = "", string width = "", string height = "", string text = "", string tag = "", string eventType = "", string scriptCode = "")
         {
             return $@"Create a button, IO field, text, label, rectangle or other item on a WinCC Unified screen, optionally with a text and a process tag.
 
@@ -2163,12 +2206,13 @@ Common parameter values:
 - left, top, width, height: optional position and size in pixels
 - text: optional text; plain text is accepted
 - tag: optional HMI tag for the process value
+- eventType, scriptCode: optional event script, e.g. 'Tapped' with 'Tags(""Btn_Sel"").Write(1);'
 
 Use the CreateHmiScreenItem tool with these parameters:
 - softwarePath: {softwarePath}
 - screenName: {screenName}
 - kind: {kind}
-- name: {name}{OptionalParameter("left", left)}{OptionalParameter("top", top)}{OptionalParameter("width", width)}{OptionalParameter("height", height)}{OptionalParameter("text", text)}{OptionalParameter("tag", tag)}";
+- name: {name}{OptionalParameter("left", left)}{OptionalParameter("top", top)}{OptionalParameter("width", width)}{OptionalParameter("height", height)}{OptionalParameter("text", text)}{OptionalParameter("tag", tag)}{OptionalParameter("eventType", eventType)}{OptionalParameter("scriptCode", scriptCode)}";
         }
 
         [McpServerPrompt(Name = "UpdateHmiScreenItem"), Description("Change position, size, text or visibility of a screen item")]
@@ -2370,6 +2414,39 @@ Use the CreateHmiTag tool with these parameters:
 - name: {name}{OptionalParameter("dataType", dataType)}{OptionalParameter("connection", connection)}{OptionalParameter("plcTag", plcTag)}";
         }
 
+        [McpServerPrompt(Name = "CreateHmiTags"), Description("Create many WinCC Unified HMI tags at once")]
+        public static string CreateHmiTags(string softwarePath, string tagTablePath, string tags = "", string tagsFile = "", string connection = "", string skipExisting = "false")
+        {
+            return $@"Create many HMI tags in one WinCC Unified tag table in one call. Every entry is checked first; nothing is created when one is wrong.
+
+Common parameter values:
+- softwarePath: path of the WinCC Unified HMI software, e.g. 'HMI_1/HMI_RT_1'
+- tagTablePath: name or path of the HMI tag table, e.g. 'Default tag table'
+- tags: JSON array of tags, each with 'name' and optionally 'dataType', 'connection' and 'plcTag'; empty when using tagsFile
+- tagsFile: optional absolute path of a .json file with that array, or a .csv/.txt file with a header line 'name;dataType;connection;plcTag'
+- connection: optional HMI connection for entries with a plcTag but no connection, e.g. 'HMI_Connection_1'
+- skipExisting: true to skip names that already exist instead of creating nothing (default false)
+
+Use the CreateHmiTags tool with these parameters:
+- softwarePath: {softwarePath}
+- tagTablePath: {tagTablePath}{OptionalParameter("tags", tags)}{OptionalParameter("tagsFile", tagsFile)}{OptionalParameter("connection", connection)}
+- skipExisting: {NormalizeBool(skipExisting)}";
+        }
+
+        [McpServerPrompt(Name = "UpdateHmiTags"), Description("Relink existing WinCC Unified HMI tags to other PLC tags")]
+        public static string UpdateHmiTags(string softwarePath, string tags = "", string tagsFile = "")
+        {
+            return $@"Change the PLC tag, connection or data type of existing HMI tags without deleting them, so everything bound to the tag names keeps working. The previous values are backed up.
+
+Common parameter values:
+- softwarePath: path of the WinCC Unified HMI software, e.g. 'HMI_1/HMI_RT_1'
+- tags: JSON array of changes, each with 'name' and the new 'plcTag', 'connection' and/or 'dataType'; empty fields keep their value; empty when using tagsFile
+- tagsFile: optional absolute path of a .json file with that array, or a .csv/.txt file with a header line 'name;dataType;connection;plcTag'
+
+Use the UpdateHmiTags tool with these parameters:
+- softwarePath: {softwarePath}{OptionalParameter("tags", tags)}{OptionalParameter("tagsFile", tagsFile)}";
+        }
+
         [McpServerPrompt(Name = "CopyHmiScreen"), Description("Copy a WinCC Unified screen with text replacement")]
         public static string CopyHmiScreen(string softwarePath, string screenName, string newScreenName, string replace = "", string screenNumber = "")
         {
@@ -2461,16 +2538,17 @@ Use the SearchExports tool with these parameters:
         }
 
         [McpServerPrompt(Name = "GetSafetyInfo"), Description("Read the safety program status and the F-block signatures")]
-        public static string GetSafetyInfo(string softwarePath, string includeSignatures = "", string groupPath = "", string regexName = "")
+        public static string GetSafetyInfo(string softwarePath, string includeSignatures = "", string groupPath = "", string regexName = "", string saveFile = "", string compareFile = "")
         {
             return $@"Read the safety program status of an F-CPU without changing anything: password and login state, safety settings, runtime groups and the offline signature of every F-block. Keep 'signatureHash' to see later whether any F-block changed (it is not TIA's F-collective signature).
 
 Common parameter values:
 - softwarePath: defines the path in the project structure to the software
 - groupPath: optional block group, e.g. '005_Safety', to check only the safety folder
+- saveFile / compareFile: save the signatures before a change, compare after it (and a compile) to list the changed F-blocks
 
 Use the GetSafetyInfo tool with these parameters:
-- softwarePath: {softwarePath}{OptionalParameter("includeSignatures", includeSignatures)}{OptionalParameter("groupPath", groupPath)}{OptionalParameter("regexName", regexName)}";
+- softwarePath: {softwarePath}{OptionalParameter("includeSignatures", includeSignatures)}{OptionalParameter("groupPath", groupPath)}{OptionalParameter("regexName", regexName)}{OptionalParameter("saveFile", saveFile)}{OptionalParameter("compareFile", compareFile)}";
         }
 
         [McpServerPrompt(Name = "GetBlockFingerprints"), Description("Save block fingerprints and later list which blocks changed")]
@@ -2835,6 +2913,110 @@ Common parameter values:
 
 Use the GetHmiScreens tool with these parameters:
 - softwarePath: {softwarePath}";
+        }
+
+        [McpServerPrompt(Name = "GetComfortScreens"), Description("List screens, templates and pop-ups of a classic WinCC Comfort/Basic panel")]
+        public static string GetComfortScreens(string softwarePath, string regexName = "")
+        {
+            return $@"List the screens, screen templates and pop-up screens of a classic WinCC HMI (Comfort/Basic panels), including subfolders.
+
+Common parameter values:
+- softwarePath: the classic HMI software, e.g. 'HMI_1/HMI_RT_1' ('GetProjectTree' shows it as 'HmiTarget'){OptionalParameter("regexName", regexName)}
+
+Use the GetComfortScreens tool with these parameters:
+- softwarePath: {softwarePath}";
+        }
+
+        [McpServerPrompt(Name = "GetComfortScreenItems"), Description("List the items of a classic WinCC Comfort/Basic screen")]
+        public static string GetComfortScreenItems(string softwarePath, string screenName, string kind = "", string regexName = "", string includeAttributes = "", string keepExportPath = "")
+        {
+            return $@"List the items of one classic WinCC screen, template or pop-up with position, size, texts, linked tags and event functions, e.g. to rebuild it in WinCC Unified.
+
+Common parameter values:
+- softwarePath: the classic HMI software, e.g. 'HMI_1/HMI_RT_1'
+- screenName: as 'GetComfortScreens' lists it; 'Folder/Name' when the name is not unique
+- kind: Screen, Template or Popup (optional){OptionalParameter("kind", kind)}{OptionalParameter("regexName", regexName)}{OptionalParameter("includeAttributes", includeAttributes)}{OptionalParameter("keepExportPath", keepExportPath)}
+
+Use the GetComfortScreenItems tool with these parameters:
+- softwarePath: {softwarePath}
+- screenName: {screenName}";
+        }
+
+        [McpServerPrompt(Name = "GetHmiScreenItemProperties"), Description("List the settable properties of a WinCC Unified screen item")]
+        public static string GetHmiScreenItemProperties(string softwarePath, string screenName, string itemName, string regexName = "")
+        {
+            return $@"List the settable properties (colors, border, font, formats, ...) of one WinCC Unified screen item with their current values, e.g. to find names for 'SetHmiScreenItemProperties'.
+
+Common parameter values:
+- softwarePath: the HMI software, e.g. 'HMI_1/HMI_RT_1'
+- regexName: e.g. 'Color|Font' to see only those{OptionalParameter("regexName", regexName)}
+
+Use the GetHmiScreenItemProperties tool with these parameters:
+- softwarePath: {softwarePath}
+- screenName: {screenName}
+- itemName: {itemName}";
+        }
+
+        [McpServerPrompt(Name = "SetHmiScreenItemProperties"), Description("Set colors, fonts or formats of WinCC Unified screen items")]
+        public static string SetHmiScreenItemProperties(string softwarePath, string screenName, string properties, string itemNames = "", string itemRegex = "")
+        {
+            return $@"Set static properties of one or many WinCC Unified screen items in one call.
+
+Common parameter values:
+- properties: JSON object, e.g. '{{""BackColor"":""#FFFFFF"",""Font.Size"":20,""OutputFormat"":""{{I}}""}}'
+- itemNames: comma separated item names, or itemRegex: a regular expression over the names{OptionalParameter("itemNames", itemNames)}{OptionalParameter("itemRegex", itemRegex)}
+
+Use the SetHmiScreenItemProperties tool with these parameters:
+- softwarePath: {softwarePath}
+- screenName: {screenName}
+- properties: {properties}";
+        }
+
+        [McpServerPrompt(Name = "CopyHmiItemStyle"), Description("Copy the style of one WinCC Unified screen item to others")]
+        public static string CopyHmiItemStyle(string softwarePath, string screenName, string sourceItem, string targetItems = "", string targetRegex = "", string properties = "", string targetScreenName = "")
+        {
+            return $@"Give WinCC Unified screen items the look of another item (colors, border, font, formats; not position, size, texts or tag bindings).
+
+Common parameter values:
+- targetItems: comma separated names, or targetRegex: a regular expression over the names
+- properties: optional, e.g. 'BackColor, ForeColor, Font.Size' to copy only those{OptionalParameter("targetItems", targetItems)}{OptionalParameter("targetRegex", targetRegex)}{OptionalParameter("properties", properties)}{OptionalParameter("targetScreenName", targetScreenName)}
+
+Use the CopyHmiItemStyle tool with these parameters:
+- softwarePath: {softwarePath}
+- screenName: {screenName}
+- sourceItem: {sourceItem}";
+        }
+
+        [McpServerPrompt(Name = "SetHmiItemEventScript"), Description("Create or replace an event script on WinCC Unified screen items")]
+        public static string SetHmiItemEventScript(string softwarePath, string screenName, string eventType, string scriptCode, string itemNames = "", string itemRegex = "", string itemValues = "", string onScreen = "", string globalDefinitionAreaScriptCode = "", string async = "")
+        {
+            return $@"Create or replace the JavaScript of one event on one or many WinCC Unified screen items, or on the screen itself.
+
+Common parameter values:
+- eventType: 'Tapped' (click), 'Down' (press), 'Up' (release); for a screen 'Loaded'
+- itemNames: comma separated names, or itemRegex: a regular expression over the names
+- itemValues: optional JSON object of item name to value; '{{item}}' and '{{value}}' in scriptCode are replaced per item{OptionalParameter("itemNames", itemNames)}{OptionalParameter("itemRegex", itemRegex)}{OptionalParameter("itemValues", itemValues)}{OptionalParameter("onScreen", onScreen)}{OptionalParameter("globalDefinitionAreaScriptCode", globalDefinitionAreaScriptCode)}{OptionalParameter("async", async)}
+
+Use the SetHmiItemEventScript tool with these parameters:
+- softwarePath: {softwarePath}
+- screenName: {screenName}
+- eventType: {eventType}
+- scriptCode: {scriptCode}";
+        }
+
+        [McpServerPrompt(Name = "DeleteHmiItemEventScript"), Description("Delete an event script from WinCC Unified screen items")]
+        public static string DeleteHmiItemEventScript(string softwarePath, string screenName, string eventType, string itemNames = "", string itemRegex = "", string onScreen = "")
+        {
+            return $@"Delete the script of one event on one or many WinCC Unified screen items, or on the screen itself.
+
+Common parameter values:
+- eventType: e.g. 'Tapped', 'Down', 'Up', 'Loaded'
+- itemNames: comma separated names, or itemRegex: a regular expression over the names{OptionalParameter("itemNames", itemNames)}{OptionalParameter("itemRegex", itemRegex)}{OptionalParameter("onScreen", onScreen)}
+
+Use the DeleteHmiItemEventScript tool with these parameters:
+- softwarePath: {softwarePath}
+- screenName: {screenName}
+- eventType: {eventType}";
         }
 
         [McpServerPrompt(Name = "GetHmiDiscreteAlarms"), Description("List discrete alarms of a Unified Comfort/Advanced panel")]
