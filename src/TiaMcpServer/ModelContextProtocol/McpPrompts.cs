@@ -2194,7 +2194,7 @@ Use the DeleteHmiScreen tool with these parameters:
         }
 
         [McpServerPrompt(Name = "CreateHmiScreenItem"), Description("Create an item on a WinCC Unified screen")]
-        public static string CreateHmiScreenItem(string softwarePath, string screenName, string kind, string name, string left = "", string top = "", string width = "", string height = "", string text = "", string tag = "")
+        public static string CreateHmiScreenItem(string softwarePath, string screenName, string kind, string name, string left = "", string top = "", string width = "", string height = "", string text = "", string tag = "", string eventType = "", string scriptCode = "")
         {
             return $@"Create a button, IO field, text, label, rectangle or other item on a WinCC Unified screen, optionally with a text and a process tag.
 
@@ -2206,12 +2206,13 @@ Common parameter values:
 - left, top, width, height: optional position and size in pixels
 - text: optional text; plain text is accepted
 - tag: optional HMI tag for the process value
+- eventType, scriptCode: optional event script, e.g. 'Tapped' with 'Tags(""Btn_Sel"").Write(1);'
 
 Use the CreateHmiScreenItem tool with these parameters:
 - softwarePath: {softwarePath}
 - screenName: {screenName}
 - kind: {kind}
-- name: {name}{OptionalParameter("left", left)}{OptionalParameter("top", top)}{OptionalParameter("width", width)}{OptionalParameter("height", height)}{OptionalParameter("text", text)}{OptionalParameter("tag", tag)}";
+- name: {name}{OptionalParameter("left", left)}{OptionalParameter("top", top)}{OptionalParameter("width", width)}{OptionalParameter("height", height)}{OptionalParameter("text", text)}{OptionalParameter("tag", tag)}{OptionalParameter("eventType", eventType)}{OptionalParameter("scriptCode", scriptCode)}";
         }
 
         [McpServerPrompt(Name = "UpdateHmiScreenItem"), Description("Change position, size, text or visibility of a screen item")]
@@ -2984,6 +2985,38 @@ Use the CopyHmiItemStyle tool with these parameters:
 - softwarePath: {softwarePath}
 - screenName: {screenName}
 - sourceItem: {sourceItem}";
+        }
+
+        [McpServerPrompt(Name = "SetHmiItemEventScript"), Description("Create or replace an event script on WinCC Unified screen items")]
+        public static string SetHmiItemEventScript(string softwarePath, string screenName, string eventType, string scriptCode, string itemNames = "", string itemRegex = "", string itemValues = "", string onScreen = "", string globalDefinitionAreaScriptCode = "", string async = "")
+        {
+            return $@"Create or replace the JavaScript of one event on one or many WinCC Unified screen items, or on the screen itself.
+
+Common parameter values:
+- eventType: 'Tapped' (click), 'Down' (press), 'Up' (release); for a screen 'Loaded'
+- itemNames: comma separated names, or itemRegex: a regular expression over the names
+- itemValues: optional JSON object of item name to value; '{{item}}' and '{{value}}' in scriptCode are replaced per item{OptionalParameter("itemNames", itemNames)}{OptionalParameter("itemRegex", itemRegex)}{OptionalParameter("itemValues", itemValues)}{OptionalParameter("onScreen", onScreen)}{OptionalParameter("globalDefinitionAreaScriptCode", globalDefinitionAreaScriptCode)}{OptionalParameter("async", async)}
+
+Use the SetHmiItemEventScript tool with these parameters:
+- softwarePath: {softwarePath}
+- screenName: {screenName}
+- eventType: {eventType}
+- scriptCode: {scriptCode}";
+        }
+
+        [McpServerPrompt(Name = "DeleteHmiItemEventScript"), Description("Delete an event script from WinCC Unified screen items")]
+        public static string DeleteHmiItemEventScript(string softwarePath, string screenName, string eventType, string itemNames = "", string itemRegex = "", string onScreen = "")
+        {
+            return $@"Delete the script of one event on one or many WinCC Unified screen items, or on the screen itself.
+
+Common parameter values:
+- eventType: e.g. 'Tapped', 'Down', 'Up', 'Loaded'
+- itemNames: comma separated names, or itemRegex: a regular expression over the names{OptionalParameter("itemNames", itemNames)}{OptionalParameter("itemRegex", itemRegex)}{OptionalParameter("onScreen", onScreen)}
+
+Use the DeleteHmiItemEventScript tool with these parameters:
+- softwarePath: {softwarePath}
+- screenName: {screenName}
+- eventType: {eventType}";
         }
 
         [McpServerPrompt(Name = "GetHmiDiscreteAlarms"), Description("List discrete alarms of a Unified Comfort/Advanced panel")]
