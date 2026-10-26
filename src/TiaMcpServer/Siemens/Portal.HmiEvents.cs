@@ -112,7 +112,10 @@ namespace TiaMcpServer.Siemens
                     ThrowIfProblems(problems, "Nothing was changed");
 
                     var result = new HmiEventScriptResult();
-                    WriteEventBackup(targets, softwarePath, screenName, toolName, result);
+                    // Back up only scripts this call replaces; an identical script needs no backup.
+                    var replaced = targets.Where(t => t.Existing != null &&
+                        !string.Equals(ScriptOf(t.Existing)?.ScriptCode, t.ScriptCode, StringComparison.Ordinal)).ToList();
+                    WriteEventBackup(replaced, softwarePath, screenName, toolName, result);
 
                     foreach (var target in targets)
                     {
@@ -248,7 +251,7 @@ namespace TiaMcpServer.Siemens
 
             if (match == null)
             {
-                problems.Add($"'{ownerName}' ({EventOwnerKind(owner)}) has no event '{eventType}'. Its events: {string.Join(", ", valid)}.");
+                problems.Add($"'{ownerName}' ({EventOwnerKind(owner)}) has no event '{eventType}'. Its events: {string.Join(", ", valid)}");
                 return null;
             }
 
