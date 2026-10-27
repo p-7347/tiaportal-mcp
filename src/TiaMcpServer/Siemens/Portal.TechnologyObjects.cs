@@ -32,6 +32,10 @@ namespace TiaMcpServer.Siemens
         {
             public string Name { get; set; } = string.Empty;
             public string? Value { get; set; }
+
+            /// <summary>Meaning of a coded value of an axis, e.g. "Negative direction"; null when unknown.</summary>
+            public string? ValueText { get; set; }
+
             public string? Error { get; set; }
         }
 
@@ -103,6 +107,7 @@ namespace TiaMcpServer.Siemens
                             try
                             {
                                 entry.Value = FormatParameterValue(parameter.Value);
+                                entry.ValueText = TechnologyObjectValueNames.Describe(result.Object.Type, name, entry.Value);
                             }
                             catch (Exception ex)
                             {

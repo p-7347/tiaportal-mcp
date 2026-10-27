@@ -4,6 +4,7 @@
 
 ### Changed
 
+- `GetTechnologyObjectParameters`: coded values of axis technology objects (booleans and mode numbers such as `Homing.ApproachDirection`, `Sensor[n].ActiveHoming.Mode`/`Direction`/`SideInput`/`SwitchLevel`, `PositionLimits_HW.*`, units) come with their meaning in the new field `valueText`, from the tag tables of the positioning axis (technology version V9.0). Existing fields are unchanged.
 - `EditBlockNetwork`: new optional argument `addStatics` (at the end) adds Static members ('name : type [:= start]', separated by ';' or line breaks) to the block in the same import, so an SCL network that needs a new variable takes one call. When the SCL text does not compile in the scratch FB, the error now says that the block itself was not changed and whether the errors look real (undefined names) or like artefacts of the scratch FB.
 - `EditTypeInterface` compiles an inconsistent type on its own first (e.g. one just imported from source) instead of refusing it; it still refuses when that compile does not make it consistent.
 - A tool that fails while TIA Portal is online with a device now says so in the error and suggests `GoOffline`, since being online blocks imports, exports and block changes.

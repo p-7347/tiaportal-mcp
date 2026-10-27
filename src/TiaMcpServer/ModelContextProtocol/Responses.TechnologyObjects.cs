@@ -41,6 +41,9 @@ namespace TiaMcpServer.ModelContextProtocol
 
         public string? Value { get; set; }
 
+        /// <summary>Meaning of a coded value of an axis (e.g. "Negative direction"), when known.</summary>
+        public string? ValueText { get; set; }
+
         public string? Error { get; set; }
     }
 

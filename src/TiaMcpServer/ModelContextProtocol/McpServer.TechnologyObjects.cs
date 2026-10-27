@@ -44,7 +44,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [McpServerTool(Name = "GetTechnologyObjectParameters", Title = "Get technology object parameters", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Read the configuration parameters of one technology object, e.g. an axis: homing, position limits, hardware limit switches, encoder, drive and mechanics settings as name/value pairs (the offline project values). Address parameters show the assigned PLC tag as 'Name (%I10.0)'; an unassigned one has no value. Filter with 'regexName', e.g. 'Homing|PositionLimits'. Reads only")]
+         Description("Read the configuration parameters of one technology object, e.g. an axis: homing, position limits, hardware limit switches, encoder, drive and mechanics settings as name/value pairs (the offline project values). Address parameters show the assigned PLC tag as 'Name (%I10.0)'; an unassigned one has no value. Coded values of an axis also come with their meaning in 'valueText', e.g. Homing.ApproachDirection true = 'Negative direction'. Filter with 'regexName', e.g. 'Homing|PositionLimits'. Reads only")]
         public static ResponseTechnologyObjectParameters GetTechnologyObjectParameters(
             [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
             [Description("objectPath: name or group path of the technology object, as listed by 'GetTechnologyObjects'")] string objectPath,
@@ -68,7 +68,7 @@ namespace TiaMcpServer.ModelContextProtocol
                     },
                     Total = result.Total,
                     Matched = result.Parameters.Count,
-                    Parameters = result.Parameters.Take(limit).Select(p => new ResponseTechnologyObjectParameter { Name = p.Name, Value = p.Value, Error = p.Error }).ToList(),
+                    Parameters = result.Parameters.Take(limit).Select(p => new ResponseTechnologyObjectParameter { Name = p.Name, Value = p.Value, ValueText = p.ValueText, Error = p.Error }).ToList(),
                     StoppedReason = result.StoppedReason
                 };
 
