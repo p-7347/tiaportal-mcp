@@ -1,4 +1,5 @@
 using Siemens.Engineering;
+using Siemens.Engineering.Compiler;
 using Siemens.Engineering.SW.Blocks;
 using Siemens.Engineering.SW.Types;
 using System;
@@ -173,8 +174,14 @@ namespace TiaMcpServer.Siemens
 
                     if (!type.IsConsistent)
                     {
+                        // A type is compiled on its own (e.g. one just imported from source); blocks using it are not touched.
+                        type.GetService<ICompilable>()?.Compile();
+                    }
+
+                    if (!type.IsConsistent)
+                    {
                         throw new PortalException(PortalErrorCode.InvalidState,
-                            $"Type '{type.Name}' is inconsistent; TIA Portal does not export inconsistent types. Compile the PLC software first.");
+                            $"Type '{type.Name}' is inconsistent and did not compile on its own; TIA Portal does not export inconsistent types. Compile the PLC software first.");
                     }
 
                     if (type.Parent is not PlcTypeGroup parentGroup)

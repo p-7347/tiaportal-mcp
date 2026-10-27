@@ -31,6 +31,13 @@ namespace TiaMcpServer.Siemens
         /// </summary>
         private const string LoggedKey = "__logged";
 
+        /// <summary>
+        /// Extra text for a failed Openness call, e.g. that a PLC is still online, which blocks
+        /// imports, exports and block changes without TIA saying so (thread feedback 2-1). Set by
+        /// Portal; null when there is nothing to add. Never throws into the failure path.
+        /// </summary>
+        internal static Func<string?>? FailureHint { get; set; }
+
         internal static T Run<T>(
             ILogger? logger,
             string operation,
@@ -101,7 +108,7 @@ namespace TiaMcpServer.Siemens
             (string Key, object? Value)[] context)
         {
             var pex = ex as PortalException
-                      ?? new PortalException(failCode, $"{operation} failed: {DescribeChain(ex)}", null, ex);
+                      ?? new PortalException(failCode, $"{operation} failed: {DescribeChain(ex)}{Hint(failCode)}", null, ex);
 
             // Inner frames win: an inner Run already recorded the most specific context.
             foreach (var (key, value) in context)
@@ -124,6 +131,24 @@ namespace TiaMcpServer.Siemens
             }
 
             return pex;
+        }
+
+        /// <summary>Only raw Openness failures of operations that change or export the project get the hint.</summary>
+        private static string Hint(PortalErrorCode failCode)
+        {
+            if (failCode == PortalErrorCode.NotFound || failCode == PortalErrorCode.InvalidParams || failCode == PortalErrorCode.WriteDisabled)
+            {
+                return string.Empty;
+            }
+
+            try
+            {
+                return FailureHint?.Invoke() is { Length: > 0 } hint ? " " + hint : string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
 
         /// <summary>

@@ -31,6 +31,9 @@ namespace TiaMcpServer.Siemens
         public Portal(ILogger<Portal>? logger = null)
         {
             _logger = logger;
+
+            // A failed Openness call while a device is online gets a GoOffline hint (see Operation.FailureHint).
+            Operation.FailureHint ??= DescribeOnlineDevices;
         }
 
         #endregion

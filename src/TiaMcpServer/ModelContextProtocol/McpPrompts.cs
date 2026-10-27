@@ -898,7 +898,7 @@ Use the DeleteBlockGroup tool with these parameters:
         }
 
         [McpServerPrompt(Name = "EditBlockNetwork"), Description("Replace, insert or delete one network of a program block")]
-        public static string EditBlockNetwork(string softwarePath, string blockPath, string action, string networkIndex, string networkFile = "", string sourceNetworkIndex = "", string previewFile = "", string sclFile = "", string title = "")
+        public static string EditBlockNetwork(string softwarePath, string blockPath, string action, string networkIndex, string networkFile = "", string sourceNetworkIndex = "", string previewFile = "", string sclFile = "", string title = "", string addStatics = "")
         {
             return $@"Change one network of a program block: replace or insert a network from an XML file or from SCL text (sclFile), or delete one. LAD/FBD parts are put into flow order and the block is backed up first. Compile the block afterwards.
 
@@ -912,7 +912,24 @@ Use the EditBlockNetwork tool with these parameters:
 - softwarePath: {softwarePath}
 - blockPath: {blockPath}
 - action: {action}
-- networkIndex: {networkIndex}{OptionalParameter("networkFile", networkFile)}{OptionalParameter("sourceNetworkIndex", sourceNetworkIndex)}{OptionalParameter("previewFile", previewFile)}{OptionalParameter("sclFile", sclFile)}{OptionalParameter("title", title)}";
+- networkIndex: {networkIndex}{OptionalParameter("networkFile", networkFile)}{OptionalParameter("sourceNetworkIndex", sourceNetworkIndex)}{OptionalParameter("previewFile", previewFile)}{OptionalParameter("sclFile", sclFile)}{OptionalParameter("title", title)}{OptionalParameter("addStatics", addStatics)}";
+        }
+
+        [McpServerPrompt(Name = "CopyNetwork"), Description("Copy one network into another block with names replaced")]
+        public static string CopyNetwork(string softwarePath, string sourceBlockPath, string sourceNetworkIndex, string targetBlockPath, string networkIndex, string action = "", string renames = "", string addStatics = "", string title = "", string previewFile = "")
+        {
+            return $@"Copy one network from a block into another block with names replaced, e.g. a G2U5 network rolled out to G2U6. Compile the target block afterwards.
+
+Common parameter values:
+- sourceNetworkIndex, networkIndex: 0-based (network 1 in TIA is 0)
+- renames: JSON object of literal text replacements, e.g. '{{""G2U5"":""G2U6""}}'{OptionalParameter("action", action)}{OptionalParameter("renames", renames)}{OptionalParameter("addStatics", addStatics)}{OptionalParameter("title", title)}{OptionalParameter("previewFile", previewFile)}
+
+Use the CopyNetwork tool with these parameters:
+- softwarePath: {softwarePath}
+- sourceBlockPath: {sourceBlockPath}
+- sourceNetworkIndex: {sourceNetworkIndex}
+- targetBlockPath: {targetBlockPath}
+- networkIndex: {networkIndex}";
         }
 
         [McpServerPrompt(Name = "EditBlockInterface"), Description("Add, change or delete one member of a block interface")]
@@ -3017,6 +3034,60 @@ Use the DeleteHmiItemEventScript tool with these parameters:
 - softwarePath: {softwarePath}
 - screenName: {screenName}
 - eventType: {eventType}";
+        }
+
+        [McpServerPrompt(Name = "DeleteHmiTags"), Description("Delete WinCC Unified HMI tags")]
+        public static string DeleteHmiTags(string softwarePath, string tagNames = "", string regexName = "")
+        {
+            return $@"Delete WinCC Unified HMI tags by name or regular expression. Check with GetHmiTagUsage first that nothing uses them; the deleted tags are saved as a .json backup.
+
+Common parameter values:
+- tagNames: comma separated names, or regexName: a regular expression over the names{OptionalParameter("tagNames", tagNames)}{OptionalParameter("regexName", regexName)}
+
+Use the DeleteHmiTags tool with these parameters:
+- softwarePath: {softwarePath}";
+        }
+
+        [McpServerPrompt(Name = "SetHmiAlarms"), Description("Create or change WinCC Unified alarms")]
+        public static string SetHmiAlarms(string softwarePath, string alarms, string kind = "discrete", bool createMissing = false)
+        {
+            return $@"Create or change WinCC Unified {kind} alarms. Read the current alarms with GetHmiDiscreteAlarms or GetHmiAnalogAlarms first; property names are the Openness attribute names (e.g. EventText, AlarmClass, RaisedStateTag, RaisedStateTagBitNumber, Priority).
+
+Use the SetHmiAlarms tool with these parameters:
+- softwarePath: {softwarePath}
+- alarms: {alarms}
+- kind: {kind}
+- createMissing: {createMissing}";
+        }
+
+        [McpServerPrompt(Name = "DeleteHmiAlarms"), Description("Delete WinCC Unified alarms")]
+        public static string DeleteHmiAlarms(string softwarePath, string alarmNames = "", string regexName = "", string kind = "discrete")
+        {
+            return $@"Delete WinCC Unified {kind} alarms by name or regular expression; the deleted alarms are saved as a .json backup.
+
+Use the DeleteHmiAlarms tool with these parameters:
+- softwarePath: {softwarePath}{OptionalParameter("alarmNames", alarmNames)}{OptionalParameter("regexName", regexName)}
+- kind: {kind}";
+        }
+
+        [McpServerPrompt(Name = "GetHmiScriptModules"), Description("Read WinCC Unified global script modules")]
+        public static string GetHmiScriptModules(string softwarePath, string regexName = "", bool includeCode = true, string exportPath = "")
+        {
+            return $@"Read the global script modules of a WinCC Unified HMI. Give exportPath to get files to edit and bring back with ImportHmiScriptModules.
+
+Use the GetHmiScriptModules tool with these parameters:
+- softwarePath: {softwarePath}{OptionalParameter("regexName", regexName)}
+- includeCode: {includeCode}{OptionalParameter("exportPath", exportPath)}";
+        }
+
+        [McpServerPrompt(Name = "ImportHmiScriptModules"), Description("Import WinCC Unified global script modules from files")]
+        public static string ImportHmiScriptModules(string softwarePath, string sourceDirectory, string name = "")
+        {
+            return $@"Import WinCC Unified global script modules from a folder written by GetHmiScriptModules (exportPath). Existing modules are saved as a .json backup first.
+
+Use the ImportHmiScriptModules tool with these parameters:
+- softwarePath: {softwarePath}
+- sourceDirectory: {sourceDirectory}{OptionalParameter("name", name)}";
         }
 
         [McpServerPrompt(Name = "GetHmiDiscreteAlarms"), Description("List discrete alarms of a Unified Comfort/Advanced panel")]

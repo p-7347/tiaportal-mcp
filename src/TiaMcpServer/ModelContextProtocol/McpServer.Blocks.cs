@@ -620,7 +620,8 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("sourceNetworkIndex: which network of networkFile to take, 0-based (default 0)")] int sourceNetworkIndex = 0,
             [Description("previewFile: optional absolute path; the edited block XML is written there and nothing is imported")] string previewFile = "",
             [Description("sclFile: for replace/insert, instead of networkFile: absolute path of a text file with the SCL statements of the new network ('#' names refer to this block's interface). TIA compiles it in a scratch FB that is deleted again, also in preview")] string sclFile = "",
-            [Description("title: optional network title for replace/insert, e.g. 'Vision : 2D Result Check'. Empty (default) keeps the replaced network's title and comment when the new network has none (an SCL network never has)")] string title = "")
+            [Description("title: optional network title for replace/insert, e.g. 'Vision : 2D Result Check'. Empty (default) keeps the replaced network's title and comment when the new network has none (an SCL network never has)")] string title = "",
+            [Description("addStatics: optional new Static members (FB only) added in the same import, as SCL declarations, e.g. 'sDone : Bool; sCnt : Int := 0; aOld : Array[1..2] of Bool'. The new network can use them right away. For Structs or other sections use 'EditBlockInterface'")] string addStatics = "")
         {
             WritePolicy.EnsureEnabled(nameof(EditBlockNetwork));
 
@@ -641,55 +642,8 @@ namespace TiaMcpServer.ModelContextProtocol
                     Operation.RequireAbsolutePath(sclFile, nameof(sclFile));
                 }
 
-                var result = Portal.EditBlockNetwork(softwarePath, blockPath, action, networkIndex, networkFile, sourceNetworkIndex, previewFile, sclFile, title);
-                var verb = action.Trim().ToLowerInvariant() switch
-                {
-                    "delete" => "deleted",
-                    "insert" => "inserted",
-                    _ => "replaced"
-                };
-
-                var message = result.PreviewFile != null
-                    ? $"Preview: network {networkIndex} {verb} in '{result.BlockPath}' ({result.NetworksBefore} -> {result.NetworksAfter} networks), written to '{result.PreviewFile}'. Nothing was imported."
-                    : $"Network {networkIndex} {verb} in '{result.BlockPath}' ({result.NetworksBefore} -> {result.NetworksAfter} networks). Compile the block to check it ('CompileCodeBlock'). {SaveHint}";
-
-                if (result.PartsReordered > 0)
-                {
-                    message += $" {result.PartsReordered} LAD/FBD part(s) were moved into flow order.";
-                }
-
-                if (result.SclCompiled)
-                {
-                    message += " The SCL text compiled in a scratch FB, which was deleted again.";
-                }
-
-                if (result.TitleSet)
-                {
-                    message += $" Network title set to '{title}'.";
-                }
-                else if (result.TextsKept.Count > 0)
-                {
-                    message += $" Kept the replaced network's {string.Join(" and ", result.TextsKept.Select(t => t.ToLowerInvariant()))}.";
-                }
-
-                var backup = new Portal.BackupResult { Path = result.Backup, Warning = result.BackupWarning };
-
-                return new ResponseNetworkEdit
-                {
-                    BlockPath = result.BlockPath,
-                    Action = verb,
-                    NetworkIndex = networkIndex,
-                    NetworksBefore = result.NetworksBefore,
-                    NetworksAfter = result.NetworksAfter,
-                    PartsReordered = result.PartsReordered,
-                    Backup = result.Backup,
-                    BackupWarning = result.BackupWarning,
-                    PreviewFile = result.PreviewFile,
-                    Message = message + BackupNote(backup),
-                    Meta = result.PreviewFile != null
-                        ? new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
-                        : OkMeta()
-                };
+                var result = Portal.EditBlockNetwork(softwarePath, blockPath, action, networkIndex, networkFile, sourceNetworkIndex, previewFile, sclFile, title, addStatics);
+                return NetworkEdited(result, action, networkIndex, title, string.Empty);
             }
             catch (PortalException pex)
             {
@@ -699,6 +653,108 @@ namespace TiaMcpServer.ModelContextProtocol
             {
                 throw new McpException($"Unexpected error editing a network of '{blockPath}': {ex.Message}", ex);
             }
+        }
+
+        [WriteTool]
+        [McpServerTool(Name = "CopyNetwork", Title = "Copy a network to another block", Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true),
+         Description("Use to copy one network from a block into another block (or the same one) with names replaced, e.g. a G2U5 network rolled out to G2U6 with 'G2U5'->'G2U6'. LAD, FBD and SCL networks; the text replacements are literal and apply in order to the whole network, including its title and comment. Inserts or replaces like 'EditBlockNetwork' (flow order, IDs, backup, title kept); 'addStatics' adds Static members the copy needs. The reply counts each replacement so a name that did not occur shows up; 'previewFile' writes the edited target XML without importing. Both blocks must be consistent")]
+        public static ResponseNetworkEdit CopyNetwork(
+            [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
+            [Description("sourceBlockPath: root-relative path of the block to copy from, e.g. '19_Vision/19_G2U5_Vision_2D_Interface'")] string sourceBlockPath,
+            [Description("sourceNetworkIndex: 0-based network number in the source block (network 1 in TIA is 0)")] int sourceNetworkIndex,
+            [Description("targetBlockPath: root-relative path of the block to copy into")] string targetBlockPath,
+            [Description("networkIndex: 0-based position in the target: the network to replace, or the one to insert before (the network count appends at the end)")] int networkIndex,
+            [Description("action: 'insert' (default) or 'replace'")] string action = "insert",
+            [Description("renames: optional JSON object of text to replace in the copied network, applied in order, e.g. '{\"G2U5\":\"G2U6\",\"VIS_XG1\":\"VIS_XG2\"}'")] string renames = "",
+            [Description("addStatics: optional new Static members of the target FB, as SCL declarations, e.g. 'sDone : Bool; aOld : Array[1..2] of Bool'")] string addStatics = "",
+            [Description("title: optional title for the copied network; empty keeps the source network's title")] string title = "",
+            [Description("previewFile: optional absolute path; the edited target block XML is written there and nothing is imported")] string previewFile = "")
+        {
+            WritePolicy.EnsureEnabled(nameof(CopyNetwork));
+
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(previewFile))
+                {
+                    Operation.RequireAbsolutePath(previewFile, nameof(previewFile));
+                }
+
+                var pairs = string.IsNullOrWhiteSpace(renames) ? new List<KeyValuePair<string, string>>() : ParsePropertyObject(renames);
+                var result = Portal.CopyNetwork(softwarePath, sourceBlockPath, sourceNetworkIndex, targetBlockPath, action, networkIndex, pairs, addStatics, previewFile, title);
+                var counts = result.Renamed.Count == 0
+                    ? string.Empty
+                    : " Replaced: " + string.Join(", ", result.Renamed.Select(r => $"'{r.Key}' x{r.Value}")) + "." +
+                      (result.Renamed.Any(r => r.Value == 0) ? " A replacement with x0 did not occur in the network; check its spelling." : string.Empty);
+
+                return NetworkEdited(result, action, networkIndex, title, $" Copied from network {sourceNetworkIndex} of '{sourceBlockPath}'.{counts}");
+            }
+            catch (PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error copying a network to '{targetBlockPath}': {ex.Message}", ex);
+            }
+        }
+
+        private static ResponseNetworkEdit NetworkEdited(Portal.NetworkEditResult result, string action, int networkIndex, string title, string extra)
+        {
+            var verb = action.Trim().ToLowerInvariant() switch
+            {
+                "delete" => "deleted",
+                "insert" => "inserted",
+                _ => "replaced"
+            };
+
+            var message = result.PreviewFile != null
+                ? $"Preview: network {networkIndex} {verb} in '{result.BlockPath}' ({result.NetworksBefore} -> {result.NetworksAfter} networks), written to '{result.PreviewFile}'. Nothing was imported."
+                : $"Network {networkIndex} {verb} in '{result.BlockPath}' ({result.NetworksBefore} -> {result.NetworksAfter} networks). Compile the block to check it ('CompileCodeBlock'). {SaveHint}";
+
+            if (result.PartsReordered > 0)
+            {
+                message += $" {result.PartsReordered} LAD/FBD part(s) were moved into flow order.";
+            }
+
+            if (result.SclCompiled)
+            {
+                message += " The SCL text compiled in a scratch FB, which was deleted again.";
+            }
+
+            if (result.TitleSet)
+            {
+                message += $" Network title set to '{title}'.";
+            }
+            else if (result.TextsKept.Count > 0)
+            {
+                message += $" Kept the replaced network's {string.Join(" and ", result.TextsKept.Select(t => t.ToLowerInvariant()))}.";
+            }
+
+            if (result.StaticsAdded.Count > 0)
+            {
+                message += $" Static member(s) added: {string.Join(", ", result.StaticsAdded)}.";
+            }
+
+            message += extra;
+
+            var backup = new Portal.BackupResult { Path = result.Backup, Warning = result.BackupWarning };
+
+            return new ResponseNetworkEdit
+            {
+                BlockPath = result.BlockPath,
+                Action = verb,
+                NetworkIndex = networkIndex,
+                NetworksBefore = result.NetworksBefore,
+                NetworksAfter = result.NetworksAfter,
+                PartsReordered = result.PartsReordered,
+                Backup = result.Backup,
+                BackupWarning = result.BackupWarning,
+                PreviewFile = result.PreviewFile,
+                Message = message + BackupNote(backup),
+                Meta = result.PreviewFile != null
+                    ? new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
+                    : OkMeta()
+            };
         }
 
         [WriteTool]

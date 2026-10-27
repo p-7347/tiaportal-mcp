@@ -70,6 +70,30 @@ namespace TiaMcpServer.ModelContextProtocol
             });
         }
 
+        [WriteTool]
+        [McpServerTool(Name = "DeleteHmiTags", Title = "Delete HMI tags", Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true),
+         Description("Delete WinCC Unified HMI tags by name and/or regular expression, e.g. test tags. Every name is checked first and nothing is deleted when one does not exist. The deleted tags are saved as a .json backup that 'CreateHmiTags' can take back ('tagsFile'). Screens and scripts bound to a deleted tag keep the name and show a missing tag; check with 'GetHmiTagUsage' first")]
+        public static ResponseHmiTagBatch DeleteHmiTags(
+            [Description(HmiPathDescription)] string softwarePath,
+            [Description("tagNames: tag names separated by commas or line breaks, e.g. 'MCP_TEST_B1, MCP_TEST_B2'. May be empty when 'regexName' is given")] string tagNames = "",
+            [Description("regexName: optional regular expression over the tag names; matching tags are deleted too, e.g. '^MCP_TEST_'")] string regexName = "")
+        {
+            return Guarded(nameof(DeleteHmiTags), () =>
+            {
+                var result = Portal.DeleteHmiTags(softwarePath, SplitNames(tagNames), regexName, nameof(DeleteHmiTags));
+                var backup = new Portal.BackupResult { Path = result.Backup, Warning = result.BackupWarning };
+
+                return new ResponseHmiTagBatch
+                {
+                    Message = $"{result.Created.Count} HMI tag(s) deleted. {SaveHint}" + BackupNote(backup),
+                    Deleted = result.Created,
+                    Backup = result.Backup,
+                    BackupWarning = result.BackupWarning,
+                    Meta = OkMeta()
+                };
+            });
+        }
+
         /// <summary>The tag list from the 'tags' JSON or from 'tagsFile' (.json array or .csv/.txt with a header line).</summary>
         private static List<Portal.HmiTagSpec> ReadHmiTagList(string tags, string tagsFile)
         {
@@ -102,6 +126,13 @@ namespace TiaMcpServer.ModelContextProtocol
         {
             try
             {
+                // A backup of DeleteHmiTags or UpdateHmiTags is an object whose 'tags' holds the array.
+                using var document = JsonDocument.Parse(json);
+                if (document.RootElement.ValueKind == JsonValueKind.Object && document.RootElement.TryGetProperty("tags", out var inner))
+                {
+                    json = inner.GetRawText();
+                }
+
                 return JsonSerializer.Deserialize<List<Portal.HmiTagSpec>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
                     ?? new List<Portal.HmiTagSpec>();
             }

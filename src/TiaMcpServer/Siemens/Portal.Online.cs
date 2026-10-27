@@ -1,6 +1,10 @@
 using Microsoft.Extensions.Logging;
 using Siemens.Engineering;
+using Siemens.Engineering.HW;
 using Siemens.Engineering.Online;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace TiaMcpServer.Siemens
 {
@@ -35,6 +39,50 @@ namespace TiaMcpServer.Siemens
 
             var deviceItem = GetDeviceItem(path);
             return deviceItem?.GetService<OnlineProvider>();
+        }
+
+        /// <summary>
+        /// 'PLC_1 is online ...' when a device or its CPU is online, else null. Reads only the
+        /// engineering station's connection state; used as a hint on failed imports and exports.
+        /// </summary>
+        public string? DescribeOnlineDevices()
+        {
+            if (IsProjectNull())
+            {
+                return null;
+            }
+
+            var online = new List<string>();
+
+            foreach (var device in GetDevices())
+            {
+                try
+                {
+                    if (device.GetService<OnlineProvider>()?.State == OnlineState.Online)
+                    {
+                        online.Add(device.Name);
+                        continue;
+                    }
+
+                    foreach (DeviceItem item in device.DeviceItems)
+                    {
+                        if (item.GetService<OnlineProvider>()?.State == OnlineState.Online)
+                        {
+                            online.Add(item.Name);
+                            break;
+                        }
+                    }
+                }
+                catch (Exception)
+                {
+                    // A device without an online service says nothing about the others.
+                }
+            }
+
+            return online.Count == 0
+                ? null
+                : $"TIA Portal is online with {string.Join(", ", online.Select(n => $"'{n}'"))}, which blocks imports, exports and block changes. " +
+                  $"Tell the user, or call 'GoOffline' with '{online[0]}' and retry.";
         }
 
         public OnlineState? GetOnlineState(string path)
