@@ -275,7 +275,7 @@ namespace TiaMcpServer.Siemens
                         var info = new HmiScriptModuleInfo { Name = module.Name };
                         if (includeCode)
                         {
-                            var directory = Directory.CreateDirectory(Path.Combine(scope.Directory, FileNames.Safe(module.Name)));
+                            var directory = AbsoluteDirectory(Path.Combine(scope.Directory, FileNames.Safe(module.Name)));
                             foreach (var file in module.Export(directory))
                             {
                                 info.Files.Add(ReadScriptFile(file));
@@ -311,7 +311,7 @@ namespace TiaMcpServer.Siemens
                     {
                         foreach (var module in hmi.Scripts)
                         {
-                            var directory = Directory.CreateDirectory(Path.Combine(scope.Directory, FileNames.Safe(module.Name)));
+                            var directory = AbsoluteDirectory(Path.Combine(scope.Directory, FileNames.Safe(module.Name)));
                             before.Add(new { name = module.Name, files = module.Export(directory).Select(ReadScriptFile).ToList() });
                         }
                     }
@@ -340,7 +340,7 @@ namespace TiaMcpServer.Siemens
                 {
                     var hmi = RequireHmiSoftware(softwarePath);
                     var regex = string.IsNullOrWhiteSpace(regexName) ? null : new Regex(regexName, RegexOptions.IgnoreCase);
-                    var directory = Directory.CreateDirectory(exportPath);
+                    var directory = AbsoluteDirectory(exportPath);
                     var files = new List<string>();
 
                     foreach (var module in hmi.Scripts)
@@ -354,6 +354,17 @@ namespace TiaMcpServer.Siemens
                     return files;
                 },
                 ("softwarePath", softwarePath), ("exportPath", exportPath));
+        }
+
+        /// <summary>
+        /// Creates the folder and returns it with its full path: the DirectoryInfo that
+        /// Directory.CreateDirectory returns can carry a relative path, which the script export rejects.
+        /// </summary>
+        private static DirectoryInfo AbsoluteDirectory(string path)
+        {
+            var full = Path.GetFullPath(path);
+            Directory.CreateDirectory(full);
+            return new DirectoryInfo(full);
         }
 
         private static HmiScriptFile ReadScriptFile(FileInfo file)
