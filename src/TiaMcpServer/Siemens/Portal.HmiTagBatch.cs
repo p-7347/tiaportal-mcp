@@ -230,6 +230,79 @@ namespace TiaMcpServer.Siemens
                 ("softwarePath", softwarePath), ("count", tags.Count.ToString()));
         }
 
+        /// <summary>
+        /// Deletes HMI tags by name and/or regular expression. Every name is checked first; the
+        /// deleted tags are saved as a .json backup in the 'tags' format of CreateHmiTags (plus
+        /// each tag's table), so they can be created again.
+        /// </summary>
+        public HmiTagBatchResult DeleteHmiTags(string softwarePath, IReadOnlyList<string> names, string regexName, string toolName)
+        {
+            return Operation.Run(_logger, nameof(DeleteHmiTags), PortalErrorCode.DeleteFailed,
+                () =>
+                {
+                    var hmi = RequireHmiSoftware(softwarePath);
+                    var regex = string.IsNullOrWhiteSpace(regexName) ? null : new System.Text.RegularExpressions.Regex(regexName);
+
+                    if (names.Count == 0 && regex == null)
+                    {
+                        throw new PortalException(PortalErrorCode.InvalidParams, "Name the tags to delete, or give a regular expression over their names.");
+                    }
+
+                    var problems = new List<string>();
+                    var found = new List<HmiTag>();
+
+                    foreach (var name in names.Select(n => n.Trim()).Where(n => n.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase))
+                    {
+                        var tag = hmi.Tags.Find(name);
+                        if (tag == null)
+                        {
+                            problems.Add($"'{name}': no such HMI tag");
+                        }
+                        else
+                        {
+                            found.Add(tag);
+                        }
+                    }
+
+                    if (regex != null)
+                    {
+                        found.AddRange(hmi.Tags.Where(t => regex.IsMatch(t.Name) && !found.Contains(t)));
+                    }
+
+                    ThrowIfProblems(problems, "Nothing was deleted");
+
+                    if (found.Count == 0)
+                    {
+                        throw new PortalException(PortalErrorCode.NotFound, $"No HMI tag matches '{regexName}'.");
+                    }
+
+                    var result = new HmiTagBatchResult();
+                    var before = found.Select(t => new
+                    {
+                        name = t.Name,
+                        dataType = t.DataType,
+                        connection = IsInternalHmiTag(t) ? null : t.Connection,
+                        plcTag = string.IsNullOrEmpty(t.PlcTag) ? null : t.PlcTag,
+                        tagTable = (t.Parent as HmiTagTable)?.Name
+                    }).ToList();
+
+                    var json = JsonSerializer.Serialize(new { softwarePath, tags = before }, new JsonSerializerOptions { WriteIndented = true });
+                    var backup = WriteBackup(toolName, found.Count == 1 ? $"HMI tag {found[0].Name}" : $"{found.Count} HMI tags",
+                        true, file => System.IO.File.WriteAllText(file.FullName, json), "json");
+                    result.Backup = backup.Path;
+                    result.BackupWarning = backup.Warning;
+
+                    foreach (var tag in found)
+                    {
+                        result.Created.Add(DescribeHmiTagState(tag));
+                        tag.Delete();
+                    }
+
+                    return result;
+                },
+                ("softwarePath", softwarePath), ("regexName", regexName));
+        }
+
         /// <summary>An internal tag has no connection; TIA reports it as '&lt;Internal tag&gt;'.</summary>
         private static bool IsInternalHmiTag(HmiTag tag) =>
             string.IsNullOrEmpty(tag.Connection) || tag.Connection.StartsWith("<", StringComparison.Ordinal);

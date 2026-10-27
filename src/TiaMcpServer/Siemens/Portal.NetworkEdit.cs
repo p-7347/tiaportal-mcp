@@ -39,6 +39,14 @@ namespace TiaMcpServer.Siemens
         //   brings none; an SCL network always arrives without them (the scratch FB has none), which
         //   dropped "Vision : 2D Result Check" from a replaced network (2026-10-20). 'title' sets
         //   the title of a replaced or inserted network explicitly.
+        // - New Static members. 'addStatics' adds SCL declarations to the FB's Static section in the
+        //   same import, so a new network can use '#sNew' without a separate interface edit; the
+        //   scratch FB of an SCL network sees them too.
+        // - Scratch compile errors are reported as such: the scratch FB is a copy of the interface
+        //   only, and some errors it reports never show in the real block (a DB length error on
+        //   19_G2U5_Vision_2D_Interface, 2026-10-22), so the message says where they come from.
+        // - CopyNetwork takes a network from another block, renames text in it ('G2U5' -> 'G2U6')
+        //   and inserts or replaces it through the same path.
 
         public sealed class NetworkEditResult
         {
@@ -55,6 +63,12 @@ namespace TiaMcpServer.Siemens
             public List<string> TextsKept { get; } = new List<string>();
 
             public bool TitleSet { get; set; }
+
+            /// <summary>Static members added with 'addStatics'.</summary>
+            public List<string> StaticsAdded { get; } = new List<string>();
+
+            /// <summary>CopyNetwork: each rename 'from' with the number of places it was replaced.</summary>
+            public Dictionary<string, int> Renamed { get; } = new Dictionary<string, int>();
         }
 
         /// <param name="action">"replace", "insert" (before networkIndex; the network count appends) or "delete".</param>
@@ -63,8 +77,11 @@ namespace TiaMcpServer.Siemens
         /// <param name="previewFile">When set, the edited block XML is written there and nothing is imported.</param>
         /// <param name="sclFile">For replace/insert, instead of networkFile: a text file with the SCL statements of the new network.</param>
         /// <param name="title">For replace/insert: the network title; empty keeps the replaced network's title (or the new network's own).</param>
+        /// <param name="addStatics">SCL declarations of new Static members, e.g. 'sDone : Bool; sCnt : Int := 0;'.</param>
+        /// <param name="incomingUnit">CopyNetwork: the network to put in, instead of networkFile/sclFile.</param>
         public NetworkEditResult EditBlockNetwork(string softwarePath, string blockPath, string action, int networkIndex,
-            string networkFile, int sourceNetworkIndex, string previewFile, string sclFile = "", string title = "")
+            string networkFile, int sourceNetworkIndex, string previewFile, string sclFile = "", string title = "",
+            string addStatics = "", XElement? incomingUnit = null, NetworkEditResult? result = null)
         {
             return Operation.Run(_logger, nameof(EditBlockNetwork), PortalErrorCode.ImportFailed,
                 () =>
@@ -103,19 +120,25 @@ namespace TiaMcpServer.Siemens
 
                     EnsureNotKnowHowProtected(block);
 
-                    XElement? incoming = null;
-                    if (mode != "delete" && !useScl)
+                    XElement? incoming = incomingUnit == null ? null : new XElement(incomingUnit);
+                    if (mode != "delete" && !useScl && incoming == null)
                     {
                         incoming = LoadCompileUnit(networkFile, sourceNetworkIndex);
                     }
 
-                    var result = new NetworkEditResult { BlockPath = GetBlockPath(block) };
+                    result ??= new NetworkEditResult();
+                    result.BlockPath = GetBlockPath(block);
 
                     using var scope = new SourceScope(_logger);
                     var exportFile = Path.Combine(scope.Directory, $"{FileNames.Safe(block.Name)}.xml");
                     block.Export(new FileInfo(exportFile), ExportOptions.None);
 
                     var doc = XDocument.Load(exportFile);
+
+                    if (!string.IsNullOrWhiteSpace(addStatics))
+                    {
+                        result.StaticsAdded.AddRange(AddStaticMembers(doc, block.Name, addStatics));
+                    }
 
                     if (mode != "delete" && useScl)
                     {
@@ -283,8 +306,9 @@ namespace TiaMcpServer.Siemens
                 {
                     var errors = CompilerErrors(compiled.Messages).Take(10).ToList();
                     throw new PortalException(PortalErrorCode.InvalidParams,
-                        "The SCL text does not compile in this block's context: " +
-                        (errors.Count > 0 ? string.Join(" | ", errors) : $"{compiled.ErrorCount} error(s)."));
+                        "The SCL text did not compile in the scratch FB (a temporary FB with a copy of this block's interface; your block is unchanged): " +
+                        (errors.Count > 0 ? string.Join(" | ", errors) : $"{compiled.ErrorCount} error(s).") +
+                        " " + ScratchErrorAdvice(errors));
                 }
 
                 var exportFile = Path.Combine(workDirectory, name + ".xml");
@@ -332,6 +356,171 @@ namespace TiaMcpServer.Siemens
 
             var start = withStartValue ? member.Elements().FirstOrDefault(e => e.Name.LocalName == "StartValue")?.Value : null;
             source.AppendLine(start == null ? $"{indent}{quoted} : {datatype};" : $"{indent}{quoted} : {datatype} := {start};");
+        }
+
+        /// <summary>
+        /// What the scratch errors most likely mean. A missing '#' name is real: the member is not in
+        /// the interface yet. Errors about DB lengths, instances or addresses can come from the
+        /// scratch FB itself and not show in the real block.
+        /// </summary>
+        private static string ScratchErrorAdvice(List<string> errors)
+        {
+            var advice = new List<string>();
+
+            if (errors.Any(e => e.IndexOf("not defined", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                e.IndexOf("nicht definiert", StringComparison.OrdinalIgnoreCase) >= 0))
+            {
+                advice.Add("An undefined '#' name is a real error: add the member with 'addStatics' (Static) or 'EditBlockInterface' first.");
+            }
+
+            if (errors.Any(e => e.IndexOf("exceeds the length", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                e.IndexOf("instance", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                e.IndexOf("address", StringComparison.OrdinalIgnoreCase) >= 0))
+            {
+                advice.Add("Errors about DB lengths, instances or addresses can be artifacts of the scratch FB and may not occur in the real block: " +
+                           "export the real block ('ExportXmlBlock'), put the statements in there by hand and use 'networkFile', or 'ImportXmlBlock' the whole block.");
+            }
+
+            return advice.Count > 0 ? string.Join(" ", advice) : "Fix the SCL text and retry; do not repeat the call unchanged.";
+        }
+
+        /// <summary>
+        /// Adds 'name : type [:= start];' declarations to the Static section of an exported FB. A
+        /// name that already exists is refused, as is a Struct (use EditBlockInterface for those).
+        /// </summary>
+        private static List<string> AddStaticMembers(XDocument doc, string blockName, string declarations)
+        {
+            var section = doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "Section" && (string?)e.Attribute("Name") == "Static")
+                ?? throw new PortalException(PortalErrorCode.InvalidParams,
+                    $"Block '{blockName}' has no Static section (only FBs have one). Use 'EditBlockInterface' for Temp or other sections.");
+
+            var ns = section.Name.Namespace;
+            var existing = new HashSet<string>(section.Elements().Where(e => e.Name.LocalName == "Member")
+                .Select(e => (string?)e.Attribute("Name") ?? string.Empty), StringComparer.OrdinalIgnoreCase);
+            var added = new List<string>();
+
+            foreach (var raw in declarations.Split(new[] { ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                var text = raw.Trim();
+                if (text.Length == 0)
+                {
+                    continue;
+                }
+
+                var colon = text.IndexOf(':');
+                if (colon <= 0 || (colon + 1 < text.Length && text[colon + 1] == '='))
+                {
+                    throw new PortalException(PortalErrorCode.InvalidParams, $"'addStatics': '{text}' is not 'name : type' (e.g. 'sDone : Bool').");
+                }
+
+                var name = text.Substring(0, colon).Trim().Trim('"', '#');
+                var rest = text.Substring(colon + 1);
+                var assign = rest.IndexOf(":=", StringComparison.Ordinal);
+                var datatype = (assign >= 0 ? rest.Substring(0, assign) : rest).Trim();
+                var start = assign >= 0 ? rest.Substring(assign + 2).Trim() : null;
+
+                if (name.Length == 0 || datatype.Length == 0)
+                {
+                    throw new PortalException(PortalErrorCode.InvalidParams, $"'addStatics': '{text}' needs a name and a data type.");
+                }
+
+                if (datatype.StartsWith("Struct", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new PortalException(PortalErrorCode.InvalidParams, $"'addStatics': '{name}' is a Struct; add it with 'EditBlockInterface' first.");
+                }
+
+                if (!existing.Add(name))
+                {
+                    throw new PortalException(PortalErrorCode.InvalidParams, $"'addStatics': block '{blockName}' already has a member '{name}'.");
+                }
+
+                var member = new XElement(ns + "Member", new XAttribute("Name", name), new XAttribute("Datatype", datatype));
+                if (!string.IsNullOrEmpty(start))
+                {
+                    member.Add(new XElement(ns + "StartValue", start));
+                }
+
+                section.Add(member);
+                added.Add($"{name} : {datatype}");
+            }
+
+            if (added.Count == 0)
+            {
+                throw new PortalException(PortalErrorCode.InvalidParams, "'addStatics' holds no declaration, e.g. 'sDone : Bool; sCnt : Int := 0'.");
+            }
+
+            return added;
+        }
+
+        /// <summary>
+        /// Copies one network of a block into another (or the same) block: export the source,
+        /// replace text in the network as 'renames' says (literally, in order, also in titles and
+        /// comments), then insert or replace it in the target like EditBlockNetwork.
+        /// </summary>
+        public NetworkEditResult CopyNetwork(string softwarePath, string sourceBlockPath, int sourceNetworkIndex, string targetBlockPath,
+            string action, int networkIndex, IReadOnlyList<KeyValuePair<string, string>> renames, string addStatics, string previewFile, string title)
+        {
+            return Operation.Run(_logger, nameof(CopyNetwork), PortalErrorCode.ImportFailed,
+                () =>
+                {
+                    var mode = (action ?? string.Empty).Trim().ToLowerInvariant();
+                    if (mode != "replace" && mode != "insert")
+                    {
+                        throw new PortalException(PortalErrorCode.InvalidParams, $"Unknown action '{action}'. Use 'insert' or 'replace'.");
+                    }
+
+                    var source = GetBlock(softwarePath, sourceBlockPath)
+                        ?? throw new PortalException(PortalErrorCode.NotFound,
+                            $"Source block not found at '{sourceBlockPath}'. Use 'ResolveObjectPath' or 'GetBlocks' to find its path.");
+
+                    if (!source.IsConsistent)
+                    {
+                        throw new PortalException(PortalErrorCode.InvalidState,
+                            $"Source block '{source.Name}' is inconsistent; TIA Portal does not export inconsistent blocks. Compile it first ('CompileCodeBlock').");
+                    }
+
+                    EnsureNotKnowHowProtected(source);
+
+                    using var scope = new SourceScope(_logger);
+                    var exportFile = Path.Combine(scope.Directory, $"source_{FileNames.Safe(source.Name)}.xml");
+                    source.Export(new FileInfo(exportFile), ExportOptions.None);
+
+                    var unit = LoadCompileUnit(exportFile, sourceNetworkIndex);
+                    var result = new NetworkEditResult();
+
+                    if (renames.Count > 0)
+                    {
+                        var text = unit.ToString(SaveOptions.DisableFormatting);
+                        foreach (var pair in renames)
+                        {
+                            if (pair.Key.Length == 0)
+                            {
+                                continue;
+                            }
+
+                            var count = CountOccurrences(text, pair.Key);
+                            result.Renamed[pair.Key] = count;
+                            text = text.Replace(pair.Key, pair.Value);
+                        }
+
+                        unit = XElement.Parse(text);
+                    }
+
+                    return EditBlockNetwork(softwarePath, targetBlockPath, mode, networkIndex, string.Empty, 0, previewFile, string.Empty, title,
+                        addStatics, unit, result);
+                },
+                ("softwarePath", softwarePath), ("sourceBlockPath", sourceBlockPath), ("targetBlockPath", targetBlockPath));
+        }
+
+        private static int CountOccurrences(string text, string value)
+        {
+            var count = 0;
+            for (var i = text.IndexOf(value, StringComparison.Ordinal); i >= 0; i = text.IndexOf(value, i + value.Length, StringComparison.Ordinal))
+            {
+                count++;
+            }
+
+            return count;
         }
 
         private static IEnumerable<string> CompilerErrors(CompilerResultMessageComposition? messages)

@@ -128,6 +128,9 @@ namespace TiaMcpServer.ModelContextProtocol
         /// <summary>CreateHmiTags with skipExisting: names that already existed.</summary>
         public List<string>? Skipped { get; set; }
 
+        /// <summary>DeleteHmiTags: the deleted tags as they were.</summary>
+        public List<TiaMcpServer.Siemens.Portal.HmiTagState>? Deleted { get; set; }
+
         /// <summary>UpdateHmiTags: each tag before and after.</summary>
         public List<TiaMcpServer.Siemens.Portal.HmiTagUpdate>? Updated { get; set; }
 
@@ -138,5 +141,20 @@ namespace TiaMcpServer.ModelContextProtocol
     public class ResponseHmiTagWrite : ResponseMessage
     {
         public ResponseHmiTagInfo? Tag { get; set; }
+    }
+
+    public class ResponseHmiAlarmWrite : ResponseMessage
+    {
+        public List<TiaMcpServer.Siemens.Portal.HmiAlarmChange>? Alarms { get; set; }
+        public string? Backup { get; set; }
+        public string? BackupWarning { get; set; }
+    }
+
+    public class ResponseHmiScriptModules : ResponseMessage
+    {
+        public List<TiaMcpServer.Siemens.Portal.HmiScriptModuleInfo>? Modules { get; set; }
+        public List<string>? ExportedFiles { get; set; }
+        public string? Backup { get; set; }
+        public string? BackupWarning { get; set; }
     }
 }
