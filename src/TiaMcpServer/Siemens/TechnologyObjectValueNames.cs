@@ -25,8 +25,9 @@ namespace TiaMcpServer.Siemens
             }
 
             // "Sensor[2].Interface[5].EnableLeading" -> "Sensor[1..4].Interface[1..32].EnableLeading"
+            // Some parameters carry a leading '_' in Openness, e.g. "_Units.LengthUnit".
             var counter = 0;
-            var key = Index.Replace(name, _ => counter++ == 0 && name.StartsWith("Sensor[", StringComparison.Ordinal) ? "[1..4]" : "[1..32]");
+            var key = Index.Replace(name.TrimStart('_'), _ => counter++ == 0 && name.TrimStart('_').StartsWith("Sensor[", StringComparison.Ordinal) ? "[1..4]" : "[1..32]");
 
             if (!Names.TryGetValue(key, out var values))
             {
