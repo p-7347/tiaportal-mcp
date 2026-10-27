@@ -37,7 +37,7 @@ namespace TiaMcpServer.Siemens
             public string Action { get; set; } = string.Empty;
 
             /// <summary>Property name to value after the call (before it, for Deleted).</summary>
-            public Dictionary<string, string?> Values { get; set; } = new Dictionary<string, string?>();
+            public Dictionary<string, string> Values { get; set; } = new Dictionary<string, string>();
         }
 
         public sealed class HmiAlarmWriteResult
@@ -184,7 +184,7 @@ namespace TiaMcpServer.Siemens
                         {
                             Name = spec.Name.Trim(),
                             Action = created ? "Created" : changed ? "Updated" : "Unchanged",
-                            Values = spec.Properties.ToDictionary(p => p.Key, p => AlarmValueText(alarm, p.Key))
+                            Values = spec.Properties.ToDictionary(p => p.Key, p => AlarmValueText(alarm, p.Key) ?? string.Empty)
                         });
                     }
 
@@ -382,12 +382,12 @@ namespace TiaMcpServer.Siemens
         private static string AlarmName(IEngineeringObject alarm) => alarm.GetAttribute("Name") as string ?? string.Empty;
 
         /// <summary>Every readable plain or text attribute of an alarm, for backups.</summary>
-        private static Dictionary<string, string?> AlarmValues(IEngineeringObject alarm)
+        private static Dictionary<string, string> AlarmValues(IEngineeringObject alarm)
         {
-            var values = new Dictionary<string, string?>();
+            var values = new Dictionary<string, string>();
             foreach (var property in AlarmTextProperties(alarm))
             {
-                values[property.Name] = PropertyText(property.GetValue(alarm));
+                values[property.Name] = PropertyText(property.GetValue(alarm)) ?? string.Empty;
             }
 
             foreach (var info in alarm.GetAttributeInfos())
@@ -397,7 +397,7 @@ namespace TiaMcpServer.Siemens
                     var value = alarm.GetAttribute(info.Name);
                     if (value is MultilingualText || (value != null && IsPlainValue(value)))
                     {
-                        values[info.Name] = PropertyText(value);
+                        values[info.Name] = PropertyText(value) ?? string.Empty;
                     }
                 }
                 catch (Exception)
