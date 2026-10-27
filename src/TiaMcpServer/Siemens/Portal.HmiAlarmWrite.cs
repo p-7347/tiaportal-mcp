@@ -385,6 +385,11 @@ namespace TiaMcpServer.Siemens
         private static Dictionary<string, string?> AlarmValues(IEngineeringObject alarm)
         {
             var values = new Dictionary<string, string?>();
+            foreach (var property in AlarmTextProperties(alarm))
+            {
+                values[property.Name] = PropertyText(property.GetValue(alarm));
+            }
+
             foreach (var info in alarm.GetAttributeInfos())
             {
                 try
@@ -404,11 +409,18 @@ namespace TiaMcpServer.Siemens
             return values;
         }
 
+        /// <summary>The multilingual text properties of an alarm (EventText, InfoText, AlarmParameter texts, ...).</summary>
+        private static List<System.Reflection.PropertyInfo> AlarmTextProperties(IEngineeringObject alarm) =>
+            alarm.GetType().GetProperties()
+                .Where(p => p.PropertyType == typeof(MultilingualText) && p.GetIndexParameters().Length == 0)
+                .ToList();
+
         private static string? AlarmValueText(IEngineeringObject alarm, string attribute)
         {
             try
             {
-                return PropertyText(alarm.GetAttribute(attribute));
+                var property = AlarmTextProperties(alarm).FirstOrDefault(p => p.Name.Equals(attribute, StringComparison.OrdinalIgnoreCase));
+                return PropertyText(property != null ? property.GetValue(alarm) : alarm.GetAttribute(attribute));
             }
             catch (Exception)
             {
@@ -421,6 +433,7 @@ namespace TiaMcpServer.Siemens
         {
             var writes = new List<ItemPropertyWrite>();
             var infos = alarm.GetAttributeInfos().ToDictionary(i => i.Name, StringComparer.OrdinalIgnoreCase);
+            var texts = AlarmTextProperties(alarm);
 
             foreach (var pair in spec.Properties)
             {
@@ -429,9 +442,26 @@ namespace TiaMcpServer.Siemens
                     continue;
                 }
 
+                var textProperty = texts.FirstOrDefault(p => p.Name.Equals(pair.Key, StringComparison.OrdinalIgnoreCase));
+                if (textProperty != null)
+                {
+                    // Texts (EventText, InfoText, ...) are .NET properties, not Openness attributes.
+                    var text = textProperty.GetValue(alarm);
+                    if (text is MultilingualText)
+                    {
+                        writes.Add(new ItemPropertyWrite { Item = spec.Name, Path = textProperty.Name, Owner = alarm, Attribute = textProperty.Name, Before = text, Text = pair.Value });
+                    }
+                    else
+                    {
+                        problems.Add($"'{spec.Name}.{textProperty.Name}' has no text object to write to");
+                    }
+
+                    continue;
+                }
+
                 if (!infos.TryGetValue(pair.Key, out var info))
                 {
-                    problems.Add($"'{spec.Name}': alarms have no property '{pair.Key}'. Some: {string.Join(", ", infos.Keys.OrderBy(k => k).Take(25))}");
+                    problems.Add($"'{spec.Name}': alarms have no property '{pair.Key}'. Some: {string.Join(", ", texts.Select(p => p.Name).Concat(infos.Keys).OrderBy(k => k).Take(30))}");
                     continue;
                 }
 

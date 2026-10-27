@@ -225,7 +225,7 @@ namespace TiaMcpServer.Siemens
                     Directory.CreateDirectory(Path.GetDirectoryName(editedFile)!);
                     doc.Save(editedFile);
 
-                    var backup = BackupBlock(softwarePath, blockPath, nameof(EditBlockNetwork));
+                    var backup = BackupBlock(softwarePath, blockPath, incomingUnit != null ? nameof(CopyNetwork) : nameof(EditBlockNetwork));
                     result.Backup = backup.Path;
                     result.BackupWarning = backup.Warning;
 
