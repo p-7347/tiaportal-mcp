@@ -47,7 +47,6 @@ before delete or replacing import (A2), DB start values read/write (A3), V21 bui
 | D2 | Read SINAMICS drive parameters (Startdrive) | `MC.Drives`. Check that Startdrive is installed first. |
 | D3 | Create/delete single watch table entries | The entry composition only has a comment-row creator; find the right creation call on the live API. Today: export, edit, `ImportWatchTable`. |
 | D6 | Know-how protection handling | `PlcBlockProtectionProvider`. Passwords make this low priority. |
-| D7 | ProDiag supervision export/import (in progress) | `SW.Supervision`. |
 | D8 | Read GRAPH and STL blocks as text | |
 | D9 | Read the OPC UA server interface | `SW.OpcUa`. |
 | D10 | Update instruction versions in a program | `PlcSoftware.UpdateProgram`. Writes the project; low priority. |

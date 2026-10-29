@@ -643,12 +643,18 @@ namespace TiaMcpServer.Siemens
                         ?? throw new PortalException(PortalErrorCode.NotFound,
                             $"Block group not found at '{groupPath}'.");
 
-                    return group.Blocks.CreateFB(name, autoNumber, number, parsedLanguage);
+                    return group.Blocks.CreateFB(name, autoNumber, AutoNumberStart(autoNumber, number), parsedLanguage);
                 },
                 ("softwarePath", softwarePath), ("groupPath", groupPath), ("name", name), ("language", language));
         }
 
         /// <param name="instanceOfName">Name of the FB this instance DB is created for.</param>
+        /// <summary>
+        /// With autoNumber TIA takes the given number when it is free and picks another one otherwise,
+        /// but it keeps 0 as is (live 2026-10-29: FB0/DB0, "invalid number 0" on compile). Start at 1.
+        /// </summary>
+        private static int AutoNumberStart(bool autoNumber, int number) => autoNumber && number <= 0 ? 1 : number;
+
         public InstanceDB CreateInstanceDB(string softwarePath, string groupPath, string name, string instanceOfName, bool autoNumber = true, int number = 0)
         {
             return Operation.Run(_logger, nameof(CreateInstanceDB), PortalErrorCode.CreateFailed,
@@ -666,7 +672,7 @@ namespace TiaMcpServer.Siemens
                         ?? throw new PortalException(PortalErrorCode.NotFound,
                             $"Block group not found at '{groupPath}'.");
 
-                    return group.Blocks.CreateInstanceDB(name, autoNumber, number, instanceOfName);
+                    return group.Blocks.CreateInstanceDB(name, autoNumber, AutoNumberStart(autoNumber, number), instanceOfName);
                 },
                 ("softwarePath", softwarePath), ("groupPath", groupPath), ("name", name), ("instanceOfName", instanceOfName));
         }
