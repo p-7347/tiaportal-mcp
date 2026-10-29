@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- ProDiag (backlog D7): `GetProDiagInfo` lists the ProDiag FBs (version, settings, instance DBs), the FBs that define supervisions (count, and supervised operand, conditions and categories of the first ones) and the instance DBs assigned to a ProDiag FB. `ExportProDiagSupervisions` exports the global supervisions of a PLC, or those of one ProDiag FB, to .xlsx. Write tools: `ImportProDiagSupervisions` imports such a file (supervisions or settings only, optional overwrite; the current supervisions are exported to the backup folder first and a failed import is rolled back), `SetAssignedProDiagFB` sets or removes the ProDiag FB of an instance DB or of a UDT member of a global DB (DB backed up first). This is the PLC side the WinCC PLC code view needs to jump from an alarm to the LAD/FBD network.
+- `CreateFB`, `CreateInstanceDB`: with `autoNumber` and no `number` the new block got number 0, which does not compile ("invalid number 0"); they now start the search at 1.
+
 ### Changed
 
 - `GetTechnologyObjectParameters`: coded values of axis technology objects (booleans and mode numbers such as `Homing.ApproachDirection`, `Sensor[n].ActiveHoming.Mode`/`Direction`/`SideInput`/`SwitchLevel`, `PositionLimits_HW.*`, units) come with their meaning in the new field `valueText`, from the tag tables of the positioning axis (technology version V9.0). Existing fields are unchanged.
