@@ -13,7 +13,7 @@ namespace TiaMcpServer.ModelContextProtocol
         // ProDiag supervisions and their assignment to instance DBs. See Portal.ProDiag.cs.
 
         [McpServerTool(Name = "GetProDiagInfo", Title = "Get ProDiag info", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Use to see how ProDiag is set up in a PLC before configuring alarms or the WinCC PLC code view: lists the ProDiag FBs (version, settings, instance DBs), the FBs that define supervisions on their members (count and the attributes of the first ones), and the instance DBs assigned to a ProDiag FB. Walks the blocks of a group; reads only")]
+         Description("Use to see how ProDiag is set up in a PLC before configuring alarms or the WinCC PLC code view: lists the ProDiag FBs (version, settings, instance DBs), the FBs that define supervisions on their members (count, and supervised operand, conditions and categories of the first ones), and the instance DBs assigned to a ProDiag FB. Walks the blocks of a group; reads only")]
         public static ResponseProDiagInfo GetProDiagInfo(
             [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
             [Description("groupPath: optional root-relative block group to search, e.g. 'Libraries/06.Communication'; empty searches the whole program")] string groupPath = "",

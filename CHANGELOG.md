@@ -4,7 +4,7 @@
 
 ### Added
 
-- ProDiag (backlog D7): `GetProDiagInfo` lists the ProDiag FBs (version, settings, instance DBs), the FBs that define supervisions (count and attributes of the first ones) and the instance DBs assigned to a ProDiag FB. `ExportProDiagSupervisions` exports the global supervisions of a PLC, or those of one ProDiag FB, to .xlsx. Write tools: `ImportProDiagSupervisions` imports such a file (supervisions or settings only, optional overwrite; the current supervisions are exported to the backup folder first and a failed import is rolled back), `SetAssignedProDiagFB` sets or removes the ProDiag FB of an instance DB or of a UDT member of a global DB (DB backed up first). This is the PLC side the WinCC PLC code view needs to jump from an alarm to the LAD/FBD network.
+- ProDiag (backlog D7): `GetProDiagInfo` lists the ProDiag FBs (version, settings, instance DBs), the FBs that define supervisions (count, and supervised operand, conditions and categories of the first ones) and the instance DBs assigned to a ProDiag FB. `ExportProDiagSupervisions` exports the global supervisions of a PLC, or those of one ProDiag FB, to .xlsx. Write tools: `ImportProDiagSupervisions` imports such a file (supervisions or settings only, optional overwrite; the current supervisions are exported to the backup folder first and a failed import is rolled back), `SetAssignedProDiagFB` sets or removes the ProDiag FB of an instance DB or of a UDT member of a global DB (DB backed up first). This is the PLC side the WinCC PLC code view needs to jump from an alarm to the LAD/FBD network.
 
 ### Changed
 

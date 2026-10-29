@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Xml.Linq;
 
 namespace TiaMcpServer.Siemens
 {
@@ -37,7 +38,7 @@ namespace TiaMcpServer.Siemens
             public string Path { get; set; } = string.Empty;
             public int Count { get; set; }
 
-            /// <summary>Attributes of the first supervisions (name -> value), as TIA reports them.</summary>
+            /// <summary>The first supervisions, parsed from the FB attribute "Supervisions" (key -> value).</summary>
             public List<Dictionary<string, string?>> Supervisions { get; } = new List<Dictionary<string, string?>>();
             public string? Error { get; set; }
         }
@@ -185,24 +186,22 @@ namespace TiaMcpServer.Siemens
 
                 var info = new SupervisedBlockInfo { Path = path, Count = supervisions.Count };
 
-                foreach (var supervision in supervisions.Take(Math.Max(0, maxSupervisions)))
+                // The Supervision objects expose no attributes in V20 (live 2026-10-29: GetAttributeInfos
+                // is empty). The details are in the FB attribute "Supervisions", the same
+                // BlockTypeSupervisions XML a block export carries.
+                string? xml = null;
+                try
                 {
-                    var values = new Dictionary<string, string?>(StringComparer.Ordinal);
+                    xml = fb.GetAttribute("Supervisions") as string;
+                }
+                catch (Exception)
+                {
+                    // Not readable on this block; Count is still known.
+                }
 
-                    // Supervision has no typed properties in V20; everything is a dynamic attribute.
-                    foreach (var attribute in supervision.GetAttributeInfos())
-                    {
-                        try
-                        {
-                            values[attribute.Name] = FormatParameterValue(supervision.GetAttribute(attribute.Name));
-                        }
-                        catch (Exception)
-                        {
-                            // Some attributes cannot be read for every supervision type.
-                        }
-                    }
-
-                    info.Supervisions.Add(values);
+                if (!string.IsNullOrWhiteSpace(xml))
+                {
+                    info.Supervisions.AddRange(ParseBlockTypeSupervisions(xml!).Take(Math.Max(0, maxSupervisions)));
                 }
 
                 return info;
@@ -210,6 +209,70 @@ namespace TiaMcpServer.Siemens
             catch (Exception ex)
             {
                 return new SupervisedBlockInfo { Path = path, Error = Operation.DescribeChain(ex) };
+            }
+        }
+
+        /// <summary>
+        /// One entry per BlockTypeSupervision: number, type, supervised operand and status, delay,
+        /// the conditions that are set, category numbers and associated values.
+        /// </summary>
+        private static IEnumerable<Dictionary<string, string?>> ParseBlockTypeSupervisions(string xml)
+        {
+            var doc = TryParseXml(xml);
+            if (doc == null)
+            {
+                yield break;
+            }
+
+            static string? OperandName(XElement? e) => e?.Attribute("Name")?.Value is string v && v.Length > 0 ? v : null;
+
+            foreach (var sup in doc.Descendants().Where(e => e.Name.LocalName == "BlockTypeSupervision"))
+            {
+                XElement? Child(string name) => sup.Elements().FirstOrDefault(e => e.Name.LocalName == name);
+
+                var entry = new Dictionary<string, string?>(StringComparer.Ordinal)
+                {
+                    ["number"] = sup.Attribute("Number")?.Value,
+                    ["type"] = sup.Attribute("Type")?.Value,
+                    ["operand"] = OperandName(Child("SupervisedOperand")),
+                    ["status"] = Child("SupervisedStatus")?.Value,
+                    ["delay"] = OperandName(Child("DelayOperand")),
+                    ["category"] = Child("CategoryNumber")?.Value,
+                    ["subCategory1"] = Child("SubCategory1Number")?.Value,
+                    ["subCategory2"] = Child("SubCategory2Number")?.Value
+                };
+
+                var conditions = sup.Descendants().Where(e => e.Name.LocalName == "Condition")
+                    .Select(c => (Operand: OperandName(c.Elements().FirstOrDefault(e => e.Name.LocalName == "ConditionOperand")),
+                                  Status: c.Elements().FirstOrDefault(e => e.Name.LocalName == "TriggeringStatus")?.Value))
+                    .Where(c => c.Operand != null)
+                    .Select(c => $"{c.Operand}={c.Status}")
+                    .ToList();
+                if (conditions.Count > 0)
+                {
+                    entry["conditions"] = string.Join("; ", conditions);
+                }
+
+                var values = sup.Descendants().Where(e => e.Name.LocalName == "AssociatedValueOperand")
+                    .Select(OperandName).Where(n => n != null).ToList();
+                if (values.Count > 0)
+                {
+                    entry["associatedValues"] = string.Join("; ", values);
+                }
+
+                yield return entry;
+            }
+        }
+
+        private static XDocument? TryParseXml(string xml)
+        {
+            try
+            {
+                return XDocument.Parse(xml);
+            }
+            catch (Exception)
+            {
+                return null;
             }
         }
 

@@ -34,7 +34,7 @@ namespace TiaMcpServer.ModelContextProtocol
         public string Path { get; set; } = string.Empty;
         public int Count { get; set; }
 
-        /// <summary>Attributes of the first supervisions, as TIA Portal names them.</summary>
+        /// <summary>The first supervisions: number, type, operand, status, delay, conditions, category numbers, associated values.</summary>
         public List<Dictionary<string, string?>> Supervisions { get; set; } = new List<Dictionary<string, string?>>();
         public string? Error { get; set; }
     }
