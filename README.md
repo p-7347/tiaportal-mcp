@@ -120,7 +120,7 @@ a change summary.
 
 ## Tools
 
-191 tools total. Read-only/ungated tools (103) are always available.
+195 tools total. Read-only/ungated tools (105) are always available.
 
 | Area                          | Tools                                                                                                                                                                                                  |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -134,6 +134,7 @@ a change summary.
 | Direct PLC (S7CommPlus, experimental) | `ConnectPlcDirect`, `DisconnectPlcDirect`, `BrowsePlcTagsDirect`, `ReadPlcTagValuesDirect`, `WritePlcTagValueDirect`, `GetActivePlcAlarmsDirect`                                             |
 | PLC software                  | `GetSoftwareInfo`, `GetSoftwareTree`, `CompileSoftware`, `CompileCodeBlock`, `CompareSoftware`, `GetBlockFingerprints`, `GetSoftwareChecksum`, `GetSafetyInfo`                                                                                                                                            |
 | Technology objects            | `GetTechnologyObjects`, `GetTechnologyObjectParameters`                                                                                                                                              |
+| ProDiag                       | `GetProDiagInfo`, `ExportProDiagSupervisions`                                                                                                                                                         |
 | Blocks                        | `GetBlocks`, `GetBlockInfo`, `GetBlocksWithHierarchy`, `GetBlockInterface`, `GetDbStartValues`, `ExportXmlBlock`, `ExportXmlBlocks`                                                                                        |
 | Types                         | `GetTypes`, `GetTypeInfo`, `ExportXmlType`, `ExportXmlTypes`                                                                                                                                           |
 | Tags and constants            | `GetTagTables`, `GetTagTableInfo`, `GetTags`, `GetTagInfo`, `GetConstants`, `ExportXmlTagTable`                                                                                                        |
@@ -146,7 +147,7 @@ a change summary.
 | HMI, classic WinCC (read)     | `GetComfortScreens`, `GetComfortScreenItems` (Comfort/Basic panels; items read from an XML export of the screen)                                                                                        |
 | Understand and read (comfort) | `GetPlcSummary`, `ResolveObjectPath`, `WhereUsed`, `FindInCode`, `GetBlockSource`, `GetNetworkSource`, `GetTypeSource`, `PreviewImport`, `OpenTiaProject`, `ExportPlcAsDocuments`, `CompareExports`, `SearchExports`    |
 
-Write tools (83) require `--allow-write` (see [Write mode](#write-mode) for the handful that
+Write tools (85) require `--allow-write` (see [Write mode](#write-mode) for the handful that
 don't, and why).
 
 | Area                       | Tools                                                                                                                                                                                          |
@@ -156,6 +157,7 @@ don't, and why).
 | Copy and move              | `CopyBlock`, `MoveBlock`, `CopyType`, `MoveType`                                                                                                                                                |
 | Tag tables                 | `CreateTagTable`, `DeleteTagTable`, `RenameTagTable`, `CreateTagTableGroup`, `DeleteTagTableGroup`, `ImportXmlTagTable`                                                                         |
 | Technology objects         | `SetTechnologyObjectParameter`                                                                                                                                                                   |
+| ProDiag                    | `ImportProDiagSupervisions`, `SetAssignedProDiagFB`                                                                                                                                              |
 | Tags and constants         | `CreateTag`, `UpdateTag`, `DeleteTag`, `CreateUserConstant`, `UpdateUserConstant`, `DeleteUserConstant`                                                                                         |
 | Watch tables                | `CreateWatchTable`, `RenameWatchTable`, `DeleteWatchTable`, `CreateWatchTableGroup`, `DeleteWatchTableGroup`, `ImportWatchTable`                                                                |
 | External sources           | `CreateExternalSourceFromFile`, `DeleteExternalSource`, `CreateExternalSourceGroup`, `DeleteExternalSourceGroup`, `ImportExternalSource`, `ImportSourceBlock`, `ImportSourceType`, `ImportSourceBlocks`, `ImportSourceTypes`, `ImportSources` |
@@ -392,8 +394,8 @@ These are not gaps in this server - the underlying API offers no operation for t
 - Built on the [ModelContextProtocol](https://www.nuget.org/packages/ModelContextProtocol) .NET SDK **2.2.0**.
 - Protocol revisions negotiated during `initialize`: `2024-11-05`, `2025-03-26`, `2025-06-18`, `2025-11-25` (the SDK picks the highest the client also supports).
 - Every tool advertises a human-readable `title` and behaviour annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`).
-- 171 of the 191 tools publish an `outputSchema` and return `structuredContent` (88 of 103
-  read-only, 83 of 88 write).
+- 175 of the 195 tools publish an `outputSchema` and return `structuredContent` (90 of 105
+  read-only, 85 of 90 write).
 - Long-running export/import tools report progress via `notifications/progress` when the client supplies a `progressToken`.
 - Independently of that, `GetState` can report the progress of another call still running on the
   same TIA Portal instance (tool name, processed/total, current object, time since last progress)

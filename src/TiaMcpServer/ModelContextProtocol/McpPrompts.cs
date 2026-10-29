@@ -2695,6 +2695,65 @@ Use the SetTechnologyObjectParameter tool with these parameters:
 - value: {value}";
         }
 
+        [McpServerPrompt(Name = "GetProDiagInfo"), Description("Show how ProDiag is set up in a PLC")]
+        public static string GetProDiagInfo(string softwarePath, string groupPath = "", string regexName = "", string maxSupervisions = "")
+        {
+            return $@"List the ProDiag FBs, the FBs that define supervisions and the instance DBs assigned to a ProDiag FB. Reads only.
+
+Common parameter values:
+- softwarePath: defines the path in the project structure to the software
+- groupPath: root-relative block group, empty for the whole program
+
+Use the GetProDiagInfo tool with these parameters:
+- softwarePath: {softwarePath}{OptionalParameter("groupPath", groupPath)}{OptionalParameter("regexName", regexName)}{OptionalParameter("maxSupervisions", maxSupervisions)}";
+        }
+
+        [McpServerPrompt(Name = "ExportProDiagSupervisions"), Description("Export ProDiag supervisions to an Excel file")]
+        public static string ExportProDiagSupervisions(string softwarePath, string exportPath, string blockPath = "")
+        {
+            return $@"Export the global ProDiag supervisions of a PLC, or those of one ProDiag FB, to .xlsx. Does not change the project.
+
+Common parameter values:
+- softwarePath: defines the path in the project structure to the software
+- exportPath: absolute path of the .xlsx file
+- blockPath: ProDiag FB from GetProDiagInfo, empty for the global supervisions
+
+Use the ExportProDiagSupervisions tool with these parameters:
+- softwarePath: {softwarePath}
+- exportPath: {exportPath}{OptionalParameter("blockPath", blockPath)}";
+        }
+
+        [McpServerPrompt(Name = "ImportProDiagSupervisions"), Description("Import ProDiag supervisions from an Excel file")]
+        public static string ImportProDiagSupervisions(string softwarePath, string importPath, string blockPath = "", string settingsOnly = "", string overwrite = "")
+        {
+            return $@"Import ProDiag supervisions (or only their settings) from an .xlsx file made by ExportProDiagSupervisions. The current supervisions are backed up first; compile and download afterwards (requires the server started with '--allow-write').
+
+Common parameter values:
+- softwarePath: defines the path in the project structure to the software
+- importPath: absolute path of the .xlsx file
+- blockPath: ProDiag FB from GetProDiagInfo, empty for the global supervisions
+
+Use the ImportProDiagSupervisions tool with these parameters:
+- softwarePath: {softwarePath}
+- importPath: {importPath}{OptionalParameter("blockPath", blockPath)}{OptionalParameter("settingsOnly", settingsOnly)}{OptionalParameter("overwrite", overwrite)}";
+        }
+
+        [McpServerPrompt(Name = "SetAssignedProDiagFB"), Description("Assign a ProDiag FB to an instance DB or UDT instance")]
+        public static string SetAssignedProDiagFB(string softwarePath, string blockPath, string proDiagFb, string memberPath = "")
+        {
+            return $@"Set which ProDiag FB evaluates the supervisions of an instance DB, or of a UDT member of a global DB. The DB is backed up first; compile and download afterwards (requires the server started with '--allow-write').
+
+Common parameter values:
+- softwarePath: defines the path in the project structure to the software
+- blockPath: root-relative path of the instance DB (or global DB with memberPath)
+- proDiagFb: ProDiag FB from GetProDiagInfo, empty to remove
+
+Use the SetAssignedProDiagFB tool with these parameters:
+- softwarePath: {softwarePath}
+- blockPath: {blockPath}
+- proDiagFb: {proDiagFb}{OptionalParameter("memberPath", memberPath)}";
+        }
+
         #endregion
 
         #region Device Write Templates
