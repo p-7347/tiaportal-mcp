@@ -42,7 +42,16 @@ namespace TiaMcpServer.Siemens
 
         public List<HmiScreenItemBase> GetHmiScreenItems(string softwarePath, string screenName, string regexName = "")
         {
-            return Operation.Run(_logger, nameof(GetHmiScreenItems), PortalErrorCode.NotFound,
+            return GetHmiScreenItems(softwarePath, screenName, regexName, out _);
+        }
+
+        /// <param name="unreadable">items the screen holds that Openness returns as null - kinds V20 Openness has no
+        /// type for, e.g. a PLC code view - so a caller can say they exist instead of leaving them out silently</param>
+        public List<HmiScreenItemBase> GetHmiScreenItems(string softwarePath, string screenName, string regexName, out int unreadable)
+        {
+            var nulls = 0;
+
+            var result = Operation.Run(_logger, nameof(GetHmiScreenItems), PortalErrorCode.NotFound,
                 () =>
                 {
                     var screen = RequireHmiScreen(RequireHmiSoftware(softwarePath), screenName);
@@ -52,6 +61,7 @@ namespace TiaMcpServer.Siemens
                     {
                         if (item == null)
                         {
+                            nulls++;
                             continue;
                         }
 
@@ -77,6 +87,10 @@ namespace TiaMcpServer.Siemens
                     return list;
                 },
                 ("softwarePath", softwarePath), ("screenName", screenName));
+
+            unreadable = nulls;
+
+            return result;
         }
 
         /// <summary>Flat description of one screen item, used by the read tool and as the read-back of every write.</summary>

@@ -294,7 +294,9 @@ namespace TiaMcpServer.Siemens
                 return EnsureAlive(named);
             }
 
-            var all = _contexts.Values.ToList();
+            // A closed or crashed TIA Portal stays registered until a request names it; drop those
+            // first, or every later call without 'portalId' fails with "several attached".
+            var all = PruneDead();
 
             if (all.Count > 1)
             {
@@ -304,6 +306,27 @@ namespace TiaMcpServer.Siemens
             }
 
             return all.Count == 1 ? EnsureAlive(all[0]) : null;
+        }
+
+        /// <summary>Forgets attached instances whose process has ended and returns the ones still alive.</summary>
+        private List<PortalContext> PruneDead()
+        {
+            var alive = new List<PortalContext>();
+
+            foreach (var context in _contexts.Values.ToList())
+            {
+                if (IsAlive(context))
+                {
+                    alive.Add(context);
+                }
+                else
+                {
+                    _logger?.LogInformation("TIA Portal instance {PortalId} is no longer running; detaching it.", context.Id);
+                    Forget(context);
+                }
+            }
+
+            return alive;
         }
 
         private PortalContext EnsureAlive(PortalContext context)

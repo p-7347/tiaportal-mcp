@@ -28,7 +28,7 @@ namespace TiaMcpServer.ModelContextProtocol
         {
             try
             {
-                var items = Portal.GetHmiScreenItems(softwarePath, screenName, regexName)
+                var items = Portal.GetHmiScreenItems(softwarePath, screenName, regexName, out var unreadable)
                     .Select(item => Portal.DescribeHmiScreenItem(item, includeScripts))
                     .ToList();
 
@@ -37,10 +37,14 @@ namespace TiaMcpServer.ModelContextProtocol
                 return new ResponseHmiScreenItems
                 {
                     Message = $"{items.Count} item(s) on screen '{screenName}' in '{softwarePath}'" +
-                              (includeScripts ? $", {items.Sum(i => i.Events?.Count ?? 0) + (screenEvents?.Count ?? 0)} event script(s)" : string.Empty),
+                              (includeScripts ? $", {items.Sum(i => i.Events?.Count ?? 0) + (screenEvents?.Count ?? 0)} event script(s)" : string.Empty) +
+                              (unreadable > 0
+                                  ? $". WARNING: {unreadable} more item(s) on the screen are of a kind Openness cannot read (e.g. PLC code view) and are not listed; " +
+                                    "copying or comparing this screen leaves them out"
+                                  : string.Empty),
                     Items = items,
                     ScreenEvents = screenEvents?.Count > 0 ? screenEvents : null,
-                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true, ["count"] = items.Count }
+                    Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true, ["count"] = items.Count, ["unreadable"] = unreadable }
                 };
             }
             catch (PortalException pex)
