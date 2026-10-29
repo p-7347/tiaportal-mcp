@@ -188,7 +188,11 @@ namespace TiaMcpServer
                             "that root. File paths ('exportPath', 'importPath') are absolute paths on the PC running this server. " +
                             "(5) Formats: XML (SimaticML) is complete and is what 'ImportXmlBlock' and 'EditBlockNetwork' use; " +
                             "documents (.s7dcl/.s7res, V20+) are readable text for review; external source (.scl/.db/.awl) " +
-                            "exists only for SCL, STL and DB blocks." +
+                            "exists only for SCL, STL and DB blocks. " +
+                            "(6) WinCC Unified screens: before tools that change a screen's items (create, delete, update, copy, " +
+                            "styles, scripts, dynamizations) ask the user to close that screen in the TIA Portal screen editor; " +
+                            "changing a screen that is open there can crash TIA Portal (NullReferenceException in the editor's " +
+                            "arrange toolbar) and lose every unsaved change." +
                             (ToolDefaults.Presets.Count > 0
                                 ? " The server presets " + string.Join(", ", ToolDefaults.Presets.Keys.OrderBy(k => k, StringComparer.Ordinal)) +
                                   ": leave them out of a call to use the preset, pass a value to override it. 'GetState' shows the presets."
