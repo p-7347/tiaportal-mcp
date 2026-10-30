@@ -17,7 +17,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [McpServerTool(Name = "GetSoftwareInfo", Title = "Get software info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Show name, description and attributes of one PLC software")]
         public static ResponseSoftwareInfo GetSoftwareInfo(
-            [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath)
+            [Description("softwarePath: PLC software as 'GetProjectTree' names it, e.g. 'PLC_1' or 'PC-System_1/Software PLC_1'")] string softwarePath)
         {
             try
             {
@@ -54,7 +54,7 @@ namespace TiaMcpServer.ModelContextProtocol
         [McpServerTool(Name = "CompileSoftware", Title = "Compile software", Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
          Description("Compile the PLC software and report every compiler message with the object it belongs to, so errors can be fixed without re-reading the whole PLC. Warnings are reported as a successful compile with detail; only errors fail the call")]
         public static ResponseCompileSoftware CompileSoftware(
-            [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
+            [Description("softwarePath: PLC software as 'GetProjectTree' names it, e.g. 'PLC_1' or 'PC-System_1/Software PLC_1'")] string softwarePath,
             [Description("password: the password to access adminsitration, default: no password")] string password = "")
         {
             try
@@ -79,7 +79,7 @@ namespace TiaMcpServer.ModelContextProtocol
         [McpServerTool(Name = "CompileCodeBlock", Title = "Compile code block", Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
          Description("Use after every block change to check it. Compile one code block (OB, FC, FB or DB) instead of the whole PLC, for example right after importing it, and report its compiler messages like 'CompileSoftware' does. Warnings are reported as a successful compile with detail; only errors fail the call")]
         public static ResponseCompileSoftware CompileCodeBlock(
-            [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
+            [Description("softwarePath: PLC software as 'GetProjectTree' names it, e.g. 'PLC_1' or 'PC-System_1/Software PLC_1'")] string softwarePath,
             [Description("blockPath: path of the block below 'Program blocks', e.g. '009_Servo/FB_PitchHome_Inch'")] string blockPath,
             [Description("password: the password to access adminsitration, default: no password")] string password = "")
         {

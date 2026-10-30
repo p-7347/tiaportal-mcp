@@ -17,7 +17,7 @@ namespace TiaMcpServer.ModelContextProtocol
         [McpServerTool(Name = "CompareSoftware", Title = "Compare PLC software", ReadOnly = true, Idempotent = true, OpenWorld = true, UseStructuredContent = true),
          Description("Compare a PLC software with the connected PLC (online, the default) or with another PLC software in the project, using TIA Portal's own compare, and list the blocks, types and tags that differ or exist on one side only. Use it before a download or after an upload to see whether project and PLC match. Reads only; the online compare needs the PLC to be reachable")]
         public static ResponseCompareSoftware CompareSoftware(
-            [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
+            [Description("softwarePath: PLC software as 'GetProjectTree' names it, e.g. 'PLC_1' or 'PC-System_1/Software PLC_1'")] string softwarePath,
             [Description("otherSoftwarePath: optional second PLC software in the project to compare with; empty compares with the online PLC")] string otherSoftwarePath = "",
             [Description("maxItems: maximum number of differences listed (default 200); 'differenceCount' is always the full count")] int maxItems = 200)
         {

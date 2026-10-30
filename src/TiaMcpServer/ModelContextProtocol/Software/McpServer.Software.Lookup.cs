@@ -26,7 +26,7 @@ namespace TiaMcpServer.ModelContextProtocol
         [McpServerTool(Name = "ResolveObjectPath", Title = "Resolve object path", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
          Description("Turn a bare or partial object name into the root-relative path the other tools need, searching program blocks, PLC data types, tags, tag tables, watch tables and external sources. Exact matches win; substring matches are only reported when nothing matches exactly")]
         public static ResponseResolveObjectPath ResolveObjectPath(
-            [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
+            [Description("softwarePath: PLC software as 'GetProjectTree' names it, e.g. 'PLC_1' or 'PC-System_1/Software PLC_1'")] string softwarePath,
             [Description("name: the object name to look for, e.g. 'FC_Block_1'. A full path may be passed; only its last segment is matched")] string name,
             [Description("kind: restrict the search to 'block', 'type', 'tag', 'tagTable', 'watchTable' or 'source'. Default 'any' searches all of them")] string kind = "any")
         {

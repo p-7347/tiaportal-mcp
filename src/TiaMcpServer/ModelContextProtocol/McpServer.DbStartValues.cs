@@ -15,7 +15,7 @@ namespace TiaMcpServer.ModelContextProtocol
         [McpServerTool(Name = "GetDbStartValues", Title = "Get DB start values", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
          Description("List the members of a data block (global or instance DB) with data type and start value, including members inside structs, UDTs and arrays, e.g. 'S[3].OriginOffset'. Needs no export. Filter with 'regexName' on the member path. Reads only; change one value with 'SetDbStartValue'")]
         public static ResponseDbStartValues GetDbStartValues(
-            [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
+            [Description("softwarePath: PLC software as 'GetProjectTree' names it, e.g. 'PLC_1' or 'PC-System_1/Software PLC_1'")] string softwarePath,
             [Description("blockPath: root-relative path of the data block, e.g. 'Servo/SM_UserData_Origin'")] string blockPath,
             [Description("regexName: optional regular expression on the member path, e.g. 'OriginOffset'")] string regexName = "",
             [Description("maxMembers: maximum number of members listed (default 500)")] int maxMembers = 500)
@@ -60,7 +60,7 @@ namespace TiaMcpServer.ModelContextProtocol
         [McpServerTool(Name = "SetDbStartValue", Title = "Set DB start value", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
          Description("Change the start value of one data block member in the offline project, e.g. 'S[3].OriginOffset' to '2.0', without touching anything else in the DB. The DB is backed up first. The PLC uses it only after compile and a download that reinitializes the DB (actual values stay until then)")]
         public static ResponseDbStartValueSet SetDbStartValue(
-            [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
+            [Description("softwarePath: PLC software as 'GetProjectTree' names it, e.g. 'PLC_1' or 'PC-System_1/Software PLC_1'")] string softwarePath,
             [Description("blockPath: root-relative path of the data block")] string blockPath,
             [Description("memberPath: member path as listed by 'GetDbStartValues', e.g. 'S[3].OriginOffset'")] string memberPath,
             [Description("value: new start value in TIA notation, e.g. 2.0, TRUE or T#5s; a string value includes its single quotes")] string value)
