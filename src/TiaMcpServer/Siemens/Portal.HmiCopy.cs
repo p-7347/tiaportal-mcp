@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Siemens.Engineering;
 using Siemens.Engineering.HmiUnified;
 using Siemens.Engineering.HmiUnified.UI;
@@ -113,59 +114,34 @@ namespace TiaMcpServer.Siemens
                     var sourceScreen = RequireHmiScreen(hmi, source.Name);
                     var screens = ScreensHolding(hmi, sourceScreen);
                     var writer = new CopyWriter(replacements, source.TargetDefaults);
+                    HmiScreen? screen = null;
 
                     try
                     {
-                        writer.Step = $"create screen '{newScreenName}'";
-                        var screen = screens.Create(newScreenName);
-
-                        writer.WriteUi(screen, source.Screen, "screen");
-
-                        if (screenNumber.HasValue)
+                        // The screen and each item get a transaction of their own: items created in the
+                        // same transaction as their new screen made the TIA Portal screen editor crash on
+                        // opening it (NullReferenceException in ArrangeCommandTarget, live 2026-10-30),
+                        // while the same screen and items made by separate calls open fine.
+                        // assigned only once committed, so a refused screen write leaves nothing to remove
+                        screen = InTransaction($"MCP: copy screen '{source.Name}' to '{newScreenName}'", () =>
                         {
-                            writer.Step = $"set screen number {screenNumber.Value}";
-                            screen.ScreenNumber = screenNumber.Value;
-                        }
+                            writer.Step = $"create screen '{newScreenName}'";
+                            var created = screens.Create(newScreenName);
+
+                            writer.WriteUi(created, source.Screen, "screen");
+
+                            if (screenNumber.HasValue)
+                            {
+                                writer.Step = $"set screen number {screenNumber.Value}";
+                                created.ScreenNumber = screenNumber.Value;
+                            }
+
+                            return created;
+                        });
 
                         foreach (var item in source.Items)
                         {
-                            writer.Step = $"create item '{item.Name}' ({item.Type.Name})";
-                            var created = CreateItemOfType(screen.ScreenItems, item);
-                            writer.Items++;
-
-                            writer.WriteUi(created, item.Ui, item.Name);
-
-                            if (created is HmiFaceplateContainer faceplate)
-                            {
-                                foreach (var part in item.Interface)
-                                {
-                                    writer.Step = $"{item.Name}.Interface.{part.PropertyName}";
-                                    var target = faceplate.Interface.Find(part.PropertyName);
-
-                                    if (target == null)
-                                    {
-                                        writer.Warnings.Add($"{item.Name}: faceplate interface '{part.PropertyName}' not found on the copy");
-                                        continue;
-                                    }
-
-                                    if (part.Value != null && !IsPlainValue(part.Value))
-                                    {
-                                        writer.Warnings.Add($"{item.Name}.Interface.{part.PropertyName}: value of type {part.Value.GetType().Name} not copied");
-                                    }
-                                    else if (part.Value != null)
-                                    {
-                                        var value = writer.Replace(part.Value);
-
-                                        if (!Equals(target.Value, value))
-                                        {
-                                            target.Value = value;
-                                            writer.Attributes++;
-                                        }
-                                    }
-
-                                    writer.WriteDynamizations(target, part.Dynamizations, $"{item.Name}.Interface.{part.PropertyName}");
-                                }
-                            }
+                            InTransaction($"MCP: copy item '{item.Name}' to '{newScreenName}'", () => WriteItemCopy(screen, item, writer));
                         }
 
                         return new HmiScreenCopyResult
@@ -182,11 +158,78 @@ namespace TiaMcpServer.Siemens
                     }
                     catch (Exception ex) when (ex is not PortalException)
                     {
+                        // a refused write rolls back only its own transaction, so remove the half-made screen
+                        var removed = TryDeleteScreen(screen);
+
                         throw new PortalException(PortalErrorCode.CreateFailed,
-                            $"TIA Portal refused the copy at '{writer.Step}': {Operation.DescribeChain(ex)}. Nothing was kept.", null, ex);
+                            $"TIA Portal refused the copy at '{writer.Step}': {Operation.DescribeChain(ex)}. " +
+                            (removed ? "Nothing was kept." : $"The partly copied screen '{newScreenName}' could not be removed; delete it with 'DeleteHmiScreen'."),
+                            null, ex);
                     }
                 },
-                ("softwarePath", softwarePath), ("source", source.Name), ("newScreenName", newScreenName));
+("softwarePath", softwarePath), ("source", source.Name), ("newScreenName", newScreenName));
+        }
+
+        private static void WriteItemCopy(HmiScreen screen, HmiItemSnapshot item, CopyWriter writer)
+        {
+            writer.Step = $"create item '{item.Name}' ({item.Type.Name})";
+            var created = CreateItemOfType(screen.ScreenItems, item);
+            writer.Items++;
+
+            writer.WriteUi(created, item.Ui, item.Name);
+
+            if (created is not HmiFaceplateContainer faceplate)
+            {
+                return;
+            }
+
+            foreach (var part in item.Interface)
+            {
+                writer.Step = $"{item.Name}.Interface.{part.PropertyName}";
+                var target = faceplate.Interface.Find(part.PropertyName);
+
+                if (target == null)
+                {
+                    writer.Warnings.Add($"{item.Name}: faceplate interface '{part.PropertyName}' not found on the copy");
+                    continue;
+                }
+
+                if (part.Value != null && !IsPlainValue(part.Value))
+                {
+                    writer.Warnings.Add($"{item.Name}.Interface.{part.PropertyName}: value of type {part.Value.GetType().Name} not copied");
+                }
+                else if (part.Value != null)
+                {
+                    var value = writer.Replace(part.Value);
+
+                    if (!Equals(target.Value, value))
+                    {
+                        target.Value = value;
+                        writer.Attributes++;
+                    }
+                }
+
+                writer.WriteDynamizations(target, part.Dynamizations, $"{item.Name}.Interface.{part.PropertyName}");
+            }
+        }
+
+        private bool TryDeleteScreen(HmiScreen? screen)
+        {
+            if (screen == null)
+            {
+                return true;
+            }
+
+            try
+            {
+                InTransaction("MCP: remove partly copied screen", () => screen.Delete());
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Could not remove the partly copied screen '{Screen}'", screen.Name);
+                return false;
+            }
         }
 
         public bool HmiScreenExists(string softwarePath, string screenName)
