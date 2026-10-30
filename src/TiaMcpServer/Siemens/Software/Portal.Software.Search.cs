@@ -50,7 +50,8 @@ namespace TiaMcpServer.Siemens
             string softwarePath,
             string pattern,
             string nameFilter = "",
-            int maxResults = 200)
+            int maxResults = 200,
+            int startAt = 0)
         {
             return Operation.Run(_logger, nameof(FindInCode), PortalErrorCode.ExportFailed,
                 () =>
@@ -65,6 +66,13 @@ namespace TiaMcpServer.Siemens
                     {
                         throw new PortalException(PortalErrorCode.InvalidParams, "'maxResults' must be greater than zero.");
                     }
+
+                    if (startAt < 0)
+                    {
+                        throw new PortalException(PortalErrorCode.InvalidParams, "'startAt' must not be negative.");
+                    }
+
+                    var clock = System.Diagnostics.Stopwatch.StartNew();
 
                     Regex regex;
 
@@ -91,49 +99,30 @@ namespace TiaMcpServer.Siemens
                         // a hit always corresponds to text the caller can fetch with GetBlockSource.
                         // The objects are kept rather than just their paths: re-resolving each path
                         // walked the device list and group tree again for every single object.
-                        var targets = new List<(string Path, PlcBlock? Block, PlcType? Type)>();
+                        // A continued call (startAt > 0) reuses the list the first call made: listing and
+                        // checking ~1000 objects took most of the 40 s budget, leaving a few objects per call.
+                        var key = $"{CurrentPortalId}|{softwarePath}|{nameFilter}";
+                        var cached = _searchTargets;
+                        List<(string Path, PlcBlock? Block, PlcType? Type)> readable;
 
-                        ReportProgress(0, "(listing blocks)");
-
-                        foreach (var block in GetBlocks(softwarePath, nameFilter))
+                        if (startAt > 0 && cached != null && cached.Key == key && DateTime.UtcNow - cached.At < TimeSpan.FromMinutes(SearchListReuseMinutes))
                         {
-                            targets.Add((GetBlockPath(block), block, null));
+                            readable = (List<(string Path, PlcBlock? Block, PlcType? Type)>)cached.Readable;
+                        }
+                        else
+                        {
+                            readable = ListSearchTargets(softwarePath, nameFilter, startAt == 0 ? result.Unsearchable : new List<string>());
+                            _searchTargets = new SearchTargetCache(key, DateTime.UtcNow, readable);
                         }
 
-                        ReportProgress(0, "(listing PLC data types)");
-
-                        foreach (var type in GetTypes(softwarePath, nameFilter))
-                        {
-                            targets.Add((GetTypePath(type), null, type));
-                        }
-
-                        // Inconsistent objects cannot be exported. They used to be dropped without a
-                        // word, so a search over a block that was just edited and not yet compiled
-                        // reported "0 objects searched" instead of saying why.
-                        var readable = new List<(string Path, PlcBlock? Block, PlcType? Type)>();
-
-                        foreach (var target in targets)
-                        {
-                            var consistent = target.Block?.IsConsistent ?? target.Type!.IsConsistent;
-
-                            if (consistent)
-                            {
-                                readable.Add(target);
-                            }
-                            else
-                            {
-                                result.Unsearchable.Add($"{target.Path}: inconsistent - compile the software first.");
-                            }
-                        }
-
-                        result.ObjectsSearched = readable.Count;
+                        result.ObjectsTotal = readable.Count;
 
                         // Each target is exported individually, so a big, unfiltered PLC can take
                         // minutes - 'GetState' reports this while it runs so a caller stuck on a
                         // busy error can tell "still working" from "looks stuck".
                         SetProgressTotal(readable.Count);
 
-                        for (var t = 0; t < readable.Count; t++)
+                        for (var t = startAt; t < readable.Count; t++)
                         {
                             var target = readable[t];
 
@@ -143,6 +132,17 @@ namespace TiaMcpServer.Siemens
 
                                 break;
                             }
+
+                            // An unfiltered search of a big PLC ran past the client's timeout and the
+                            // server was disconnected; stop in time and say where to go on.
+                            if (result.ObjectsSearched > 0 && clock.Elapsed > SearchBudget)
+                            {
+                                result.NextStartAt = t;
+
+                                break;
+                            }
+
+                            result.ObjectsSearched++;
 
                             ReportProgress(t, target.Path);
 
@@ -180,6 +180,70 @@ namespace TiaMcpServer.Siemens
                 },
                 ("softwarePath", softwarePath), ("pattern", pattern), ("nameFilter", nameFilter));
         }
+
+        private const int SearchListReuseMinutes = 10;
+
+        // A plain class typed with 'object': a field whose type names PlcBlock (e.g. a tuple) makes the
+        // runtime load Siemens.Engineering when Portal is first touched in Main, before the Openness
+        // resolver is installed, and the server died at start (live 2026-10-30).
+        private SearchTargetCache? _searchTargets;
+
+        private sealed class SearchTargetCache
+        {
+            public SearchTargetCache(string key, DateTime at, object readable)
+            {
+                Key = key;
+                At = at;
+                Readable = readable;
+            }
+
+            public string Key { get; }
+            public DateTime At { get; }
+            public object Readable { get; }
+        }
+
+        /// <summary>The blocks and types FindInCode can export, in search order; inconsistent ones go to 'unsearchable'.</summary>
+        private List<(string Path, PlcBlock? Block, PlcType? Type)> ListSearchTargets(string softwarePath, string nameFilter, List<string> unsearchable)
+        {
+            var targets = new List<(string Path, PlcBlock? Block, PlcType? Type)>();
+
+            ReportProgress(0, "(listing blocks)");
+
+            foreach (var block in GetBlocks(softwarePath, nameFilter))
+            {
+                targets.Add((GetBlockPath(block), block, null));
+            }
+
+            ReportProgress(0, "(listing PLC data types)");
+
+            foreach (var type in GetTypes(softwarePath, nameFilter))
+            {
+                targets.Add((GetTypePath(type), null, type));
+            }
+
+            // Inconsistent objects cannot be exported. They used to be dropped without a
+            // word, so a search over a block that was just edited and not yet compiled
+            // reported "0 objects searched" instead of saying why.
+            var readable = new List<(string Path, PlcBlock? Block, PlcType? Type)>();
+
+            foreach (var target in targets)
+            {
+                var consistent = target.Block?.IsConsistent ?? target.Type!.IsConsistent;
+
+                if (consistent)
+                {
+                    readable.Add(target);
+                }
+                else
+                {
+                    unsearchable.Add($"{target.Path}: inconsistent - compile the software first.");
+                }
+            }
+
+            return readable;
+        }
+
+        private static readonly TimeSpan SearchBudget = TimeSpan.FromSeconds(40);
 
         private static void AddMatches(CodeSearchResult result, string objectPath, SourceTextResult source, Regex regex, int maxResults)
         {
@@ -234,8 +298,14 @@ namespace TiaMcpServer.Siemens
 
         public List<CodeMatch> Items { get; set; } = new List<CodeMatch>();
 
-        /// <summary>How many objects were exported and scanned.</summary>
+        /// <summary>How many objects were exported and scanned by this call.</summary>
         public int ObjectsSearched { get; set; }
+
+        /// <summary>How many objects the filter selected that can be searched.</summary>
+        public int ObjectsTotal { get; set; }
+
+        /// <summary>Set when the time budget ran out: pass it as 'startAt' to search the rest.</summary>
+        public int? NextStartAt { get; set; }
 
         /// <summary>Objects that could not be read, with the reason.</summary>
         public List<string> Unsearchable { get; set; } = new List<string>();

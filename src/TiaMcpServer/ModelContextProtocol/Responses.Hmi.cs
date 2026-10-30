@@ -66,6 +66,12 @@ namespace TiaMcpServer.ModelContextProtocol
     public class ResponseHmiAlarms : ResponseMessage
     {
         public IEnumerable<ResponseHmiAlarmInfo>? Items { get; set; }
+
+        /// <summary>Alarms matching the filter, over all calls.</summary>
+        public int? Total { get; set; }
+
+        /// <summary>Set when the call stopped on time: pass it as 'offset' to read the rest.</summary>
+        public int? NextOffset { get; set; }
     }
 
     public class ResponseHmiAlarmStateInfo

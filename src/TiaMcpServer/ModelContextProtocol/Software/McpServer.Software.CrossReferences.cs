@@ -234,11 +234,12 @@ namespace TiaMcpServer.ModelContextProtocol
         #region insight
 
         [McpServerTool(Name = "WhereUsed", Title = "Where used", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Use for a quick 'who uses X' by name. Answer 'what uses this?' for a tag, block, PLC data type or tag table by name. Resolves the name, picks the right object kind and flattens the cross-reference tree to a plain list of users. Use 'GetCrossReferences' instead when the full nested result or a specific filter is needed")]
+         Description("Use for a quick 'who uses X' by name. Answer 'what uses this?' for a tag, block, PLC data type or tag table by name. Resolves the name, picks the right object kind and flattens the cross-reference tree to a plain list of users, including the uses of a DB's or data type's members ('member'). Use 'GetCrossReferences' instead when the full nested result or a specific filter is needed")]
         public static ResponseWhereUsed WhereUsed(
             [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
             [Description("name: the object to look up, by bare name or by full root-relative path")] string name,
-            [Description("kind: restrict resolution to 'block', 'type', 'tag' or 'tagTable'. Default 'any' picks the single match, and reports the candidates when the name is ambiguous")] string kind = "any")
+            [Description("kind: restrict resolution to 'block', 'type', 'tag' or 'tagTable'. Default 'any' picks the single match, and reports the candidates when the name is ambiguous")] string kind = "any",
+            [Description("maxResults: return at most this many uses (default 300); 'total' is the full count. A DB used by an HMI can have thousands")] int maxResults = 300)
         {
             try
             {
@@ -264,27 +265,37 @@ namespace TiaMcpServer.ModelContextProtocol
                 var target = matches[0];
                 var result = Portal.GetCrossReferences(softwarePath, target.Path, target.Kind, CrossReferenceFilter.AllObjects);
 
-                var users = result.Sources
-                    .SelectMany(source => source.References.Select(reference => new ResponseUsage
-                    {
-                        UsedBy = reference.Name,
-                        Path = reference.Path,
-                        Address = reference.Address,
-                        TypeName = reference.TypeName
-                    }))
-                    .GroupBy(u => $"{u.Path}|{u.UsedBy}|{u.Address}")
+                // Members of a DB, UDT or struct are child sources with references of their own;
+                // reading only the top level missed every use of a DB member
+                var found = new List<ResponseUsage>();
+                var clock = System.Diagnostics.Stopwatch.StartNew();
+                var complete = true;
+
+                foreach (var source in result.Sources)
+                {
+                    complete &= CollectUsages(source, null, 0, found, clock);
+                }
+
+                var all = found
+                    .GroupBy(u => $"{u.Path}|{u.UsedBy}|{u.Address}|{u.Member}")
                     .Select(g => g.First())
                     .OrderBy(u => u.Path, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(u => u.Member, StringComparer.OrdinalIgnoreCase)
                     .ToList();
+                var users = maxResults > 0 ? all.Take(maxResults).ToList() : all;
 
                 return new ResponseWhereUsed
                 {
-                    Message = users.Count == 0
+                    Message = (all.Count == 0
                         ? $"'{target.Path}' ({target.Kind}) is not used anywhere in '{softwarePath}'"
-                        : $"'{target.Path}' ({target.Kind}) is used by {users.Count} object(s)",
+                        : $"'{target.Path}' ({target.Kind}) has {all.Count} use(s)" +
+                          (all.Any(u => u.Member != null) ? ", including uses of its members ('member')" : string.Empty) +
+                          (users.Count < all.Count ? $"; the first {users.Count} are listed (raise 'maxResults' or look up one member)" : string.Empty)) +
+                              (complete ? string.Empty : ". WARNING: stopped after about 40 s, so the list is incomplete - use 'GetCrossReferences' on a single member or tag for the rest"),
                     Path = target.Path,
                     Kind = target.Kind,
                     Items = users,
+                    Total = all.Count,
                     Meta = Ok(new JsonObject { ["userCount"] = users.Count, ["kind"] = target.Kind })
                 };
             }
@@ -296,6 +307,45 @@ namespace TiaMcpServer.ModelContextProtocol
             {
                 throw new McpException($"Unexpected error resolving usages of '{name}': {ex.Message}", ex);
             }
+        }
+
+        private static readonly TimeSpan WhereUsedBudget = TimeSpan.FromSeconds(40);
+
+        /// <summary>Adds the references of 'source' and of its members; false when the time budget ran out.</summary>
+        private static bool CollectUsages(SourceObject source, string? member, int depth, List<ResponseUsage> sink, System.Diagnostics.Stopwatch clock)
+        {
+            if (clock.Elapsed > WhereUsedBudget)
+            {
+                return false;
+            }
+
+            foreach (var reference in source.References)
+            {
+                sink.Add(new ResponseUsage
+                {
+                    UsedBy = reference.Name,
+                    Path = reference.Path,
+                    Address = reference.Address,
+                    TypeName = reference.TypeName,
+                    Member = member
+                });
+            }
+
+            if (depth >= 8)
+            {
+                return true;
+            }
+
+            foreach (var child in source.Children)
+            {
+                // a child's name is already its full name, e.g. '"ProductCount".Cfg.ShiftQty'
+                if (!CollectUsages(child, child.Name, depth + 1, sink, clock))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         /// <summary>Object kinds Openness can produce cross references for.</summary>

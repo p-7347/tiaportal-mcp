@@ -183,17 +183,24 @@ namespace TiaMcpServer.Siemens
 
                 if (!string.IsNullOrEmpty(regexName))
                 {
-                    try
+                    var itemName = name(item);
+
+                    // The exact name always matches: names like '6_G2U5_Auto[0]' read as a regex
+                    // mean "...Auto0", so a filter copied from a block name found nothing.
+                    if (!string.Equals(itemName, regexName, StringComparison.OrdinalIgnoreCase))
                     {
-                        if (!Regex.IsMatch(name(item), regexName, RegexOptions.IgnoreCase))
+                        try
                         {
+                            if (!Regex.IsMatch(itemName, regexName, RegexOptions.IgnoreCase))
+                            {
+                                continue;
+                            }
+                        }
+                        catch (ArgumentException)
+                        {
+                            // Invalid regex pattern - skip this item.
                             continue;
                         }
-                    }
-                    catch (ArgumentException)
-                    {
-                        // Invalid regex pattern - skip this item.
-                        continue;
                     }
                 }
 
