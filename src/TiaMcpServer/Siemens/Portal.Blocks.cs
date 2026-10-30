@@ -643,7 +643,17 @@ namespace TiaMcpServer.Siemens
                         ?? throw new PortalException(PortalErrorCode.NotFound,
                             $"Block group not found at '{groupPath}'.");
 
-                    return group.Blocks.CreateFB(name, autoNumber, AutoNumberStart(autoNumber, number), parsedLanguage);
+                    try
+                    {
+                        return group.Blocks.CreateFB(name, autoNumber, AutoNumberStart(autoNumber, number), parsedLanguage);
+                    }
+                    catch (EngineeringTargetInvocationException ex) when (ex.Message.Contains("ProDiag") && parsedLanguage != ProgrammingLanguage.ProDiag)
+                    {
+                        // seen live 2026-10-30 on a V20 project: LAD refused, ProDiag created
+                        throw new PortalException(PortalErrorCode.CreateFailed,
+                            $"TIA Portal creates only ProDiag FBs here, not {language} ({ex.Message.Trim()}). To make a {language} FB, " +
+                            "import it instead: 'ImportSourceBlock' with an .scl file, or 'ImportXmlBlock' with a SimaticML file.", null, ex);
+                    }
                 },
                 ("softwarePath", softwarePath), ("groupPath", groupPath), ("name", name), ("language", language));
         }

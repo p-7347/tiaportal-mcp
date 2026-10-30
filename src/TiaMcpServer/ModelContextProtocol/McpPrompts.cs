@@ -2482,6 +2482,24 @@ Use the CopyHmiScreen tool with these parameters:
 - newScreenName: {newScreenName}{OptionalParameter("replace", replace)}{OptionalParameter("screenNumber", screenNumber)}";
         }
 
+        [McpServerPrompt(Name = "SetHmiItemZOrder"), Description("Bring WinCC Unified screen items to front or send them to back")]
+        public static string SetHmiItemZOrder(string softwarePath, string screenName, string items, string position)
+        {
+            return $@"Put WinCC Unified screen items in front of or behind the others. The items are re-created with the same names and properties ('front' re-creates the named items, 'back' all the others). Ask the user to close the screen in the TIA Portal editor first.
+
+Common parameter values:
+- softwarePath: path of the WinCC Unified HMI software, e.g. 'HMI_1/HMI_RT_1'
+- screenName: name of the screen
+- items: item names separated by commas
+- position: 'front' or 'back'
+
+Use the SetHmiItemZOrder tool with these parameters:
+- softwarePath: {softwarePath}
+- screenName: {screenName}
+- items: {items}
+- position: {position}";
+        }
+
         [McpServerPrompt(Name = "CopyHmiScreens"), Description("Make a numbered series of WinCC Unified screens from one screen")]
         public static string CopyHmiScreens(string softwarePath, string screenName, string newScreenName, string from, string to, string replace = "", string screenNumberStart = "")
         {

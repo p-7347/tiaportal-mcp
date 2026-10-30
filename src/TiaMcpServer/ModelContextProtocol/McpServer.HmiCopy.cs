@@ -60,7 +60,34 @@ namespace TiaMcpServer.ModelContextProtocol
                     Warnings = result.Warnings.Count > 0 ? result.Warnings : null,
                     Meta = OkMeta()
                 };
-            });
+            }, oneTransaction: false);
+        }
+
+        [WriteTool]
+        [McpServerTool(Name = "SetHmiItemZOrder", Title = "Bring HMI items to front or send to back", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Use to put WinCC Unified screen items in front of or behind the others (bring to front / send to back). Openness has no z-order call, so the items are deleted and created again on top, with everything 'CopyHmiScreen' copies (properties, texts, dynamizations, event scripts, faceplate interfaces) and the same names: 'front' re-creates the named items, 'back' re-creates all the other items. Refused when an affected item has something Openness cannot read. Ask the user to close the screen in the TIA Portal editor first")]
+        public static ResponseHmiZOrder SetHmiItemZOrder(
+            [Description(HmiPathDescription)] string softwarePath,
+            [Description("screenName: name of the screen")] string screenName,
+            [Description("items: names of the items to move, separated by commas or line breaks; they keep their order among themselves")] string items,
+            [Description("position: 'front' (on top of all other items) or 'back' (behind all other items)")] string position)
+        {
+            return Guarded(nameof(SetHmiItemZOrder), () =>
+            {
+                var result = Portal.SetHmiItemZOrder(softwarePath, screenName, SplitNames(items), position);
+
+                return new ResponseHmiZOrder
+                {
+                    Message = $"{result.Recreated.Count} item(s) re-created on '{screenName}' to move '{items}' to the {position.Trim().ToLowerInvariant()}. " +
+                              "Order back to front: " + string.Join(", ", result.Order) + "." +
+                              (result.Warnings.Count > 0 ? $" WARNING: {result.Warnings.Count} thing(s) not re-created - see 'warnings'." : string.Empty) +
+                              $" {SaveHint}",
+                    Recreated = result.Recreated,
+                    Order = result.Order,
+                    Warnings = result.Warnings.Count > 0 ? result.Warnings : null,
+                    Meta = OkMeta()
+                };
+            }, oneTransaction: false);
         }
 
         private static readonly TimeSpan CopyBudget = TimeSpan.FromSeconds(40);
@@ -72,7 +99,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "CopyHmiScreens", Title = "Copy HMI screen to a series", Destructive = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Make a numbered series of WinCC Unified screens from one screen, e.g. the screens of servo 2..60 from the screen of servo 1. Each copy works like 'CopyHmiScreen'; in 'newScreenName' and 'replace' the placeholder %n% is the number, %n2%/%n3% the number with leading zeros. Each screen is its own transaction. Stops before a copy that would end after about 40 s, to stay inside the client timeout and returns 'nextNumber' - call again with from=nextNumber to continue. Screens that already exist are skipped, so a repeated call is safe. A continued call within 10 minutes reuses the source as the previous call read it")]
+         Description("Make a numbered series of WinCC Unified screens from one screen, e.g. the screens of servo 2..60 from the screen of servo 1. Each copy works like 'CopyHmiScreen'; in 'newScreenName' and 'replace' the placeholder %n% is the number, %n2%/%n3% the number with leading zeros. Each screen and each of its items is its own transaction. Stops before a copy that would end after about 40 s, to stay inside the client timeout and returns 'nextNumber' - call again with from=nextNumber to continue. Screens that already exist are skipped, so a repeated call is safe. A continued call within 10 minutes reuses the source as the previous call read it")]
         public static ResponseHmiScreenCopies CopyHmiScreens(
             [Description(HmiPathDescription)] string softwarePath,
             [Description("screenName: the screen to copy, as 'GetHmiScreens' lists it")] string screenName,
@@ -153,7 +180,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
                 var started = clock.Elapsed;
                 var result = Guarded(nameof(CopyHmiScreens),
-                    () => Portal.WriteHmiScreenCopy(softwarePath, snapshot, name, replacements, number));
+                    () => Portal.WriteHmiScreenCopy(softwarePath, snapshot, name, replacements, number), oneTransaction: false);
 
                 longest = TimeSpan.FromTicks(Math.Max(longest.Ticks, (clock.Elapsed - started).Ticks));
                 created.Add(name);
