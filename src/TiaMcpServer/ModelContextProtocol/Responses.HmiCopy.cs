@@ -2,6 +2,17 @@ using System.Collections.Generic;
 
 namespace TiaMcpServer.ModelContextProtocol
 {
+    public class ResponseHmiZOrder : ResponseMessage
+    {
+        /// <summary>Items deleted and created again to change the order.</summary>
+        public List<string>? Recreated { get; set; }
+
+        /// <summary>All items of the screen afterwards, back to front.</summary>
+        public List<string>? Order { get; set; }
+
+        public List<string>? Warnings { get; set; }
+    }
+
     public class ResponseHmiScreenCopies : ResponseMessage
     {
         public List<string>? Created { get; set; }

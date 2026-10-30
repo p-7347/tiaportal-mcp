@@ -63,6 +63,33 @@ namespace TiaMcpServer.ModelContextProtocol
             }, oneTransaction: false);
         }
 
+        [WriteTool]
+        [McpServerTool(Name = "SetHmiItemZOrder", Title = "Bring HMI items to front or send to back", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Use to put WinCC Unified screen items in front of or behind the others (bring to front / send to back). Openness has no z-order call, so the items are deleted and created again on top, with everything 'CopyHmiScreen' copies (properties, texts, dynamizations, event scripts, faceplate interfaces) and the same names: 'front' re-creates the named items, 'back' re-creates all the other items. Refused when an affected item has something Openness cannot read. Ask the user to close the screen in the TIA Portal editor first")]
+        public static ResponseHmiZOrder SetHmiItemZOrder(
+            [Description(HmiPathDescription)] string softwarePath,
+            [Description("screenName: name of the screen")] string screenName,
+            [Description("items: names of the items to move, separated by commas or line breaks; they keep their order among themselves")] string items,
+            [Description("position: 'front' (on top of all other items) or 'back' (behind all other items)")] string position)
+        {
+            return Guarded(nameof(SetHmiItemZOrder), () =>
+            {
+                var result = Portal.SetHmiItemZOrder(softwarePath, screenName, SplitNames(items), position);
+
+                return new ResponseHmiZOrder
+                {
+                    Message = $"{result.Recreated.Count} item(s) re-created on '{screenName}' to move '{items}' to the {position.Trim().ToLowerInvariant()}. " +
+                              "Order back to front: " + string.Join(", ", result.Order) + "." +
+                              (result.Warnings.Count > 0 ? $" WARNING: {result.Warnings.Count} thing(s) not re-created - see 'warnings'." : string.Empty) +
+                              $" {SaveHint}",
+                    Recreated = result.Recreated,
+                    Order = result.Order,
+                    Warnings = result.Warnings.Count > 0 ? result.Warnings : null,
+                    Meta = OkMeta()
+                };
+            }, oneTransaction: false);
+        }
+
         private static readonly TimeSpan CopyBudget = TimeSpan.FromSeconds(40);
 
         // The snapshot of the last series source, so a continued call (from=nextNumber) skips re-reading it

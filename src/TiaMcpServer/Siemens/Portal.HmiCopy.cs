@@ -53,42 +53,47 @@ namespace TiaMcpServer.Siemens
                             continue;
                         }
 
-                        var itemSnapshot = new HmiItemSnapshot { Name = item.Name, Type = item.GetType() };
-
-                        if (item is HmiContainerBase container)
-                        {
-                            itemSnapshot.ContainedType = container.ContainedType;
-                        }
-
-                        ReadUi(item, itemSnapshot.Ui, item.Name, snapshot.Skipped, SnapshotDepth, "Name", "ContainedType");
-                        ReadEvents(item, itemSnapshot.Ui, item.Name, snapshot.Skipped);
-
-                        if (item is HmiFaceplateContainer faceplate)
-                        {
-                            foreach (var property in faceplate.Interface)
-                            {
-                                var part = new HmiInterfaceSnapshot { PropertyName = property.PropertyName };
-
-                                try
-                                {
-                                    part.Value = property.Value;
-                                }
-                                catch (Exception ex)
-                                {
-                                    snapshot.Skipped.Add($"{item.Name}.Interface.{property.PropertyName}: not readable ({ex.Message})");
-                                }
-
-                                ReadDynamizations(property, part.Dynamizations, $"{item.Name}.Interface.{property.PropertyName}", snapshot.Skipped);
-                                itemSnapshot.Interface.Add(part);
-                            }
-                        }
-
-                        snapshot.Items.Add(itemSnapshot);
+                        snapshot.Items.Add(ReadItemSnapshot(item, snapshot.Skipped));
                     }
 
                     return snapshot;
                 },
                 ("softwarePath", softwarePath), ("screenName", screenName));
+        }
+
+        private static HmiItemSnapshot ReadItemSnapshot(HmiScreenItemBase item, List<string> skipped)
+        {
+            var itemSnapshot = new HmiItemSnapshot { Name = item.Name, Type = item.GetType() };
+
+            if (item is HmiContainerBase container)
+            {
+                itemSnapshot.ContainedType = container.ContainedType;
+            }
+
+            ReadUi(item, itemSnapshot.Ui, item.Name, skipped, SnapshotDepth, "Name", "ContainedType");
+            ReadEvents(item, itemSnapshot.Ui, item.Name, skipped);
+
+            if (item is HmiFaceplateContainer faceplate)
+            {
+                foreach (var property in faceplate.Interface)
+                {
+                    var part = new HmiInterfaceSnapshot { PropertyName = property.PropertyName };
+
+                    try
+                    {
+                        part.Value = property.Value;
+                    }
+                    catch (Exception ex)
+                    {
+                        skipped.Add($"{item.Name}.Interface.{property.PropertyName}: not readable ({ex.Message})");
+                    }
+
+                    ReadDynamizations(property, part.Dynamizations, $"{item.Name}.Interface.{property.PropertyName}", skipped);
+                    itemSnapshot.Interface.Add(part);
+                }
+            }
+
+            return itemSnapshot;
         }
 
         public HmiScreenCopyResult WriteHmiScreenCopy(
