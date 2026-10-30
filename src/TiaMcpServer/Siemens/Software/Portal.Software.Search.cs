@@ -33,10 +33,9 @@ namespace TiaMcpServer.Siemens
         // Openness offers no in-memory access to a block body. Everything is written to a scratch
         // directory under the temp path and removed again.
         //
-        // Cost: one export per candidate object, per call. A whole PLC of this project's size
-        // exports in roughly ten seconds, so no persistent cache is kept - invalidating one
-        // correctly is not worth the complexity at that scale. Narrow the work with 'nameFilter'
-        // on a large PLC.
+        // Cost: one export per candidate object the first time; the text is then kept in memory
+        // while the object's ModifiedDate is unchanged (see ReadSearchText), so later searches
+        // only re-export what changed. Narrow the first search with 'nameFilter' on a large PLC.
 
         #region search
 
@@ -150,9 +149,7 @@ namespace TiaMcpServer.Siemens
 
                             try
                             {
-                                source = target.Block != null
-                                    ? ReadBlockSource(target.Block, target.Path, "document", int.MaxValue)
-                                    : ReadTypeSource(target.Type!, target.Path, "document", int.MaxValue);
+                                source = ReadSearchText(softwarePath, target.Path, target.Block, target.Type);
                             }
                             catch (Exception ex)
                             {
@@ -182,6 +179,50 @@ namespace TiaMcpServer.Siemens
         }
 
         private const int SearchListReuseMinutes = 10;
+
+        // Exported text of each searched object, kept while the object is unchanged: an export took
+        // about 5 s per block on a 985-object PLC (live 2026-10-30), so a second search re-exporting
+        // everything got through ~7 objects per call. The stamp is ModifiedDate, which TIA moves on
+        // any change to the object; the key carries portal and project so another project never hits.
+        private readonly Dictionary<string, SearchTextEntry> _searchTexts = new Dictionary<string, SearchTextEntry>(StringComparer.Ordinal);
+
+        private const int SearchTextCacheLimit = 5000;
+
+        private sealed class SearchTextEntry
+        {
+            public SearchTextEntry(DateTime stamp, SourceTextResult text)
+            {
+                Stamp = stamp;
+                Text = text;
+            }
+
+            public DateTime Stamp { get; }
+            public SourceTextResult Text { get; }
+        }
+
+        private SourceTextResult ReadSearchText(string softwarePath, string path, PlcBlock? block, PlcType? type)
+        {
+            var key = $"{CurrentPortalId}|{_project?.Path?.FullName}|{softwarePath}|{path}";
+            var stamp = block?.ModifiedDate ?? type!.ModifiedDate;
+
+            if (_searchTexts.TryGetValue(key, out var hit) && hit.Stamp == stamp)
+            {
+                return hit.Text;
+            }
+
+            var text = block != null
+                ? ReadBlockSource(block, path, "document", int.MaxValue)
+                : ReadTypeSource(type!, path, "document", int.MaxValue);
+
+            if (_searchTexts.Count >= SearchTextCacheLimit)
+            {
+                _searchTexts.Clear();
+            }
+
+            _searchTexts[key] = new SearchTextEntry(stamp, text);
+
+            return text;
+        }
 
         // A plain class typed with 'object': a field whose type names PlcBlock (e.g. a tuple) makes the
         // runtime load Siemens.Engineering when Portal is first touched in Main, before the Openness

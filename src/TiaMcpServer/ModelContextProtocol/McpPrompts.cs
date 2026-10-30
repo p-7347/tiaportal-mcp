@@ -709,7 +709,7 @@ Use the ResolveObjectPath tool with these parameters:
         [McpServerPrompt(Name = "FindInCode"), Description("Search block and type source text with a regular expression")]
         public static string FindInCode(string softwarePath, string pattern, string nameFilter = "", string maxResults = "200")
         {
-            return $@"Search the actual source text of program blocks and PLC data types with a regular expression - every other filter in this server matches object names only. Returns the object path, line number and the matching line. Each call exports the candidate objects behind the scenes, so narrow a large PLC with 'nameFilter'. If the reply has 'nextStartAt', call again with startAt=nextStartAt.
+            return $@"Search the actual source text of program blocks and PLC data types with a regular expression - every other filter in this server matches object names only. Returns the object path, line number and the matching line. Objects are exported behind the scenes the first time (slow on a large PLC, so narrow it with 'nameFilter'); unchanged objects are then searched from memory, so repeat searches are fast. If the reply has 'nextStartAt', call again with startAt=nextStartAt.
 
 Common parameter values:
 - softwarePath: defines the path in the project structure to the software
