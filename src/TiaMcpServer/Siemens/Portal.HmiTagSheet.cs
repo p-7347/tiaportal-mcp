@@ -43,14 +43,20 @@ namespace TiaMcpServer.Siemens
             public bool BlankKeeps { get; }
         }
 
-        // TIA Portal's English display texts for HmiAcquisitionMode, as the export writes them.
-        private static readonly (string Text, HmiAcquisitionMode Mode)[] AcquisitionModeTexts =
+        // TIA Portal's English display texts for HmiAcquisitionMode, as the export writes them. In a
+        // nested class, not a field of Portal: a static field naming a Siemens type makes Portal's
+        // type initializer load Siemens.Engineering, which can happen before Program registers the
+        // assembly resolver and then kills the server at start.
+        private static class AcquisitionModes
         {
-            ("Cyclic in operation", HmiAcquisitionMode.CyclicOnUse),
-            ("Cyclic continuous", HmiAcquisitionMode.CyclicContinuous),
-            ("On demand", HmiAcquisitionMode.OnDemand),
-            ("None", HmiAcquisitionMode.None)
-        };
+            internal static readonly (string Text, HmiAcquisitionMode Mode)[] Texts =
+            {
+                ("Cyclic in operation", HmiAcquisitionMode.CyclicOnUse),
+                ("Cyclic continuous", HmiAcquisitionMode.CyclicContinuous),
+                ("On demand", HmiAcquisitionMode.OnDemand),
+                ("None", HmiAcquisitionMode.None)
+            };
+        }
 
         /// <summary>The columns written back, in write order: connection before PLC tag (the PLC tag is resolved against it), PLC tag before data type.</summary>
         public static readonly string[] HmiTagSheetColumns =
@@ -431,18 +437,18 @@ namespace TiaMcpServer.Siemens
                 case "Acquisition mode":
                     return TryParseAcquisitionMode(value, out _)
                         ? null
-                        : $"'{value}' is not one of {string.Join(", ", AcquisitionModeTexts.Select(m => m.Text))}";
+                        : $"'{value}' is not one of {string.Join(", ", AcquisitionModes.Texts.Select(m => m.Text))}";
                 default:
                     return null;
             }
         }
 
         private static string AcquisitionModeText(HmiAcquisitionMode mode) =>
-            AcquisitionModeTexts.Where(m => m.Mode == mode).Select(m => m.Text).FirstOrDefault() ?? mode.ToString();
+            AcquisitionModes.Texts.Where(m => m.Mode == mode).Select(m => m.Text).FirstOrDefault() ?? mode.ToString();
 
         private static bool TryParseAcquisitionMode(string text, out HmiAcquisitionMode mode)
         {
-            foreach (var (label, value) in AcquisitionModeTexts)
+            foreach (var (label, value) in AcquisitionModes.Texts)
             {
                 if (label.Equals(text.Trim(), StringComparison.OrdinalIgnoreCase))
                 {

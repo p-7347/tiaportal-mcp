@@ -32,14 +32,6 @@ namespace TiaMcpServer
                 Environment.Exit(1);
             }
 
-            // Set before the --doctor branch below, which reports the write mode, and before the
-            // host registers its tool types.
-            WritePolicy.AllowWrite = options.AllowWrite;
-            TiaMcpServer.Siemens.Portal.BackupRoot = options.BackupPath;
-
-            // Before the host registers its tool types: Apply reads the presets.
-            ToolDefaults.Configure(options);
-
             if (Engineering.TiaMajorVersion >= 20)
             {
                 Openness.Initialize(Engineering.TiaMajorVersion);
@@ -47,6 +39,15 @@ namespace TiaMcpServer
 
             // Fallback: the Siemens resolver does not cover every Siemens.Engineering.* satellite assembly.
             AppDomain.CurrentDomain.AssemblyResolve += Engineering.Resolver;
+
+            // After the resolvers above: touching Portal runs its type initializer, which may load
+            // Siemens.Engineering. Set before the --doctor branch below, which reports the write mode, and before the
+            // host registers its tool types.
+            WritePolicy.AllowWrite = options.AllowWrite;
+            TiaMcpServer.Siemens.Portal.BackupRoot = options.BackupPath;
+
+            // Before the host registers its tool types: Apply reads the presets.
+            ToolDefaults.Configure(options);
 
             // '--doctor' only reports the environment - it must run before the user group gate below,
             // because a missing group membership is one of the things it is meant to diagnose.
