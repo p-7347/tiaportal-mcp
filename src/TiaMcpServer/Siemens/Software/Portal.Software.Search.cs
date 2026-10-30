@@ -214,6 +214,28 @@ namespace TiaMcpServer.Siemens
                 ? ReadBlockSource(block, path, "document", int.MaxValue)
                 : ReadTypeSource(type!, path, "document", int.MaxValue);
 
+            // A block without a source document came back as SimaticML, where a hit is an XML tag
+            // line ('<Component Name="x" />') and a common name matched hundreds of them. Search
+            // the compact network text instead (plus its interface members), as GetBlockSource
+            // format 'text' shows it.
+            if (block != null && text.Format == "xml")
+            {
+                var doc = System.Xml.Linq.XDocument.Parse(text.Text);
+
+                if (doc.Descendants().Any(e => e.Name.LocalName == "SW.Blocks.CompileUnit"))
+                {
+                    text = new SourceTextResult
+                    {
+                        Name = text.Name,
+                        Path = text.Path,
+                        Format = "text",
+                        Text = LadText.RenderBlock(doc, RenderStructuredText, includeInterface: true),
+                        FileNames = text.FileNames
+                    };
+                    text.TotalChars = text.Text.Length;
+                }
+            }
+
             if (_searchTexts.Count >= SearchTextCacheLimit)
             {
                 _searchTexts.Clear();
@@ -323,7 +345,7 @@ namespace TiaMcpServer.Siemens
         /// <summary>Root-relative path, ready to pass to GetBlockSource or GetTypeSource.</summary>
         public string ObjectPath { get; set; } = string.Empty;
 
-        /// <summary>'document' or 'xml' - which representation was searched.</summary>
+        /// <summary>'document', 'text' or 'xml' - which representation was searched.</summary>
         public string Format { get; set; } = string.Empty;
 
         /// <summary>1-based line number within that representation.</summary>
