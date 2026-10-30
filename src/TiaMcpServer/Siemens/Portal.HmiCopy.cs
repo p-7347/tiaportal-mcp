@@ -45,6 +45,13 @@ namespace TiaMcpServer.Siemens
 
                     foreach (var item in screen.ScreenItems)
                     {
+                        if (item == null)
+                        {
+                            // a kind V20 Openness has no type for (e.g. a PLC code view)
+                            snapshot.Skipped.Add("an item of a kind Openness cannot read (e.g. PLC code view): not copied");
+                            continue;
+                        }
+
                         var itemSnapshot = new HmiItemSnapshot { Name = item.Name, Type = item.GetType() };
 
                         if (item is HmiContainerBase container)

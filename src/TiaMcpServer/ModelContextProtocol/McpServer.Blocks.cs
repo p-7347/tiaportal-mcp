@@ -610,7 +610,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "EditBlockNetwork", Title = "Replace, insert or delete a network", Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true),
-         Description("Use to change a block (add, replace or remove a network) instead of editing the whole block XML. Change one network of a program block without hand-editing the whole block XML: replace or insert a network taken from an XML file (e.g. another block's export) or written as SCL text ('sclFile'), or delete one. LAD/FBD parts are put into the flow order TIA requires and IDs are renumbered; the block is backed up first. Use 'previewFile' to only write the edited block XML. The block must be consistent (compile it first)")]
+         Description("Use to change a block (add, replace or remove a network) instead of editing the whole block XML. Change one network of a program block without hand-editing the whole block XML: replace or insert a network taken from an XML file (e.g. another block's export) or written as SCL text ('sclFile'), or delete one. LAD/FBD parts are put into the flow order TIA requires and IDs are renumbered; the block is backed up first. Use 'previewFile' to only write the edited block XML. The block must be consistent (compile it first). The whole block is re-imported, which changes its interface timestamp: the instance DBs of an FB recompile and may be reinitialized at the next download")]
         public static ResponseNetworkEdit EditBlockNetwork(
             [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
             [Description("blockPath: root-relative path of the block, e.g. 009_Servo/FB_PitchHome_Inch")] string blockPath,
@@ -733,6 +733,13 @@ namespace TiaMcpServer.ModelContextProtocol
             if (result.StaticsAdded.Count > 0)
             {
                 message += $" Static member(s) added: {string.Join(", ", result.StaticsAdded)}.";
+            }
+
+            if (result.PreviewFile == null)
+            {
+                message += " NOTE: the whole block was re-imported, so its interface timestamp changed even if no member did: " +
+                           "instance DBs of an FB must be recompiled and their actual values may be reset to start values at the next download. " +
+                           "For a running machine where that matters, make the change in the TIA editor instead.";
             }
 
             message += extra;
