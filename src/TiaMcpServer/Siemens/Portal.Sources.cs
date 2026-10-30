@@ -288,12 +288,13 @@ namespace TiaMcpServer.Siemens
             Func<string, bool> exportDocuments,
             Func<string, bool> exportXml)
         {
-            var wantsDocument = format.Equals("document", StringComparison.OrdinalIgnoreCase);
+            var wantsText = format.Equals("text", StringComparison.OrdinalIgnoreCase);
+            var wantsDocument = wantsText || format.Equals("document", StringComparison.OrdinalIgnoreCase);
 
             if (!wantsDocument && !format.Equals("xml", StringComparison.OrdinalIgnoreCase))
             {
                 throw new PortalException(PortalErrorCode.InvalidParams,
-                    $"Unknown format '{format}'. Use 'document' for readable source text or 'xml' for SimaticML.");
+                    $"Unknown format '{format}'. Use 'document' for readable source text, 'text' for a compact reading of LAD/FBD blocks, or 'xml' for SimaticML.");
             }
 
             if (maxChars <= 0)
@@ -304,6 +305,28 @@ namespace TiaMcpServer.Siemens
             using (var scope = new SourceScope(_logger))
             {
                 var used = wantsDocument ? "document" : "xml";
+
+                // 'text': the block's networks rendered from its XML (LadText). An object without
+                // networks (a DB, a PLC data type) has nothing to render and goes the document way.
+                if (wantsText)
+                {
+                    exportXml(scope.Directory);
+
+                    var rendered = RenderNetworksText(scope.Directory);
+
+                    if (rendered != null)
+                    {
+                        return Truncate(new SourceTextResult
+                        {
+                            Name = name,
+                            Path = objectPath,
+                            Format = "text",
+                            FileNames = new List<string> { name + ".xml" }
+                        }, rendered, maxChars);
+                    }
+
+                    ClearDirectory(scope.Directory);
+                }
 
                 if (wantsDocument)
                 {
@@ -360,28 +383,54 @@ namespace TiaMcpServer.Siemens
                         ? $"===== {System.IO.Path.GetFileName(f)} ====={Environment.NewLine}{File.ReadAllText(f)}"
                         : File.ReadAllText(f)));
 
-                var full = text.Length;
-                var truncated = full > maxChars;
-
-                if (truncated)
-                {
-                    // Cut on a line boundary so the caller never sees half a statement.
-                    var cut = text.LastIndexOf('\n', Math.Min(maxChars, text.Length - 1));
-
-                    text = text.Substring(0, cut > 0 ? cut : maxChars);
-                }
-
-                return new SourceTextResult
+                return Truncate(new SourceTextResult
                 {
                     Name = name,
                     Path = objectPath,
                     Format = used,
-                    Text = text,
-                    TotalChars = full,
-                    Truncated = truncated,
                     FileNames = files.Select(f => System.IO.Path.GetFileName(f)).ToList()
-                };
+                }, text, maxChars);
             }
+        }
+
+        private static SourceTextResult Truncate(SourceTextResult result, string text, int maxChars)
+        {
+            var full = text.Length;
+            var truncated = full > maxChars;
+
+            if (truncated)
+            {
+                // Cut on a line boundary so the caller never sees half a statement.
+                var cut = text.LastIndexOf('\n', Math.Min(maxChars, text.Length - 1));
+
+                text = text.Substring(0, cut > 0 ? cut : maxChars);
+            }
+
+            result.Text = text;
+            result.TotalChars = full;
+            result.Truncated = truncated;
+
+            return result;
+        }
+
+        /// <summary>The compact text of the exported block in <paramref name="directory"/>, or null when it has no networks.</summary>
+        private static string? RenderNetworksText(string directory)
+        {
+            var file = System.IO.Directory.EnumerateFiles(directory, "*.xml", SearchOption.AllDirectories).FirstOrDefault();
+
+            if (file == null)
+            {
+                return null;
+            }
+
+            var doc = XDocument.Load(file);
+
+            if (!doc.Descendants().Any(e => e.Name.LocalName == "SW.Blocks.CompileUnit"))
+            {
+                return null;
+            }
+
+            return LadText.RenderBlock(doc, RenderStructuredText);
         }
 
         private static bool HasFiles(string directory) =>
@@ -1625,6 +1674,7 @@ namespace TiaMcpServer.Siemens
             var attributeList = cu.Elements().FirstOrDefault(e => e.Name.LocalName == "AttributeList");
             var networkSource = attributeList?.Elements().FirstOrDefault(e => e.Name.LocalName == "NetworkSource");
             var structuredText = networkSource?.Elements().FirstOrDefault(e => e.Name.LocalName == "StructuredText");
+            var flgNet = networkSource?.Elements().FirstOrDefault(e => e.Name.LocalName == "FlgNet");
             var programmingLanguage = attributeList?.Elements().FirstOrDefault(e => e.Name.LocalName == "ProgrammingLanguage")?.Value;
 
             return new NetworkSourceInfo
@@ -1634,7 +1684,9 @@ namespace TiaMcpServer.Siemens
                 Comment = GetMultilingualText(cu, "Comment"),
                 ProgrammingLanguage = string.IsNullOrEmpty(programmingLanguage) ? null : programmingLanguage,
                 IsStructuredText = structuredText != null,
-                Text = structuredText != null ? RenderStructuredText(structuredText) : null
+                Text = structuredText != null
+                    ? RenderStructuredText(structuredText)
+                    : flgNet != null ? string.Join(Environment.NewLine, LadText.RenderFlgNet(flgNet)) : null
             };
         }
 
@@ -1847,7 +1899,7 @@ namespace TiaMcpServer.Siemens
 
         public string Path { get; set; } = string.Empty;
 
-        /// <summary>'document' or 'xml' - the format actually produced, which may differ from the request.</summary>
+        /// <summary>'document', 'text' or 'xml' - the format actually produced, which may differ from the request.</summary>
         public string Format { get; set; } = string.Empty;
 
         public string Text { get; set; } = string.Empty;
