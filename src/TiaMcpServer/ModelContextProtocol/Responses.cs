@@ -678,7 +678,7 @@ namespace TiaMcpServer.ModelContextProtocol
         /// <summary>Root-relative path, ready to pass to GetBlockSource or GetTypeSource.</summary>
         public string? ObjectPath { get; set; }
 
-        /// <summary>'document' or 'xml' - which representation was searched.</summary>
+        /// <summary>'document', 'text' or 'xml' - which representation was searched.</summary>
         public string? Format { get; set; }
 
         /// <summary>1-based line number within that representation.</summary>

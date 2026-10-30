@@ -1843,6 +1843,8 @@ namespace TiaMcpServer.Siemens
         // LocalVariable; later Components (after a '.' Token) are plain. Array index brackets
         // are NOT added here - the exported XML already contains literal "[" / "]" Token
         // children inside the indexed Component, so rendering them in place is correct.
+        private static readonly Regex PlainSclName = new Regex(@"^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
+
         private static void RenderSymbolAccess(XElement c, string scope, StringBuilder sb)
         {
             var symbol = c.Elements().FirstOrDefault(e => e.Name.LocalName == "Symbol");
@@ -1859,17 +1861,21 @@ namespace TiaMcpServer.Siemens
                 {
                     var name = (string?)cc.Attribute("Name") ?? "";
 
+                    // names that are not plain identifiers ("Home[0]", "S->P") need quotes in SCL,
+                    // or the text reads as an array access and does not compile
+                    var quoted = PlainSclName.IsMatch(name) || name.StartsWith("%", StringComparison.Ordinal) ? name : $"\"{name}\"";
+
                     if (!any && scope == "GlobalVariable")
                     {
-                        sb.Append('"').Append(name).Append('"');
+                        sb.Append(name.StartsWith("%", StringComparison.Ordinal) ? name : $"\"{name}\"");
                     }
                     else if (!any && scope == "LocalVariable")
                     {
-                        sb.Append('#').Append(name);
+                        sb.Append('#').Append(quoted);
                     }
                     else
                     {
-                        sb.Append(name);
+                        sb.Append(quoted);
                     }
                     any = true;
 
