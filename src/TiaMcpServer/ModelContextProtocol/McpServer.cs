@@ -208,7 +208,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "Doctor", Title = "Run Doctor diagnostics", ReadOnly = true, OpenWorld = true, UseStructuredContent = true), Description("Diagnose the TIA Portal environment: server version, connection, open project, active and installed TIA Portal versions, Openness user group membership. Also reports which git commit this running exe was actually built from and - unless checkRemote=false - whether the source tree has moved on since (needs rebuilding) or is behind its branch on GitHub (needs a pull); a quick 'git ls-remote', no fetch/pull. Added after a rebuilt exe was confirmed to silently keep serving old code with no way to tell from outside it.")]
+        [McpServerTool(Name = "Doctor", Title = "Run Doctor diagnostics", ReadOnly = true, OpenWorld = true, UseStructuredContent = true), Description("Diagnose the TIA Portal environment: server version, connection, open project, active and installed TIA Portal versions, installed option packages, other Openness clients attached to TIA Portal (another MCP server, a VS debug session), Openness user group membership. Also reports which git commit this running exe was actually built from and - unless checkRemote=false - whether the source tree has moved on since (needs rebuilding) or is behind its branch on GitHub (needs a pull); a quick 'git ls-remote', no fetch/pull. Added after a rebuilt exe was confirmed to silently keep serving old code with no way to tell from outside it.")]
         public static ResponseDoctor Doctor(
             [Description("checkRemote: also check origin/main on GitHub via 'git ls-remote' (default true). Set false to stay offline/local-only.")] bool checkRemote = true)
         {
@@ -240,6 +240,8 @@ namespace TiaMcpServer.ModelContextProtocol
                             PortalExeExists = i.PortalExeExists
                         })
                         .ToList(),
+                    OpennessSessions = report.OpennessSessions,
+                    InstalledProducts = report.InstalledProducts,
                     BuiltCommit = v.BuiltCommit,
                     BuiltCommitShort = v.BuiltCommitShort,
                     BuiltBranch = v.BuiltBranch,
@@ -268,7 +270,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region project/session
 
-        [McpServerTool(Name = "GetProject", Title = "Get open project", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("List the projects and local sessions open in the connected TIA Portal, with name and path")]
+        [McpServerTool(Name = "GetProject", Title = "Get open project", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("List the projects and local sessions open in the connected TIA Portal, with name, path and languages (editing language = where Openness text writes land)")]
         public static ResponseGetProjects GetProjects()
         {
             try
@@ -287,7 +289,8 @@ namespace TiaMcpServer.ModelContextProtocol
                         responseList.Add(new ResponseProjectInfo
                         {
                             Name = project.Name,
-                            Attributes = attributes
+                            Attributes = attributes,
+                            Languages = Portal.GetProjectLanguages(project)
                         });
                     }
                 }

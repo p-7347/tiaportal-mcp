@@ -32,6 +32,12 @@ namespace TiaMcpServer.Siemens
         /// <summary>Whether the server was started with --allow-write.</summary>
         public bool AllowWrite { get; set; }
         public IReadOnlyList<TiaInstallation> Installations { get; set; } = new List<TiaInstallation>();
+
+        /// <summary>Openness clients attached to the running TIA Portal instances, this server included.</summary>
+        public IReadOnlyList<OpennessSessionInfo> OpennessSessions { get; set; } = new List<OpennessSessionInfo>();
+
+        /// <summary>Products and option packages of the attached instance, "Name Version" each.</summary>
+        public IReadOnlyList<string> InstalledProducts { get; set; } = new List<string>();
         public string? Text { get; set; }
     }
 
@@ -78,6 +84,8 @@ namespace TiaMcpServer.Siemens
             var (projectName, projectPath) = GetProject(portal);
             var installations = GetInstalledTiaPortalVersions();
             var userInGroup = GetUserInGroup();
+            var sessions = GetOpennessSessions(portal);
+            var products = GetInstalledProducts(portal);
 
             var serverVersion = ServerVersion;
 
@@ -115,6 +123,27 @@ namespace TiaMcpServer.Siemens
                 status += $"\n├─ Installed TIA Portal versions: none found (>= V{MinTiaMajorVersion})";
             }
 
+            var others = sessions.Where(s => !s.IsThisServer).ToList();
+            if (others.Count > 0)
+            {
+                status += $"\n├─ Other Openness clients attached ({others.Count}):";
+                for (int i = 0; i < others.Count; i++)
+                {
+                    var other = others[i];
+                    var prefix = i == others.Count - 1 ? "│  └─" : "│  ├─";
+                    status += $"\n{prefix} TIA {other.PortalId}: {other.ProcessPath ?? "unknown"} (pid {other.ProcessId?.ToString() ?? "?"}, since {other.AttachTime?.ToString("yyyy-MM-dd HH:mm") ?? "?"})";
+                }
+            }
+            else
+            {
+                status += $"\n├─ Other Openness clients attached: none";
+            }
+
+            if (products.Count > 0)
+            {
+                status += $"\n├─ Installed products: {string.Join("; ", products)}";
+            }
+
             status += $"\n├─ User in 'Siemens TIA Openness' user group: {userInGroup}";
             status += $"\n└─ Write mode (--allow-write): {(allowWrite ? "enabled" : "disabled, read-only tools only")}";
 
@@ -128,6 +157,8 @@ namespace TiaMcpServer.Siemens
                 IsUserInGroup = userInGroup,
                 AllowWrite = allowWrite,
                 Installations = installations,
+                OpennessSessions = sessions,
+                InstalledProducts = products,
                 Text = status
             };
         }
@@ -208,6 +239,31 @@ namespace TiaMcpServer.Siemens
             return (
                 nameProp?.GetValue(info)?.ToString(),
                 pathProp?.GetValue(info)?.ToString());
+        }
+
+        private static IReadOnlyList<OpennessSessionInfo> GetOpennessSessions(Portal portal)
+        {
+            try
+            {
+                return portal.GetOpennessSessions();
+            }
+            catch (Exception)
+            {
+                // No TIA Portal running, or Openness not initialized - nothing to list.
+                return new List<OpennessSessionInfo>();
+            }
+        }
+
+        private static IReadOnlyList<string> GetInstalledProducts(Portal portal)
+        {
+            try
+            {
+                return portal.GetInstalledProducts();
+            }
+            catch (Exception)
+            {
+                return new List<string>();
+            }
         }
 
         private static bool GetUserInGroup()
