@@ -238,7 +238,8 @@ namespace TiaMcpServer.ModelContextProtocol
         public static ResponseWhereUsed WhereUsed(
             [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
             [Description("name: the object to look up, by bare name or by full root-relative path")] string name,
-            [Description("kind: restrict resolution to 'block', 'type', 'tag' or 'tagTable'. Default 'any' picks the single match, and reports the candidates when the name is ambiguous")] string kind = "any")
+            [Description("kind: restrict resolution to 'block', 'type', 'tag' or 'tagTable'. Default 'any' picks the single match, and reports the candidates when the name is ambiguous")] string kind = "any",
+            [Description("maxResults: return at most this many uses (default 300); 'total' is the full count. A DB used by an HMI can have thousands")] int maxResults = 300)
         {
             try
             {
@@ -275,23 +276,26 @@ namespace TiaMcpServer.ModelContextProtocol
                     complete &= CollectUsages(source, null, 0, found, clock);
                 }
 
-                var users = found
+                var all = found
                     .GroupBy(u => $"{u.Path}|{u.UsedBy}|{u.Address}|{u.Member}")
                     .Select(g => g.First())
                     .OrderBy(u => u.Path, StringComparer.OrdinalIgnoreCase)
                     .ThenBy(u => u.Member, StringComparer.OrdinalIgnoreCase)
                     .ToList();
+                var users = maxResults > 0 ? all.Take(maxResults).ToList() : all;
 
                 return new ResponseWhereUsed
                 {
-                    Message = (users.Count == 0
+                    Message = (all.Count == 0
                         ? $"'{target.Path}' ({target.Kind}) is not used anywhere in '{softwarePath}'"
-                        : $"'{target.Path}' ({target.Kind}) has {users.Count} use(s)" +
-                          (users.Any(u => u.Member != null) ? ", including uses of its members ('member')" : string.Empty)) +
+                        : $"'{target.Path}' ({target.Kind}) has {all.Count} use(s)" +
+                          (all.Any(u => u.Member != null) ? ", including uses of its members ('member')" : string.Empty) +
+                          (users.Count < all.Count ? $"; the first {users.Count} are listed (raise 'maxResults' or look up one member)" : string.Empty)) +
                               (complete ? string.Empty : ". WARNING: stopped after about 40 s, so the list is incomplete - use 'GetCrossReferences' on a single member or tag for the rest"),
                     Path = target.Path,
                     Kind = target.Kind,
                     Items = users,
+                    Total = all.Count,
                     Meta = Ok(new JsonObject { ["userCount"] = users.Count, ["kind"] = target.Kind })
                 };
             }
@@ -334,7 +338,8 @@ namespace TiaMcpServer.ModelContextProtocol
 
             foreach (var child in source.Children)
             {
-                if (!CollectUsages(child, member == null ? child.Name : $"{member}.{child.Name}", depth + 1, sink, clock))
+                // a child's name is already its full name, e.g. '"ProductCount".Cfg.ShiftQty'
+                if (!CollectUsages(child, child.Name, depth + 1, sink, clock))
                 {
                     return false;
                 }

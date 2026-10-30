@@ -99,39 +99,20 @@ namespace TiaMcpServer.Siemens
                         // a hit always corresponds to text the caller can fetch with GetBlockSource.
                         // The objects are kept rather than just their paths: re-resolving each path
                         // walked the device list and group tree again for every single object.
-                        var targets = new List<(string Path, PlcBlock? Block, PlcType? Type)>();
+                        // A continued call (startAt > 0) reuses the list the first call made: listing and
+                        // checking ~1000 objects took most of the 40 s budget, leaving a few objects per call.
+                        var key = $"{CurrentPortalId}|{softwarePath}|{nameFilter}";
+                        var cached = _searchTargets;
+                        List<(string Path, PlcBlock? Block, PlcType? Type)> readable;
 
-                        ReportProgress(0, "(listing blocks)");
-
-                        foreach (var block in GetBlocks(softwarePath, nameFilter))
+                        if (startAt > 0 && cached.HasValue && cached.Value.Key == key && DateTime.UtcNow - cached.Value.At < SearchListReuse)
                         {
-                            targets.Add((GetBlockPath(block), block, null));
+                            readable = cached.Value.Readable;
                         }
-
-                        ReportProgress(0, "(listing PLC data types)");
-
-                        foreach (var type in GetTypes(softwarePath, nameFilter))
+                        else
                         {
-                            targets.Add((GetTypePath(type), null, type));
-                        }
-
-                        // Inconsistent objects cannot be exported. They used to be dropped without a
-                        // word, so a search over a block that was just edited and not yet compiled
-                        // reported "0 objects searched" instead of saying why.
-                        var readable = new List<(string Path, PlcBlock? Block, PlcType? Type)>();
-
-                        foreach (var target in targets)
-                        {
-                            var consistent = target.Block?.IsConsistent ?? target.Type!.IsConsistent;
-
-                            if (consistent)
-                            {
-                                readable.Add(target);
-                            }
-                            else if (startAt == 0)
-                            {
-                                result.Unsearchable.Add($"{target.Path}: inconsistent - compile the software first.");
-                            }
+                            readable = ListSearchTargets(softwarePath, nameFilter, startAt == 0 ? result.Unsearchable : new List<string>());
+                            _searchTargets = (key, DateTime.UtcNow, readable);
                         }
 
                         result.ObjectsTotal = readable.Count;
@@ -198,6 +179,51 @@ namespace TiaMcpServer.Siemens
                     return result;
                 },
                 ("softwarePath", softwarePath), ("pattern", pattern), ("nameFilter", nameFilter));
+        }
+
+        private static readonly TimeSpan SearchListReuse = TimeSpan.FromMinutes(10);
+
+        private (string Key, DateTime At, List<(string Path, PlcBlock? Block, PlcType? Type)> Readable)? _searchTargets;
+
+        /// <summary>The blocks and types FindInCode can export, in search order; inconsistent ones go to 'unsearchable'.</summary>
+        private List<(string Path, PlcBlock? Block, PlcType? Type)> ListSearchTargets(string softwarePath, string nameFilter, List<string> unsearchable)
+        {
+            var targets = new List<(string Path, PlcBlock? Block, PlcType? Type)>();
+
+            ReportProgress(0, "(listing blocks)");
+
+            foreach (var block in GetBlocks(softwarePath, nameFilter))
+            {
+                targets.Add((GetBlockPath(block), block, null));
+            }
+
+            ReportProgress(0, "(listing PLC data types)");
+
+            foreach (var type in GetTypes(softwarePath, nameFilter))
+            {
+                targets.Add((GetTypePath(type), null, type));
+            }
+
+            // Inconsistent objects cannot be exported. They used to be dropped without a
+            // word, so a search over a block that was just edited and not yet compiled
+            // reported "0 objects searched" instead of saying why.
+            var readable = new List<(string Path, PlcBlock? Block, PlcType? Type)>();
+
+            foreach (var target in targets)
+            {
+                var consistent = target.Block?.IsConsistent ?? target.Type!.IsConsistent;
+
+                if (consistent)
+                {
+                    readable.Add(target);
+                }
+                else
+                {
+                    unsearchable.Add($"{target.Path}: inconsistent - compile the software first.");
+                }
+            }
+
+            return readable;
         }
 
         private static readonly TimeSpan SearchBudget = TimeSpan.FromSeconds(40);

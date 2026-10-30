@@ -831,6 +831,9 @@ namespace TiaMcpServer.ModelContextProtocol
         public string? Kind { get; set; }
 
         public IEnumerable<ResponseUsage>? Items { get; set; }
+
+        /// <summary>All uses found; more than 'items' when maxResults cut the list.</summary>
+        public int? Total { get; set; }
     }
 
     #endregion
