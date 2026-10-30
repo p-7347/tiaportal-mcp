@@ -59,6 +59,13 @@ namespace TiaMcpServer
             // Ensure user is in user group 'Siemens TIA Openness'
             if (await Openness.IsUserInGroup())
             {
+                // 'hmitags <file.xlsx>': the Excel HMI tag tool, run from a command prompt instead of an MCP client.
+                if (args.Length > 0 && args[0].Equals(HmiTagSheetCli.Command, StringComparison.OrdinalIgnoreCase))
+                {
+                    Environment.ExitCode = HmiTagSheetCli.Run(args.Skip(1).ToArray());
+                    return;
+                }
+
                 await RunStdioHost(options);
             }
             else
