@@ -100,7 +100,7 @@ namespace TiaMcpServer.Siemens
             /// <summary>"new" or "change".</summary>
             public string Kind { get; set; } = string.Empty;
 
-            /// <summary>Tag table path for a new tag ('/'-separated).</summary>
+            /// <summary>Tag table path for a new tag, as the sheet writes it ('Group\\Table').</summary>
             public string? TagTable { get; set; }
 
             public List<HmiTagSheetChange> Changes { get; set; } = new List<HmiTagSheetChange>();
@@ -236,7 +236,7 @@ namespace TiaMcpServer.Siemens
                 {
                     var table = TagTablePathOf(row);
                     var actual = tag.TagTableName ?? string.Empty;
-                    var wantedTable = table.Split('/').Last();
+                    var wantedTable = table.Split('\\').Last();
                     if (table.Length > 0 && !wantedTable.Equals(actual, StringComparison.OrdinalIgnoreCase))
                     {
                         plan.Notes.Add($"row {row.Line} '{name}': is in tag table '{actual}', the sheet says '{table}' - moving tags between tables is not done here (do it in TIA Portal)");
@@ -279,7 +279,7 @@ namespace TiaMcpServer.Siemens
                 table = "Default tag table";
             }
 
-            if (GetHmiTagTable(hmiPath, table) == null)
+            if (FindSheetTagTable(RequireHmiSoftware(hmiPath), table) == null)
             {
                 plan.Problems.Add($"row {row.Line} '{name}': new tag, but tag table '{table}' does not exist in {hmiPath} (create the table in TIA Portal first)");
                 return;
@@ -362,7 +362,7 @@ namespace TiaMcpServer.Siemens
 
                     if (item.Kind == "new")
                     {
-                        var table = GetHmiTagTable(plan.HmiPath, item.TagTable!)
+                        var table = FindSheetTagTable(hmi, item.TagTable!)
                             ?? throw new PortalException(PortalErrorCode.NotFound, $"Tag table '{item.TagTable}' disappeared.");
                         tag = Write(item, "create", () => table.Tags.Create(item.Name));
                         result.Created++;
@@ -404,8 +404,31 @@ namespace TiaMcpServer.Siemens
             }
         }
 
+        // The export writes the path with '\' between group and table names; a table name may
+        // itself contain '/' (e.g. 'I/O'), so '/' is not a separator here.
         private static string TagTablePathOf(HmiTagSheetRow row) =>
-            string.Join("/", row.Get("Path").Split(new[] { '\\', '/' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()));
+            string.Join("\\", row.Get("Path").Split(new[] { '\\' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()));
+
+        /// <summary>The tag table at a sheet path ('Group\\Table', or a table name found anywhere), or null.</summary>
+        private static HmiTagTable? FindSheetTagTable(HmiSoftware hmi, string path)
+        {
+            var parts = path.Split('\\');
+            var tableName = parts[parts.Length - 1];
+
+            if (parts.Length == 1)
+            {
+                return hmi.TagTables.FirstOrDefault(t => t.Name.Equals(tableName, StringComparison.OrdinalIgnoreCase))
+                    ?? FindHmiTagTableRecursive(hmi.TagTableGroups, tableName);
+            }
+
+            var group = hmi.TagTableGroups.FirstOrDefault(g => g.Name.Equals(parts[0], StringComparison.OrdinalIgnoreCase));
+            for (var i = 1; i < parts.Length - 1 && group != null; i++)
+            {
+                group = group.Groups.FirstOrDefault(g => g.Name.Equals(parts[i], StringComparison.OrdinalIgnoreCase));
+            }
+
+            return group?.TagTables.FirstOrDefault(t => t.Name.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+        }
 
         private static bool SameSheetValue(string column, string current, string wanted)
         {
