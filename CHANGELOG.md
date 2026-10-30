@@ -9,6 +9,9 @@
 
 ### Changed
 
+- `Doctor` also lists the other Openness clients attached to the running TIA Portal instances (exe path, process id, attach time; e.g. a second MCP server or a Visual Studio debug session) and the installed products and option packages (Safety, WinCC Unified, ...). New response fields `opennessSessions` (this server's own sessions marked `isThisServer`) and `installedProducts`. It only reads; no session is closed.
+- `GetProject`: each project or session now has `languages` (editing, reference and active languages). Openness writes to multilingual texts (comments, alarm texts, HMI labels) go into the editing language. Existing fields are unchanged.
+
 - `GetTechnologyObjectParameters`: coded values of axis technology objects (booleans and mode numbers such as `Homing.ApproachDirection`, `Sensor[n].ActiveHoming.Mode`/`Direction`/`SideInput`/`SwitchLevel`, `PositionLimits_HW.*`, units) come with their meaning in the new field `valueText`, from the tag tables of the positioning axis (technology version V9.0). Existing fields are unchanged.
 - `EditBlockNetwork`: new optional argument `addStatics` (at the end) adds Static members ('name : type [:= start]', separated by ';' or line breaks) to the block in the same import, so an SCL network that needs a new variable takes one call. When the SCL text does not compile in the scratch FB, the error now says that the block itself was not changed and whether the errors look real (undefined names) or like artefacts of the scratch FB.
 - `EditTypeInterface` compiles an inconsistent type on its own first (e.g. one just imported from source) instead of refusing it; it still refuses when that compile does not make it consistent.
