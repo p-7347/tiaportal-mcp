@@ -1829,7 +1829,7 @@ Use the ExportAsDocuments tool with these parameters:
 Common parameter values:
 - softwarePath: defines the path in the project structure to the PLC software
 - blockPath: root-relative path of the block, e.g. '0_OBs/Main'. Use 'ResolveObjectPath' if you only know the name
-- format: 'document' (default) for readable source text, or 'xml' for the SimaticML export
+- format: 'document' (default) for readable source text, 'text' for a compact reading of LAD/FBD/mixed blocks, or 'xml' for the SimaticML export
 - maxChars: truncate the text at this many characters, on a line boundary (default 40000)
 
 Use the GetBlockSource tool with these parameters:

@@ -590,7 +590,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         public string? Path { get; set; }
 
-        /// <summary>'document' or 'xml'. May differ from the request when the object has no source document.</summary>
+        /// <summary>'document', 'text' or 'xml'. May differ from the request when the object has no source document.</summary>
         public string? Format { get; set; }
 
         public string? Text { get; set; }

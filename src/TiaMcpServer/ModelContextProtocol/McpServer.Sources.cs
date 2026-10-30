@@ -26,11 +26,11 @@ namespace TiaMcpServer.ModelContextProtocol
         #region source
 
         [McpServerTool(Name = "GetBlockSource", Title = "Get block source", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Use to read what a block does. Return the source text of one program block directly, instead of exporting a file and reading it back. 'document' gives readable SCL/LAD/STL (SIMATIC Source Document, V20+); objects TIA Portal cannot represent that way - STL and mixed-language blocks - fall back to XML automatically, and the response says which format was produced")]
+         Description("Use to read what a block does. Return the source text of one program block directly, instead of exporting a file and reading it back. 'document' gives readable SCL/LAD/STL (SIMATIC Source Document, V20+); objects TIA Portal cannot represent that way - STL and mixed-language blocks - fall back to XML automatically, and the response says which format was produced. For LAD/FBD and mixed blocks prefer 'text': a compact reading of every network (one line per coil or box, SCL networks as SCL), about 1/15 of the XML - for reading only, not importable")]
         public static ResponseSourceText GetBlockSource(
             [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
             [Description("blockPath: root-relative path of the block, e.g. '0_OBs/Main'. Use 'ResolveObjectPath' if you only know the name")] string blockPath,
-            [Description("format: 'document' (default) for readable source text, or 'xml' for the SimaticML export")] string format = "document",
+            [Description("format: 'document' (default) for readable source text, 'text' for a compact reading of LAD/FBD/mixed blocks (networks as 'operand := condition;' lines, boxes as calls), or 'xml' for the SimaticML export")] string format = "document",
             [Description("maxChars: truncate the text at this many characters, on a line boundary (default 40000)")] int maxChars = 40000)
         {
             return Sourced(
@@ -40,7 +40,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [McpServerTool(Name = "GetNetworkSource", Title = "Get a block's networks as SCL text", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Use to read single networks, e.g. of mixed LAD/SCL blocks. Read a block's networks (CompileUnits) back as SCL text - for the case 'GetBlockSource' can't cover: a mixed-language block (e.g. a LAD-typed FB with individual SCL networks inside it), where 'document' format falls back to raw XML. Exports to a throwaway temp file internally (nothing written to a caller-visible location) and renders the StructuredText (SCL) XML grammar back into source, including call parameter lists and array indices. LAD/FBD networks come back with isStructuredText=false and text=null - ladder logic is not rendered; read those with 'GetBlockSource' (readable LAD for a pure LAD block) or 'ExportXmlBlock'. To change a network use 'EditBlockNetwork'.")]
+         Description("Use to read single networks, e.g. of mixed LAD/SCL blocks. Read a block's networks (CompileUnits) back as SCL text - for the case 'GetBlockSource' can't cover: a mixed-language block (e.g. a LAD-typed FB with individual SCL networks inside it), where 'document' format falls back to raw XML. Exports to a throwaway temp file internally (nothing written to a caller-visible location) and renders the StructuredText (SCL) XML grammar back into source, including call parameter lists and array indices. LAD/FBD networks come back with isStructuredText=false and a compact text reading (one 'operand := condition;' line per coil, boxes as calls), the same as GetBlockSource format 'text'. To change a network use 'EditBlockNetwork'.")]
         public static ResponseNetworkSource GetNetworkSource(
             [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
             [Description("blockPath: root-relative path of the block, e.g. '0_OBs/Main'. Use 'ResolveObjectPath' if you only know the name")] string blockPath,
