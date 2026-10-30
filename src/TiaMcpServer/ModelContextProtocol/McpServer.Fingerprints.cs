@@ -21,7 +21,7 @@ namespace TiaMcpServer.ModelContextProtocol
         [McpServerTool(Name = "GetBlockFingerprints", Title = "Get block fingerprints", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
          Description("Read the fingerprints (checksums of interface, program code, comments, properties, ...) of the program blocks in a group, without exporting anything. Save them with 'saveFile' and later pass that file as 'compareFile' to list exactly which blocks changed and in which aspect, e.g. 'what changed since yesterday'. Fingerprints reflect what users edited, not compile results; inconsistent blocks must be compiled first")]
         public static ResponseBlockFingerprints GetBlockFingerprints(
-            [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
+            [Description("softwarePath: PLC software as 'GetProjectTree' names it, e.g. 'PLC_1' or 'PC-System_1/Software PLC_1'")] string softwarePath,
             [Description("groupPath: optional block group, e.g. '009_Servo'; empty reads every block (may stop after about 40 s on a large PLC)")] string groupPath = "",
             [Description("regexName: optional regular expression on the block name")] string regexName = "",
             [Description("saveFile: optional absolute path of a JSON file to write the fingerprints to, for a later 'compareFile'")] string saveFile = "",
@@ -160,7 +160,7 @@ namespace TiaMcpServer.ModelContextProtocol
         [McpServerTool(Name = "GetSoftwareChecksum", Title = "Get software checksum", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
          Description("Read the checksum of the compiled program of a PLC software (and of its text lists), as TIA Portal shows it. Two equal checksums mean the same compiled program, e.g. before and after a change, or project and CPU. Empty until the program is compiled")]
         public static ResponseSoftwareChecksum GetSoftwareChecksum(
-            [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath)
+            [Description("softwarePath: PLC software as 'GetProjectTree' names it, e.g. 'PLC_1' or 'PC-System_1/Software PLC_1'")] string softwarePath)
         {
             try
             {

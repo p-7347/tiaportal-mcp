@@ -15,7 +15,7 @@ namespace TiaMcpServer.ModelContextProtocol
         [McpServerTool(Name = "GetTechnologyObjects", Title = "Get technology objects", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
          Description("List the technology objects of a PLC software (axes, encoders, cams, PID, counters, ...) with their type and version. They are not program blocks, so the block tools do not show them; read one with 'GetTechnologyObjectParameters'")]
         public static ResponseTechnologyObjects GetTechnologyObjects(
-            [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
+            [Description("softwarePath: PLC software as 'GetProjectTree' names it, e.g. 'PLC_1' or 'PC-System_1/Software PLC_1'")] string softwarePath,
             [Description("regexName: optional regular expression on the technology object name")] string regexName = "")
         {
             try
@@ -46,7 +46,7 @@ namespace TiaMcpServer.ModelContextProtocol
         [McpServerTool(Name = "GetTechnologyObjectParameters", Title = "Get technology object parameters", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
          Description("Read the configuration parameters of one technology object, e.g. an axis: homing, position limits, hardware limit switches, encoder, drive and mechanics settings as name/value pairs (the offline project values). Address parameters show the assigned PLC tag as 'Name (%I10.0)'; an unassigned one has no value. Coded values of an axis also come with their meaning in 'valueText', e.g. Homing.ApproachDirection true = 'Negative direction'. Filter with 'regexName', e.g. 'Homing|PositionLimits'. Reads only")]
         public static ResponseTechnologyObjectParameters GetTechnologyObjectParameters(
-            [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
+            [Description("softwarePath: PLC software as 'GetProjectTree' names it, e.g. 'PLC_1' or 'PC-System_1/Software PLC_1'")] string softwarePath,
             [Description("objectPath: name or group path of the technology object, as listed by 'GetTechnologyObjects'")] string objectPath,
             [Description("regexName: optional regular expression on the parameter name, e.g. 'Homing|PositionLimits'")] string regexName = "",
             [Description("maxParameters: maximum number of parameters listed (default 500); 'matched' is always the full count")] int maxParameters = 500)
@@ -105,7 +105,7 @@ namespace TiaMcpServer.ModelContextProtocol
         [McpServerTool(Name = "SetTechnologyObjectParameter", Title = "Set technology object parameter", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
          Description("Change one configuration parameter of a technology object in the offline project, e.g. an axis homing mode or a limit switch setting. The value is converted to the parameter's type; TIA Portal checks the range and refuses read-only parameters. Takes effect in the PLC only after compile and download")]
         public static ResponseTechnologyObjectParameterSet SetTechnologyObjectParameter(
-            [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
+            [Description("softwarePath: PLC software as 'GetProjectTree' names it, e.g. 'PLC_1' or 'PC-System_1/Software PLC_1'")] string softwarePath,
             [Description("objectPath: name or group path of the technology object, as listed by 'GetTechnologyObjects'")] string objectPath,
             [Description("parameterName: exact parameter name as listed by 'GetTechnologyObjectParameters', e.g. 'Homing.Mode'")] string parameterName,
             [Description("value: new value as text, e.g. 'true', '2' or '12.5' ('.' as decimal separator); for an address parameter (name ends in 'Address') the name of a PLC tag")] string value)

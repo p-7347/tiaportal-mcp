@@ -21,7 +21,7 @@ namespace TiaMcpServer.ModelContextProtocol
         [McpServerTool(Name = "GetSafetyInfo", Title = "Get safety program info", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
          Description("Read the safety program status of an F-CPU without changing anything: whether a safety password is set and logged on, the safety settings and runtime groups (F-OB, main safety block, cycle times), and the offline signature of every F-block. 'signatureHash' combines all F-block signatures, so comparing it with an earlier call shows whether any F-block changed (it is not TIA's F-collective signature). A signature of 16#00000000 means the block has no valid signature, e.g. changed since the last compile. Use 'saveFile' before a change and 'compareFile' after it (and a compile) to list exactly which F-block signatures changed")]
         public static ResponseSafetyInfo GetSafetyInfo(
-            [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
+            [Description("softwarePath: PLC software as 'GetProjectTree' names it, e.g. 'PLC_1' or 'PC-System_1/Software PLC_1'")] string softwarePath,
             [Description("includeSignatures: read the F-block signatures (default true); false returns only the status, settings and runtime groups")] bool includeSignatures = true,
             [Description("groupPath: optional block group to look in, e.g. '005_Safety'; empty checks every block (slower on a large PLC)")] string groupPath = "",
             [Description("regexName: optional regular expression on the block name")] string regexName = "",

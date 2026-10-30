@@ -71,7 +71,7 @@ namespace TiaMcpServer.ModelContextProtocol
         [McpServerTool(Name = "GetCrossReferences", Title = "Get cross references", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
          Description("Use to see where a tag or block is used, with locations. Get cross references for a PLC software or for one block, type, tag table, tag or block group inside it. Watch tables, force tables and external sources have no cross references")]
         public static ResponseCrossReferences GetCrossReferences(
-            [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
+            [Description("softwarePath: PLC software as 'GetProjectTree' names it, e.g. 'PLC_1' or 'PC-System_1/Software PLC_1'")] string softwarePath,
             [Description("objectPath: optional root-relative path of a block, type, tag table, tag or block group; empty targets the whole PLC software")] string objectPath = "",
             [Description("objectKind: 'auto' (default), 'block', 'type', 'tagTable', 'tag' or 'blockGroup'")] string objectKind = "auto",
             [Description("filter: 'AllObjects' (default), 'ObjectsWithReferences', 'ObjectsWithoutReferences' or 'UnusedObjects'")] string filter = "AllObjects",
@@ -236,7 +236,7 @@ namespace TiaMcpServer.ModelContextProtocol
         [McpServerTool(Name = "WhereUsed", Title = "Where used", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
          Description("Use for a quick 'who uses X' by name. Answer 'what uses this?' for a tag, block, PLC data type or tag table by name. Resolves the name, picks the right object kind and flattens the cross-reference tree to a plain list of users, including the uses of a DB's or data type's members ('member'). Use 'GetCrossReferences' instead when the full nested result or a specific filter is needed")]
         public static ResponseWhereUsed WhereUsed(
-            [Description("softwarePath: the PLC software as 'GetProjectTree' names it, e.g. 'PLC_1'; a PLC inside a PC station or device group takes its parent path, e.g. 'PC-System_1/Software PLC_1'")] string softwarePath,
+            [Description("softwarePath: PLC software as 'GetProjectTree' names it, e.g. 'PLC_1' or 'PC-System_1/Software PLC_1'")] string softwarePath,
             [Description("name: the object to look up, by bare name or by full root-relative path")] string name,
             [Description("kind: restrict resolution to 'block', 'type', 'tag' or 'tagTable'. Default 'any' picks the single match, and reports the candidates when the name is ambiguous")] string kind = "any",
             [Description("maxResults: return at most this many uses (default 300); 'total' is the full count. A DB used by an HMI can have thousands")] int maxResults = 300)
