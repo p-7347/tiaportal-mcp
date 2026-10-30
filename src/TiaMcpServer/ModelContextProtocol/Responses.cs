@@ -72,6 +72,9 @@ namespace TiaMcpServer.ModelContextProtocol
         /// <summary>Full path of the project or session file on the server machine.</summary>
         public string? Path { get; set; }
         public string? Name { get; set; }
+
+        /// <summary>Editing/reference/active languages; Openness text writes go to the editing language.</summary>
+        public TiaMcpServer.Siemens.ProjectLanguageInfo? Languages { get; set; }
     }
 
     #region PLC tags, constants
@@ -294,6 +297,12 @@ namespace TiaMcpServer.ModelContextProtocol
         public bool? IsUserInGroup { get; set; }
         public bool? AllowWrite { get; set; }
         public IEnumerable<ResponseTiaInstallation>? Installations { get; set; }
+
+        /// <summary>Openness clients attached to the running TIA Portal instances; IsThisServer marks our own.</summary>
+        public IEnumerable<TiaMcpServer.Siemens.OpennessSessionInfo>? OpennessSessions { get; set; }
+
+        /// <summary>Products and option packages of the attached instance, "Name Version" each.</summary>
+        public IEnumerable<string>? InstalledProducts { get; set; }
 
         // Git-commit-based build freshness, on top of the plain ServerVersion (AssemblyVersion)
         // above - added after a rebuilt exe was confirmed to silently keep serving a month-old
