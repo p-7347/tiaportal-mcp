@@ -479,9 +479,10 @@ namespace TiaMcpServer.Siemens
             foreach (var component in symbol.Elements().Where(e => e.Name.LocalName == "Component"))
             {
                 var name = (string?)component.Attribute("Name") ?? "?";
-                var text = PlainIdentifier.IsMatch(name) ? name : $"\"{name}\"";
+                var absolute = parts.Count == 0 && name.StartsWith("%", StringComparison.Ordinal);
+                var text = PlainIdentifier.IsMatch(name) || absolute ? name : $"\"{name}\"";
 
-                if (parts.Count == 0 && scope == "GlobalVariable" && !name.StartsWith("%", StringComparison.Ordinal))
+                if (parts.Count == 0 && scope == "GlobalVariable" && !absolute)
                 {
                     text = $"\"{name}\"";
                 }
