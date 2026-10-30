@@ -105,14 +105,14 @@ namespace TiaMcpServer.Siemens
                         var cached = _searchTargets;
                         List<(string Path, PlcBlock? Block, PlcType? Type)> readable;
 
-                        if (startAt > 0 && cached.HasValue && cached.Value.Key == key && DateTime.UtcNow - cached.Value.At < SearchListReuse)
+                        if (startAt > 0 && cached != null && cached.Key == key && DateTime.UtcNow - cached.At < TimeSpan.FromMinutes(SearchListReuseMinutes))
                         {
-                            readable = cached.Value.Readable;
+                            readable = (List<(string Path, PlcBlock? Block, PlcType? Type)>)cached.Readable;
                         }
                         else
                         {
                             readable = ListSearchTargets(softwarePath, nameFilter, startAt == 0 ? result.Unsearchable : new List<string>());
-                            _searchTargets = (key, DateTime.UtcNow, readable);
+                            _searchTargets = new SearchTargetCache(key, DateTime.UtcNow, readable);
                         }
 
                         result.ObjectsTotal = readable.Count;
@@ -181,9 +181,26 @@ namespace TiaMcpServer.Siemens
                 ("softwarePath", softwarePath), ("pattern", pattern), ("nameFilter", nameFilter));
         }
 
-        private static readonly TimeSpan SearchListReuse = TimeSpan.FromMinutes(10);
+        private const int SearchListReuseMinutes = 10;
 
-        private (string Key, DateTime At, List<(string Path, PlcBlock? Block, PlcType? Type)> Readable)? _searchTargets;
+        // A plain class typed with 'object': a field whose type names PlcBlock (e.g. a tuple) makes the
+        // runtime load Siemens.Engineering when Portal is first touched in Main, before the Openness
+        // resolver is installed, and the server died at start (live 2026-10-30).
+        private SearchTargetCache? _searchTargets;
+
+        private sealed class SearchTargetCache
+        {
+            public SearchTargetCache(string key, DateTime at, object readable)
+            {
+                Key = key;
+                At = at;
+                Readable = readable;
+            }
+
+            public string Key { get; }
+            public DateTime At { get; }
+            public object Readable { get; }
+        }
 
         /// <summary>The blocks and types FindInCode can export, in search order; inconsistent ones go to 'unsearchable'.</summary>
         private List<(string Path, PlcBlock? Block, PlcType? Type)> ListSearchTargets(string softwarePath, string nameFilter, List<string> unsearchable)
