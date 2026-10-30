@@ -50,7 +50,8 @@ namespace TiaMcpServer.Siemens
             string softwarePath,
             string pattern,
             string nameFilter = "",
-            int maxResults = 200)
+            int maxResults = 200,
+            int startAt = 0)
         {
             return Operation.Run(_logger, nameof(FindInCode), PortalErrorCode.ExportFailed,
                 () =>
@@ -65,6 +66,13 @@ namespace TiaMcpServer.Siemens
                     {
                         throw new PortalException(PortalErrorCode.InvalidParams, "'maxResults' must be greater than zero.");
                     }
+
+                    if (startAt < 0)
+                    {
+                        throw new PortalException(PortalErrorCode.InvalidParams, "'startAt' must not be negative.");
+                    }
+
+                    var clock = System.Diagnostics.Stopwatch.StartNew();
 
                     Regex regex;
 
@@ -120,20 +128,20 @@ namespace TiaMcpServer.Siemens
                             {
                                 readable.Add(target);
                             }
-                            else
+                            else if (startAt == 0)
                             {
                                 result.Unsearchable.Add($"{target.Path}: inconsistent - compile the software first.");
                             }
                         }
 
-                        result.ObjectsSearched = readable.Count;
+                        result.ObjectsTotal = readable.Count;
 
                         // Each target is exported individually, so a big, unfiltered PLC can take
                         // minutes - 'GetState' reports this while it runs so a caller stuck on a
                         // busy error can tell "still working" from "looks stuck".
                         SetProgressTotal(readable.Count);
 
-                        for (var t = 0; t < readable.Count; t++)
+                        for (var t = startAt; t < readable.Count; t++)
                         {
                             var target = readable[t];
 
@@ -143,6 +151,17 @@ namespace TiaMcpServer.Siemens
 
                                 break;
                             }
+
+                            // An unfiltered search of a big PLC ran past the client's timeout and the
+                            // server was disconnected; stop in time and say where to go on.
+                            if (result.ObjectsSearched > 0 && clock.Elapsed > SearchBudget)
+                            {
+                                result.NextStartAt = t;
+
+                                break;
+                            }
+
+                            result.ObjectsSearched++;
 
                             ReportProgress(t, target.Path);
 
@@ -180,6 +199,8 @@ namespace TiaMcpServer.Siemens
                 },
                 ("softwarePath", softwarePath), ("pattern", pattern), ("nameFilter", nameFilter));
         }
+
+        private static readonly TimeSpan SearchBudget = TimeSpan.FromSeconds(40);
 
         private static void AddMatches(CodeSearchResult result, string objectPath, SourceTextResult source, Regex regex, int maxResults)
         {
@@ -234,8 +255,14 @@ namespace TiaMcpServer.Siemens
 
         public List<CodeMatch> Items { get; set; } = new List<CodeMatch>();
 
-        /// <summary>How many objects were exported and scanned.</summary>
+        /// <summary>How many objects were exported and scanned by this call.</summary>
         public int ObjectsSearched { get; set; }
+
+        /// <summary>How many objects the filter selected that can be searched.</summary>
+        public int ObjectsTotal { get; set; }
+
+        /// <summary>Set when the time budget ran out: pass it as 'startAt' to search the rest.</summary>
+        public int? NextStartAt { get; set; }
 
         /// <summary>Objects that could not be read, with the reason.</summary>
         public List<string> Unsearchable { get; set; } = new List<string>();

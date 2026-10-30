@@ -699,6 +699,12 @@ namespace TiaMcpServer.ModelContextProtocol
         public IEnumerable<string>? Unsearchable { get; set; }
 
         public bool? Truncated { get; set; }
+
+        /// <summary>Objects the filter selected that can be searched, over all calls.</summary>
+        public int? ObjectsTotal { get; set; }
+
+        /// <summary>Set when the call stopped on time: pass it as 'startAt' to search the rest.</summary>
+        public int? NextStartAt { get; set; }
     }
 
     public class ResponseSourceTree : ResponseMessage
@@ -812,6 +818,9 @@ namespace TiaMcpServer.ModelContextProtocol
         public string? Address { get; set; }
 
         public string? TypeName { get; set; }
+
+        /// <summary>The member that is used, e.g. 'Unit[1].Count', when not the object as a whole.</summary>
+        public string? Member { get; set; }
     }
 
     public class ResponseWhereUsed : ResponseMessage

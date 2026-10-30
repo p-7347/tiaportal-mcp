@@ -1,6 +1,7 @@
 ﻿using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Text.Json.Nodes;
@@ -122,18 +123,46 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GetHmiDiscreteAlarms", Title = "Get HMI discrete alarms", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get a list of discrete (bit-triggered) alarms from a device's HMI software (Unified Comfort/Advanced Panels only)")]
+        private static readonly TimeSpan AlarmBudget = TimeSpan.FromSeconds(40);
+
+        /// <summary>
+        /// Reads alarms from 'offset' on until about 40 s have passed. Every alarm property is a call into
+        /// TIA Portal; an unfiltered list of a big HMI ran past the client's timeout and the server was cut off.
+        /// </summary>
+        private static (List<ResponseHmiAlarmInfo> Items, int? Next) AlarmPage<T>(List<T> alarms, int offset, Func<T, ResponseHmiAlarmInfo> read)
+        {
+            if (offset < 0)
+            {
+                throw new McpException("'offset' must not be negative.");
+            }
+
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var items = new List<ResponseHmiAlarmInfo>();
+
+            for (var i = offset; i < alarms.Count; i++)
+            {
+                if (items.Count > 0 && clock.Elapsed > AlarmBudget)
+                {
+                    return (items, i);
+                }
+
+                items.Add(read(alarms[i]));
+            }
+
+            return (items, null);
+        }
+
+        [McpServerTool(Name = "GetHmiDiscreteAlarms", Title = "Get HMI discrete alarms", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get a list of discrete (bit-triggered) alarms from a device's HMI software (Unified Comfort/Advanced Panels only). A long list stops after about 40 s with 'nextOffset'; call again with offset=nextOffset for the rest")]
         public static ResponseHmiAlarms GetHmiDiscreteAlarms(
             [Description("softwarePath: defines the path in the project structure to the HMI device/device item, e.g. 'HMI_1/HMI_RT_1'")] string softwarePath,
-            [Description("regexName: defines the name or regular expression to find the alarm. Use empty string (default) to find all")] string regexName = "")
+            [Description("regexName: defines the name or regular expression to find the alarm. Use empty string (default) to find all")] string regexName = "",
+            [Description("offset: continue a list that stopped on time: the 'nextOffset' of the previous call with the same regexName (default 0)")] int offset = 0)
         {
             try
             {
-                var list = Portal.GetHmiDiscreteAlarms(softwarePath, regexName);
+                var list = Portal.GetHmiDiscreteAlarms(softwarePath, regexName).Where(alarm => alarm != null).ToList();
 
-                var responseList = list
-                    .Where(alarm => alarm != null)
-                    .Select(alarm => new ResponseHmiAlarmInfo
+                var (responseList, next) = AlarmPage(list, offset, alarm => new ResponseHmiAlarmInfo
                     {
                         Name = alarm.Name,
                         EventText = Helper.FirstText(alarm.EventText),
@@ -142,13 +171,16 @@ namespace TiaMcpServer.ModelContextProtocol
                         Area = alarm.Area,
                         Priority = alarm.Priority,
                         TriggerAddress = alarm.TriggerBitAddress
-                    })
-                    .ToList();
+                    });
 
                 return new ResponseHmiAlarms
                 {
-                    Message = $"HMI discrete alarms with regex '{regexName}' retrieved from '{softwarePath}'",
+                    Message = $"HMI discrete alarms with regex '{regexName}' retrieved from '{softwarePath}': {responseList.Count} of {list.Count}" +
+                              (offset > 0 ? $" from offset {offset}" : string.Empty) +
+                              (next.HasValue ? $". Stopped after about 40 s to stay inside the client timeout - call again with offset={next.Value} for the rest, or narrow 'regexName'" : string.Empty),
                     Items = responseList,
+                    Total = list.Count,
+                    NextOffset = next,
                     Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
                 };
             }
@@ -158,18 +190,17 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GetHmiAnalogAlarms", Title = "Get HMI analog alarms", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get a list of analog (limit-triggered) alarms from a device's HMI software (Unified Comfort/Advanced Panels only)")]
+        [McpServerTool(Name = "GetHmiAnalogAlarms", Title = "Get HMI analog alarms", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get a list of analog (limit-triggered) alarms from a device's HMI software (Unified Comfort/Advanced Panels only). A long list stops after about 40 s with 'nextOffset'; call again with offset=nextOffset for the rest")]
         public static ResponseHmiAlarms GetHmiAnalogAlarms(
             [Description("softwarePath: defines the path in the project structure to the HMI device/device item, e.g. 'HMI_1/HMI_RT_1'")] string softwarePath,
-            [Description("regexName: defines the name or regular expression to find the alarm. Use empty string (default) to find all")] string regexName = "")
+            [Description("regexName: defines the name or regular expression to find the alarm. Use empty string (default) to find all")] string regexName = "",
+            [Description("offset: continue a list that stopped on time: the 'nextOffset' of the previous call with the same regexName (default 0)")] int offset = 0)
         {
             try
             {
-                var list = Portal.GetHmiAnalogAlarms(softwarePath, regexName);
+                var list = Portal.GetHmiAnalogAlarms(softwarePath, regexName).Where(alarm => alarm != null).ToList();
 
-                var responseList = list
-                    .Where(alarm => alarm != null)
-                    .Select(alarm => new ResponseHmiAlarmInfo
+                var (responseList, next) = AlarmPage(list, offset, alarm => new ResponseHmiAlarmInfo
                     {
                         Name = alarm.Name,
                         EventText = Helper.FirstText(alarm.EventText),
@@ -179,13 +210,16 @@ namespace TiaMcpServer.ModelContextProtocol
                         Priority = alarm.Priority,
                         TriggerAddress = alarm.TriggerAddress,
                         Condition = alarm.Condition.ToString()
-                    })
-                    .ToList();
+                    });
 
                 return new ResponseHmiAlarms
                 {
-                    Message = $"HMI analog alarms with regex '{regexName}' retrieved from '{softwarePath}'",
+                    Message = $"HMI analog alarms with regex '{regexName}' retrieved from '{softwarePath}': {responseList.Count} of {list.Count}" +
+                              (offset > 0 ? $" from offset {offset}" : string.Empty) +
+                              (next.HasValue ? $". Stopped after about 40 s to stay inside the client timeout - call again with offset={next.Value} for the rest, or narrow 'regexName'" : string.Empty),
                     Items = responseList,
+                    Total = list.Count,
+                    NextOffset = next,
                     Meta = new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }
                 };
             }
