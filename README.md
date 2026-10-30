@@ -49,6 +49,27 @@ has since diverged with its own feature set below; it no longer tracks upstream 
 | `--backup-path <path>`    | Folder for the XML backups taken before a delete or replacing import. Default `%TEMP%\tiaportal-mcp-backups`. |
 | `--with-dependencies <bool>` | Preset for the `withDependencies` argument of the `ExportSource*` tools (`true` or `false`). See below. |
 
+## HMI tags with Excel (no MCP client)
+
+`TiaMcpServer.exe hmitags <file.xlsx>` edits WinCC Unified HMI tags from the sheet that TIA Portal's own
+tag editor exports (HMI tags > Show all tags > Export), for use on site without an AI client. TIA Portal's
+import keeps an existing tag unchanged, so changing tags that way means deleting them first; this command
+changes existing tags in place instead (names stay, so screen, script and alarm bindings keep working) and
+creates the rows whose names are new. Nothing is deleted or renamed.
+
+```
+TiaMcpServer.exe hmitags C:\Work\HMITags.xlsx --hmi HMI_1              # preview only
+TiaMcpServer.exe hmitags C:\Work\HMITags.xlsx --hmi HMI_1 --apply      # preview, ask, write
+```
+
+- TIA Portal must be running with the project open; `--portal <id>` picks one of several instances.
+- Columns written: Connection, PLC tag, DataType, Address, Acquisition mode, Acquisition cycle, Persistency,
+  Comment [language]. An empty cell keeps the value, except comments. Other columns are ignored.
+- Every run writes `<file>_preview_<time>.csv` next to the sheet; `--apply` also writes
+  `<file>_backup_<time>.json` with the previous values of the changed tags. All writes are one transaction:
+  one refused value undoes all of them. The project is not saved; save it in TIA Portal (Edit > Undo takes it back).
+- `HmiTags.bat` next to the exe: drag the .xlsx onto it.
+
 ## Presetting tool arguments
 
 `softwarePath`, `exportPath`, `preservePath` and `withDependencies` (the `ExportSource*` tools) appear in many tools, `path` (the project file) in
