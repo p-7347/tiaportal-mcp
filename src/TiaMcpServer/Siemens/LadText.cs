@@ -385,7 +385,7 @@ namespace TiaMcpServer.Siemens
                         text = Not(Input(uid, "in"));
                         break;
                     case "O":
-                        text = Join(" OR ", InputPins(uid).Select(p => Input(uid, p)));
+                        text = Or(uid);
                         break;
                     case "A":
                         text = Join(" AND ", InputPins(uid).Select(p => Input(uid, p)));
@@ -423,6 +423,83 @@ namespace TiaMcpServer.Siemens
 
                 return text;
             }
+
+            /// <summary>
+            /// A parallel branch. Each branch starts where the rung splits, so the logic before the
+            /// split would be repeated in every branch ("a AND b OR a AND c"); when all branches start
+            /// at the same split, it is written once: "a AND (b OR c)", as the editor draws it.
+            /// </summary>
+            private string Or(string uid)
+            {
+                var pins = InputPins(uid).ToList();
+                var branches = pins.Select(p => (Pin: p, Branch: Branch(uid, p))).ToList();
+                var parts = new List<string>();
+
+                // branches that split off at the same point share what comes before it
+                foreach (var group in branches.GroupBy(b => b.Branch.Start))
+                {
+                    var members = group.ToList();
+
+                    if (group.Key == null || members.Count == 1)
+                    {
+                        parts.AddRange(members.Select(m => Input(uid, m.Pin)));
+                        continue;
+                    }
+
+                    var alternatives = Join(" OR ", members.Select(m => m.Branch.Terms.Count == 0 ? "TRUE" : Join(" AND ", m.Branch.Terms)));
+                    var before = Source(group.Key);
+
+                    parts.Add(before == "TRUE" ? alternatives : And(before, alternatives));
+                }
+
+                return Join(" OR ", parts);
+            }
+
+            /// <summary>The series contacts of one branch back to the point where it splits off.</summary>
+            private (XElement? Start, List<string> Terms) Branch(string uid, string pin)
+            {
+                var terms = new List<string>();
+
+                if (!_inputs.TryGetValue((uid, pin), out var from))
+                {
+                    return (null, terms);
+                }
+
+                while (from.Name.LocalName == "NameCon" && Pin(from) == "out"
+                       && _parts.TryGetValue(Uid(from), out var part)
+                       && Fanout(Uid(from)) == 1
+                       && SeriesTerm(Uid(from), part) is string term
+                       && _inputs.TryGetValue((Uid(from), "in"), out var next))
+                {
+                    terms.Insert(0, term);
+                    from = next;
+                }
+
+                return (from.Name.LocalName == "Powerrail" || from.Name.LocalName == "NameCon" ? from : null, terms);
+            }
+
+            // the condition a series element adds, or null for anything that is not a plain contact
+            private string? SeriesTerm(string uid, XElement part)
+            {
+                switch (PartName(part))
+                {
+                    case "Contact":
+                        var operand = Operand(uid);
+                        return IsNegated(part, "operand") ? Not(operand) : operand;
+                    case "PContact":
+                        return $"P({Operand(uid)})";
+                    case "NContact":
+                        return $"N({Operand(uid)})";
+                    default:
+                        return null;
+                }
+            }
+
+            private int Fanout(string uid) =>
+                _outputs.TryGetValue((uid, "out"), out var targets) ? targets.Count : 0;
+
+            private string Source(XElement from) =>
+                from.Name.LocalName == "Powerrail" ? "TRUE" : Value(Uid(from), Pin(from));
 
             private IEnumerable<string> InputPins(string uid) =>
                 _inputs.Keys.Where(k => k.Item1 == uid && k.Item2.StartsWith("in", StringComparison.Ordinal))
