@@ -102,7 +102,8 @@ namespace TiaMcpServer.ModelContextProtocol
                     .Select(screen => new ResponseHmiScreenInfo
                     {
                         Name = screen.Name,
-                        DisplayName = Helper.FirstText(screen.DisplayName),
+                        // An empty display name comes back as '<body><p/></body>': left out, like a missing one
+                        DisplayName = string.IsNullOrEmpty(TiaMcpServer.Siemens.Portal.PlainText(Helper.FirstText(screen.DisplayName))) ? null : Helper.FirstText(screen.DisplayName),
                         DisplayText = TiaMcpServer.Siemens.Portal.PlainText(Helper.FirstText(screen.DisplayName)),
                         ScreenNumber = screen.ScreenNumber,
                         Width = screen.Width,

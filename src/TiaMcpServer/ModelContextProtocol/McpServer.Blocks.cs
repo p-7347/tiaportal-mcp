@@ -29,7 +29,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 var block = Portal.GetBlock(softwarePath, blockPath);
                 if (block is not null)
                 {
-                    var attributes = Helper.GetAttributeList(block);
+                    var attributes = Helper.GetAttributeList(block, Helper.BlockFields);
 
                     return new ResponseBlockInfo
                     {
@@ -45,7 +45,6 @@ namespace TiaMcpServer.ModelContextProtocol
                         ModifiedDate = block.ModifiedDate,
                         IsKnowHowProtected = block.IsKnowHowProtected,
                         Attributes = attributes,
-                        Description = block.ToString(),
                         Meta = new JsonObject
                         {
                             ["timestamp"] = DateTime.Now,
@@ -106,7 +105,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 {
                     if (block != null)
                     {
-                        var attributes = includeAttributes ? Helper.GetAttributeList(block) : null;
+                        var attributes = includeAttributes ? Helper.GetAttributeList(block, Helper.BlockFields) : null;
 
                         responseList.Add(new ResponseBlockInfo
                         {
@@ -121,7 +120,6 @@ namespace TiaMcpServer.ModelContextProtocol
                             ModifiedDate = block.ModifiedDate,
                             IsKnowHowProtected = block.IsKnowHowProtected,
                             Attributes = attributes,
-                            Description = block.ToString()
                         });
                     }
                 }
@@ -425,7 +423,7 @@ namespace TiaMcpServer.ModelContextProtocol
                     {
                         if (b != null && b.IsConsistent == false)
                         {
-                            var attrs = includeAttributes ? Helper.GetAttributeList(b) : null;
+                            var attrs = includeAttributes ? Helper.GetAttributeList(b, Helper.BlockFields) : null;
                             inconsistentInfos.Add(new ResponseBlockInfo
                             {
                                 Path = Portal.GetBlockPath(b),
@@ -439,7 +437,6 @@ namespace TiaMcpServer.ModelContextProtocol
                                 ModifiedDate = b.ModifiedDate,
                                 IsKnowHowProtected = b.IsKnowHowProtected,
                                 Attributes = attrs,
-                                Description = b.ToString()
                             });
                         }
                     }
@@ -455,7 +452,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 {
                     if (block != null)
                     {
-                        var attributes = includeAttributes ? Helper.GetAttributeList(block) : null;
+                        var attributes = includeAttributes ? Helper.GetAttributeList(block, Helper.BlockFields) : null;
 
                         responseList.Add(new ResponseBlockInfo
                         {
@@ -470,7 +467,6 @@ namespace TiaMcpServer.ModelContextProtocol
                             ModifiedDate = block.ModifiedDate,
                             IsKnowHowProtected = block.IsKnowHowProtected,
                             Attributes = attributes,
-                            Description = block.ToString()
                         });
                     }
                 }

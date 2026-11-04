@@ -169,8 +169,7 @@ namespace TiaMcpServer.ModelContextProtocol
             IsConsistent = type.IsConsistent,
             ModifiedDate = type.ModifiedDate,
             IsKnowHowProtected = type.IsKnowHowProtected,
-            Attributes = Helper.GetAttributeList(type),
-            Description = type.ToString()
+            Attributes = Helper.GetAttributeList(type, Helper.TypeFields),
         };
 
         #endregion
@@ -387,7 +386,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 {
                     if (block != null)
                     {
-                        var attributes = Helper.GetAttributeList(block);
+                        var attributes = Helper.GetAttributeList(block, Helper.BlockFields);
 
                         responseList.Add(new ResponseBlockInfo
                         {
@@ -402,7 +401,6 @@ namespace TiaMcpServer.ModelContextProtocol
                             ModifiedDate = block.ModifiedDate,
                             IsKnowHowProtected = block.IsKnowHowProtected,
                             Attributes = attributes,
-                            Description = block.ToString()
                         });
                     }
                 }
@@ -575,7 +573,7 @@ namespace TiaMcpServer.ModelContextProtocol
                     {
                         if (block != null)
                         {
-                            var attributes = Helper.GetAttributeList(block);
+                            var attributes = Helper.GetAttributeList(block, Helper.BlockFields);
                             responseList.Add(new ResponseBlockInfo
                             {
                                 Path = Portal.GetBlockPath(block),
@@ -589,7 +587,6 @@ namespace TiaMcpServer.ModelContextProtocol
                                 ModifiedDate = block.ModifiedDate,
                                 IsKnowHowProtected = block.IsKnowHowProtected,
                                 Attributes = attributes,
-                                Description = block.ToString()
                             });
                         }
                         processed++;

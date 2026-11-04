@@ -25,7 +25,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 var type = Portal.GetType(softwarePath, typePath);
                 if (type is not null)
                 {
-                    var attributes = Helper.GetAttributeList(type);
+                    var attributes = Helper.GetAttributeList(type, Helper.TypeFields);
 
                     return new ResponseTypeInfo
                     {
@@ -38,7 +38,6 @@ namespace TiaMcpServer.ModelContextProtocol
                         ModifiedDate = type.ModifiedDate,
                         IsKnowHowProtected = type.IsKnowHowProtected,
                         Attributes = attributes,
-                        Description = type.ToString(),
                         Meta = new JsonObject
                         {
                             ["timestamp"] = DateTime.Now,
@@ -72,7 +71,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 {
                     if (type != null)
                     {
-                        var attributes = includeAttributes ? Helper.GetAttributeList(type) : null;
+                        var attributes = includeAttributes ? Helper.GetAttributeList(type, Helper.TypeFields) : null;
 
                         responseList.Add(new ResponseTypeInfo
                         {
@@ -84,7 +83,6 @@ namespace TiaMcpServer.ModelContextProtocol
                             ModifiedDate = type.ModifiedDate,
                             IsKnowHowProtected = type.IsKnowHowProtected,
                             Attributes = attributes,
-                            Description = type.ToString()
                         });
                     }
                 }
@@ -262,7 +260,7 @@ namespace TiaMcpServer.ModelContextProtocol
                     {
                         if (t != null && t.IsConsistent == false)
                         {
-                            var attrs = includeAttributes ? Helper.GetAttributeList(t) : null;
+                            var attrs = includeAttributes ? Helper.GetAttributeList(t, Helper.TypeFields) : null;
                             inconsistentTypeInfos.Add(new ResponseTypeInfo
                             {
                                 Path = Portal.GetTypePath(t),
@@ -273,7 +271,6 @@ namespace TiaMcpServer.ModelContextProtocol
                                 ModifiedDate = t.ModifiedDate,
                                 IsKnowHowProtected = t.IsKnowHowProtected,
                                 Attributes = attrs,
-                                Description = t.ToString()
                             });
                         }
                     }
@@ -289,7 +286,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 {
                     if (type != null)
                     {
-                        var attributes = includeAttributes ? Helper.GetAttributeList(type) : null;
+                        var attributes = includeAttributes ? Helper.GetAttributeList(type, Helper.TypeFields) : null;
 
                         responseList.Add(new ResponseTypeInfo
                         {
@@ -301,7 +298,6 @@ namespace TiaMcpServer.ModelContextProtocol
                             ModifiedDate = type.ModifiedDate,
                             IsKnowHowProtected = type.IsKnowHowProtected,
                             Attributes = attributes,
-                            Description = type.ToString()
                         });
                     }
                 }
