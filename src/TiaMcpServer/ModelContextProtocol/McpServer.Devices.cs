@@ -133,7 +133,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GetGsdDependencies", Title = "Get GSD device dependencies", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("List every third-party (GSD-based) device/device item in the project's hardware config, with its GSD identity (GsdId/GsdName/GsdType, Profibus/Profinet) - e.g. before moving a project to another machine, check this list against what's installed there. Only sees devices TIA already loaded successfully; a missing GSD can make TIA fail to instantiate the device at all, in which case it won't show up here either - if GetDevices/GetProject come back empty right after a successful Connect, that's a stronger sign of a missing GSD than an empty result from this tool.")]
+        [McpServerTool(Name = "GetGsdDependencies", Title = "Get GSD device dependencies", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("List the third-party (GSD-based) devices and items in the hardware config with their GSD identity, e.g. to check before moving a project to another PC. Devices whose GSD is missing are not loaded at all and do not appear; empty GetDevices after Connect points to that.")]
         public static ResponseGsdDependencies GetGsdDependencies(
             [Description("devicePath: optional - scope the scan to a single device (its name, e.g. 'S7-1500/ET200MP station_1'); omit to scan every device in the project")] string? devicePath = null)
         {
@@ -175,7 +175,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region device master copies / hardware catalog search
 
-        [McpServerTool(Name = "GetDeviceMasterCopies", Title = "Get device master copies", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("List master copies (saved device/module templates) in the project's own library, for DeviceComposition.CreateFrom(MasterCopy)/DeviceItemComposition.CreateFrom(MasterCopy). Secondary route for building a device: prefer CreateDevice/CreateDeviceWithItem with a TypeIdentifier from FindHardwareCatalogEntries, which is verified to produce fully-populated devices (confirmed with a real CPU 1516-3 PN/DP, complete DP/PROFINET interfaces). Use this only if you specifically need to replicate a saved project template rather than a plain catalog part.")]
+        [McpServerTool(Name = "GetDeviceMasterCopies", Title = "Get device master copies", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("List master copies (saved device/module templates) in the project library. To build a device prefer 'CreateDevice'/'CreateDeviceWithItem' with a catalog TypeIdentifier; use master copies only to replicate a saved template.")]
         public static ResponseDeviceMasterCopies GetDeviceMasterCopies()
         {
             try
@@ -197,7 +197,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "FindHardwareCatalogEntries", Title = "Search hardware catalog", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Diagnostic tool: search TIA Portal's hardware catalog (TiaPortal.HardwareCatalog.Find) by a text filter (e.g. article number, order number fragment, or product name like \"G120C\" or \"6ES7 510\"). Returns each match's TypeIdentifier/TypeIdentifierNormalized/ArticleNumber/Version. Live testing showed CreateDevice/CreateDeviceWithItem reject the TypeIdentifier format read off an already-placed device (GetDevices) with \"wrong type\" errors or produce an empty shell - the catalog's own TypeIdentifier string may be the format those creation APIs actually expect. Use this to find a creation-ready TypeIdentifier before calling CreateDevice/CreateDeviceWithItem.")]
+        [McpServerTool(Name = "FindHardwareCatalogEntries", Title = "Search hardware catalog", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Search the TIA Portal hardware catalog by text (article number, fragment or product name like \"G120C\" or \"6ES7 510\"). Returns TypeIdentifier/ArticleNumber/Version of each match. Use its TypeIdentifier for 'CreateDevice'/'CreateDeviceWithItem'; one read off a placed device is refused.")]
         public static ResponseHardwareCatalogEntries FindHardwareCatalogEntries(
             [Description("Filter text, e.g. an article number or product name fragment")] string filter)
         {

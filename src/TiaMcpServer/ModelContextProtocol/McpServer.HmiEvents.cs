@@ -19,7 +19,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "SetHmiItemEventScript", Title = "Set HMI item event script", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Use to create or replace the JavaScript of one event (click, press, release, ...) on one or many WinCC Unified screen items, or on the screen itself, in one call - e.g. buttons that write a tag when pressed. With 'itemValues' each item gets its own script from one template: '{item}' becomes the item name and '{value}' its value. Every item and event is checked first and nothing changes when one is wrong. Previous scripts are saved as a .json backup. For property scripts use 'SetHmiScriptDynamization'")]
+         Description("Use to create or replace the JavaScript of one event (click, press, release, ...) on one or many WinCC Unified screen items or the screen itself. With 'itemValues' each item gets its own script from one template ('{item}' = item name, '{value}' = its value). All checked first; nothing changes when one is wrong. Previous scripts go to a .json backup. Property scripts: 'SetHmiScriptDynamization'")]
         public static ResponseHmiEventScriptWrite SetHmiItemEventScript(
             [Description(HmiPathDescription)] string softwarePath,
             [Description("screenName: name of the screen")] string screenName,

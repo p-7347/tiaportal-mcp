@@ -47,7 +47,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "UpdateHmiTags", Title = "Relink or change HMI tags", Destructive = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Use to change the PLC tag, connection or data type of existing WinCC Unified HMI tags without deleting and re-creating them, so screens, scripts and alarms bound to the tag names keep working, e.g. after a PLC DB was renamed or restructured. One or many tags per call; an empty field keeps its value. Every entry is checked first and nothing is changed when one is wrong. The previous values are saved as a .json backup and returned with the new ones")]
+         Description("Use to change the PLC tag, connection or data type of existing WinCC Unified HMI tags without re-creating them, so bindings by tag name keep working, e.g. after a DB was renamed. One or many per call; an empty field keeps its value. All checked first; nothing changes when one is wrong. Previous values go to a .json backup and are returned with the new ones")]
         public static ResponseHmiTagBatch UpdateHmiTags(
             [Description(HmiPathDescription)] string softwarePath,
             [Description("tags: JSON array of changes, e.g. '[{\"name\":\"PT_Count_U1\",\"plcTag\":\"\\\"ProductTime\\\".Unit[1].CountTotal\"}]'. " + HmiTagListFields + " (the new values). Leave empty when using 'tagsFile'")] string tags = "",

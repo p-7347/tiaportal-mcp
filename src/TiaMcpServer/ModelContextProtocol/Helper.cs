@@ -7,7 +7,23 @@ namespace TiaMcpServer.ModelContextProtocol
 {
     public class Helper
     {
-        public static List<Attribute> GetAttributeList(IEngineeringObject obj)
+        /// <summary>Attributes a block reply already carries as its own fields (name, language, ...).</summary>
+        public static readonly HashSet<string> BlockFields = new(StringComparer.Ordinal)
+        {
+            "Name", "Namespace", "ProgrammingLanguage", "MemoryLayout", "IsConsistent", "HeaderName", "ModifiedDate", "IsKnowHowProtected"
+        };
+
+        /// <summary>Attributes a PLC data type reply already carries as its own fields.</summary>
+        public static readonly HashSet<string> TypeFields = new(StringComparer.Ordinal)
+        {
+            "Name", "Namespace", "IsConsistent", "ModifiedDate", "IsKnowHowProtected"
+        };
+
+        /// <summary>
+        /// Every Openness attribute of 'obj'; names in 'skip' are left out because the reply already
+        /// has them as fields (about a quarter of a block's list, repeated per block in GetBlocks).
+        /// </summary>
+        public static List<Attribute> GetAttributeList(IEngineeringObject obj, ISet<string>? skip = null)
         {
             var attributes = new List<Attribute>();
 
@@ -15,6 +31,11 @@ namespace TiaMcpServer.ModelContextProtocol
             {
                 foreach (var attr in obj.GetAttributeInfos())
                 {
+                    if (skip != null && skip.Contains(attr.Name))
+                    {
+                        continue;
+                    }
+
                     object value = obj.GetAttribute(attr.Name);
                     attributes.Add(new Attribute
                     {
@@ -95,7 +116,7 @@ namespace TiaMcpServer.ModelContextProtocol
             var blockList = new List<ResponseBlockInfo>();
             foreach (var block in group.Blocks)
             {
-                var attributes = Helper.GetAttributeList(block);
+                var attributes = Helper.GetAttributeList(block, Helper.BlockFields);
                 blockList.Add(new ResponseBlockInfo
                 {
                     Path = portal == null ? null : portal.GetBlockPath(block),
@@ -109,7 +130,6 @@ namespace TiaMcpServer.ModelContextProtocol
                     ModifiedDate = block.ModifiedDate,
                     IsKnowHowProtected = block.IsKnowHowProtected,
                     Attributes = attributes,
-                    Description = block.ToString()
                 });
             }
             groupInfo.Blocks = blockList;

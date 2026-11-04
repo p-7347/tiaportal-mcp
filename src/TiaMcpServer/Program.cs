@@ -109,7 +109,7 @@ namespace TiaMcpServer
                 .GetMethods(BindingFlags.Public | BindingFlags.Static)
                 .Where(m => m.GetCustomAttribute<global::ModelContextProtocol.Server.McpServerToolAttribute>() != null)
                 .Where(m => allowWrite || m.GetCustomAttribute<WriteToolAttribute>() == null)
-                .Select(m => ToolDefaults.Apply(m, PortalSelection.Apply(m, global::ModelContextProtocol.Server.McpServerTool.Create(m))))
+                .Select(m => ToolSchemaCompaction.Apply(ToolDefaults.Apply(m, PortalSelection.Apply(m, global::ModelContextProtocol.Server.McpServerTool.Create(m)))))
                 .ToList();
         }
 
@@ -190,7 +190,9 @@ namespace TiaMcpServer
                             "twice, stop and show the user the full error text. The 'ModifyBlockWorkflow' prompt spells out the " +
                             "routine. Changes stay in memory until 'SaveProject'; save only when the user asks. If this text or " +
                             "'Connect' says the server build is old, pass that on to the user once; it does not stop anything. " +
-                            "(4) Paths: 'softwarePath' is the PLC software name from 'GetProjectTree', e.g. 'PLC_1'. Block, " +
+                            "(4) Paths: 'softwarePath' is the PLC or HMI software as 'GetProjectTree' names it, e.g. 'PLC_1' or " +
+                            "'HMI_1/HMI_RT_1'; a PLC in a PC station or device group takes its parent path, e.g. " +
+                            "'PC-System_1/Software PLC_1'. Block, " +
                             "type and group paths are '/'-separated and relative to their system folder ('Program blocks', " +
                             "'PLC data types', 'PLC tags'), e.g. '009_Servo/zGDBs/SM_UserData_Origin'; an empty groupPath means " +
                             "that root. File paths ('exportPath', 'importPath') are absolute paths on the PC running this server. " +
@@ -199,9 +201,8 @@ namespace TiaMcpServer
                             "exists only for SCL, STL and DB blocks. " +
                             "(6) WinCC Unified screens: before tools that change a screen's items (create, delete, update, copy, " +
                             "styles, scripts, dynamizations) ask the user to close that screen in the TIA Portal screen editor, and " +
-                            "have the project saved before larger screen work. Builds before 2026-10-30 made 'CopyHmiScreen' screens " +
-                            "that crashed TIA Portal V20 whenever they were opened in the editor (screen and items were created in " +
-                            "one transaction); such old copies have to be deleted and copied again." +
+                            "have the project saved before larger screen work. 'CopyHmiScreen' copies made before 2026-10-30 crash the " +
+                            "TIA Portal V20 editor when opened; delete and copy them again." +
                             (ToolDefaults.Presets.Count > 0
                                 ? " The server presets " + string.Join(", ", ToolDefaults.Presets.Keys.OrderBy(k => k, StringComparer.Ordinal)) +
                                   ": leave them out of a call to use the preset, pass a value to override it. 'GetState' shows the presets."

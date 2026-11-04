@@ -42,7 +42,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GetNetworkInterfaceInfo", Title = "Get network interface info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get network topology info (nodes, connected subnet, IO controller/connector role, per-port wiring) for a device's network interface. path doesn't need to be the exact interface DeviceItem - give a device or device item path (e.g. just the device name, or 'PLC_1') and it auto-searches nested DeviceItems for the interface, since the interface sits at a different depth depending on device type. Check resolvedPath in the response to see what was actually used. Errors list every interface found if the given path is ambiguous (multiple interfaces underneath it). Each port's connectedDeviceItemName/connectedPortName reflects the project's own *planned* topology (best-effort - based on an undocumented Openness property) - it can be null/absent even for a physically wired port if nobody configured it in TIA's Topology view; it does not reflect what's actually plugged in on the real line (compare against a PRONETA scan for that).")]
+        [McpServerTool(Name = "GetNetworkInterfaceInfo", Title = "Get network interface info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get network topology info (nodes, subnet, IO controller/device role, per-port wiring) for a device's network interface. 'path' may be the device or any item above the interface (e.g. 'PLC_1'); 'resolvedPath' shows what was used, and an ambiguous path lists the interfaces found. Port partners are the project's planned topology (may be empty), not what is plugged in on the line.")]
         public static ResponseNetworkInterfaceInfo GetNetworkInterfaceInfo(
             [Description("path: a device or device item path, e.g. 'S7-1500/ET200MP station_1/PLC_1' or just 'HMI_1' - doesn't need to be the exact interface DeviceItem")] string path)
         {
@@ -95,7 +95,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "SetIpAddress", Title = "Set IP address", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Set IP address/subnet mask/router on a device's network interface (same auto-resolving path as GetNetworkInterfaceInfo). IMPORTANT: this only changes the TIA project's saved metadata - nothing reaches real hardware until the project is compiled and downloaded. Changing the address can also regenerate the PROFINET device name hash used to match physical hardware on the wire; if that no longer matches what's actually downloaded to a switch/drive, the online connection to that device breaks. Confirm with the user before calling this against a real (non-disposable) project, and make clear to them that this alone does not reach the PLC/line.")]
+         Description("Set IP address, subnet mask and router of a device's network interface (path as in 'GetNetworkInterfaceInfo'). Changes only the project: nothing reaches hardware until compiled and downloaded, and a new address can change the PROFINET device name and break the online match. Ask the user before using it on a real project")]
         public static ResponseSetIpAddress SetIpAddress(
             [Description("path: a device or device item path, same auto-resolving rules as GetNetworkInterfaceInfo")] string path,
             [Description("ipAddress: e.g. '192.168.0.1'")] string ipAddress,
