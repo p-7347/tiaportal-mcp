@@ -17,6 +17,9 @@ namespace TiaMcpServer
 
         public static async Task Main(string[] args)
         {
+            // No Siemens/Openness dependency, so safe to run before anything else in Main.
+            RelaxSdkJsonEscaping();
+
             var options = CliOptions.ParseArgs(args);
 
             Engineering.TiaMajorVersion = options.TiaMajorVersion ?? Openness.BuildTiaMajorVersion;
@@ -113,6 +116,52 @@ namespace TiaMcpServer
         /// and quoted names cost several times their length. The reply is JSON text in an MCP message,
         /// never HTML, so the relaxed encoder is safe here.
         /// </summary>
+        /// <summary>
+        /// That alone turned out not to be enough: it only changes how a tool's return value becomes
+        /// the reply's inner text. The SDK then always re-serializes the whole JSON-RPC envelope (that
+        /// text included) through its own fixed, source-generated JsonSerializerContext
+        /// (ModelContextProtocol.McpJsonUtilities+JsonContext.Default, still hardcoded this way in the
+        /// latest SDK release, 2.3.1), which has no exposed hook to change its encoder - so the SDK
+        /// re-escapes everything regardless, undoing ReplyJson below. There being no supported way to
+        /// reach it, RelaxSdkJsonEscaping patches the encoder on the SDK's own (already
+        /// '.MakeReadOnly()'d) JsonSerializerOptions instances via their private backing field -
+        /// unsupported, but Encoder is read fresh from that field on every write, so it takes effect
+        /// immediately. If a future SDK version renames the internal type or field, it silently does
+        /// nothing (caught below) and replies just stay as verbose as before; it never crashes the
+        /// server.
+        /// </summary>
+        private static void RelaxSdkJsonEscaping()
+        {
+            try
+            {
+                var encoderField = typeof(System.Text.Json.JsonSerializerOptions).GetField(
+                    "_encoder", BindingFlags.NonPublic | BindingFlags.Instance);
+                if (encoderField == null) return;
+
+                void Relax(System.Text.Json.JsonSerializerOptions? options)
+                {
+                    if (options != null)
+                    {
+                        encoderField.SetValue(options, System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping);
+                    }
+                }
+
+                Relax(global::ModelContextProtocol.McpJsonUtilities.DefaultOptions);
+
+                var jsonContextType = typeof(global::ModelContextProtocol.McpJsonUtilities).Assembly
+                    .GetType("ModelContextProtocol.McpJsonUtilities+JsonContext");
+                var defaultProperty = jsonContextType?.GetProperty("Default", BindingFlags.Public | BindingFlags.Static);
+                if (defaultProperty?.GetValue(null) is System.Text.Json.Serialization.JsonSerializerContext context)
+                {
+                    Relax(context.Options);
+                }
+            }
+            catch
+            {
+                // Best effort only: replies just stay as verbose as before.
+            }
+        }
+
         private static readonly System.Text.Json.JsonSerializerOptions ReplyJson =
             new(global::ModelContextProtocol.McpJsonUtilities.DefaultOptions)
             {
