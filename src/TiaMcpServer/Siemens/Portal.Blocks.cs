@@ -74,6 +74,20 @@ namespace TiaMcpServer.Siemens
                             block = group.Blocks.FirstOrDefault(b => b.Name.Equals(regexName, StringComparison.OrdinalIgnoreCase));
                         }
 
+                        // A bare name ('5_G2U1_Home[0]') of a block in a subgroup: callers had to look
+                        // up the full path first. Take it when exactly one block has that name.
+                        if (block is null && path.Length == 0)
+                        {
+                            var named = GetBlocks(softwarePath, regexName)
+                                .Where(b => b.Name.Equals(regexName, StringComparison.OrdinalIgnoreCase))
+                                .ToList();
+
+                            if (named.Count == 1)
+                            {
+                                return named[0];
+                            }
+                        }
+
                         return block;
                     }
                 }

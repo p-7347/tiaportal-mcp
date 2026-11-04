@@ -31,7 +31,9 @@ namespace TiaMcpServer.Siemens
 
         private static readonly Regex PlainIdentifier = new Regex(@"^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
 
-        public static string RenderBlock(XDocument doc, Func<XElement, string> renderStructuredText)
+        /// <param name="includeInterface">also list the top-level interface members, one per line
+        /// ('Static sAlignEdge : Struct'), so a text search finds declarations too</param>
+        public static string RenderBlock(XDocument doc, Func<XElement, string> renderStructuredText, bool includeInterface = false)
         {
             var sb = new StringBuilder();
             var block = doc.Descendants().FirstOrDefault(e => e.Name.LocalName.StartsWith("SW.Blocks.", StringComparison.Ordinal));
@@ -43,6 +45,22 @@ namespace TiaMcpServer.Siemens
                   .Append(' ').Append(Child(blockAttributes, "Name")?.Value)
                   .Append(", ").Append(Child(blockAttributes, "ProgrammingLanguage")?.Value)
                   .AppendLine(" - compact text rendering, not importable; use GetBlockInterface for the interface");
+            }
+
+            if (includeInterface)
+            {
+                // the block's own sections only: a multi-instance member carries its FB's sections too
+                var sections = doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "Sections");
+
+                foreach (var section in sections?.Elements().Where(e => e.Name.LocalName == "Section") ?? Enumerable.Empty<XElement>())
+                {
+                    foreach (var member in section.Elements().Where(e => e.Name.LocalName == "Member"))
+                    {
+                        sb.Append("  ").Append((string?)section.Attribute("Name")).Append(' ')
+                          .Append((string?)member.Attribute("Name")).Append(" : ")
+                          .AppendLine((string?)member.Attribute("Datatype"));
+                    }
+                }
             }
 
             var units = doc.Descendants().Where(e => e.Name.LocalName == "SW.Blocks.CompileUnit").ToList();
