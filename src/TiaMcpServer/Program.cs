@@ -107,6 +107,18 @@ namespace TiaMcpServer
         /// structuredContent) and lists an output schema per tool (~97k characters in tools/list);
         /// the JSON text alone carries the same data.
         /// </summary>
+        /// <summary>
+        /// Reply serialization: the SDK default escapes every non-ASCII character and the apostrophe
+        /// ('\uC124', '\u0027'), which the client passes on to the model as is, so Korean comments
+        /// and quoted names cost several times their length. The reply is JSON text in an MCP message,
+        /// never HTML, so the relaxed encoder is safe here.
+        /// </summary>
+        private static readonly System.Text.Json.JsonSerializerOptions ReplyJson =
+            new(global::ModelContextProtocol.McpJsonUtilities.DefaultOptions)
+            {
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            };
+
         public static IEnumerable<global::ModelContextProtocol.Server.McpServerTool> BuildTools(bool allowWrite)
         {
             return typeof(McpServer)
@@ -114,7 +126,7 @@ namespace TiaMcpServer
                 .Where(m => m.GetCustomAttribute<global::ModelContextProtocol.Server.McpServerToolAttribute>() != null)
                 .Where(m => allowWrite || m.GetCustomAttribute<WriteToolAttribute>() == null)
                 .Where(m => ToolFilter.Includes(m.GetCustomAttribute<global::ModelContextProtocol.Server.McpServerToolAttribute>()!.Name ?? m.Name))
-                .Select(m => ToolSchemaCompaction.Apply(ToolDefaults.Apply(m, PortalSelection.Apply(m, global::ModelContextProtocol.Server.McpServerTool.Create(m)))))
+                .Select(m => ToolSchemaCompaction.Apply(ToolDefaults.Apply(m, PortalSelection.Apply(m, global::ModelContextProtocol.Server.McpServerTool.Create(m, options: new global::ModelContextProtocol.Server.McpServerToolCreateOptions { SerializerOptions = ReplyJson })))))
                 .ToList();
         }
 

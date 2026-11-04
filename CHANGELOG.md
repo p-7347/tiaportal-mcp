@@ -24,7 +24,7 @@
 ### Changed
 
 - Token use (no tool added or removed): parameter descriptions lose their repeated `name:` prefix and a plain `(default x)` the schema already states; `portalId`, `softwarePath` and 36 long tool descriptions are shorter. Text the model reads in `tools/list` (write mode): 218k -> 167k characters, plus the 97k characters of output schemas that are no longer sent.
-- Replies are sent once, as JSON text; no tool returns `structuredContent` or publishes an `outputSchema` any more. The text is unchanged.
+- Replies are sent once, as JSON text; no tool returns `structuredContent` or publishes an `outputSchema` any more. The text no longer escapes Korean and other non-ASCII text or the apostrophe (`\uC124`, `\u0027`), which the client passed to the model as is.
 - `GetBlocks`, `GetTypes` and `GetBlocksWithHierarchy`: `includeAttributes` defaults to false (new argument on `GetBlocksWithHierarchy`); name, path, language and consistency come either way. Block and type entries no longer carry `description` (the .NET type name, same as `typeName`), and their attribute lists skip attributes already returned as fields. `GetHmiScreens` leaves out empty display names. Block and type entries leave out an empty `namespace` and `headerName`.
 - `FindInCode`: LAD and mixed blocks are searched as the compact network text plus interface member names (result format `text`) instead of their XML; exported text is kept per object while its modified date is unchanged, so repeat searches are fast. A call stops after about 40 s and returns `nextStartAt`. `GetHmiDiscreteAlarms`/`GetHmiAnalogAlarms` stop the same way with `nextOffset`.
 - `WhereUsed` also finds uses of DB members (`member` field) and takes `maxResults` (default 300, `total` in the reply).
