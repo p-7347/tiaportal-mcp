@@ -12,7 +12,7 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         // Unsaved-change flag and project history (BACKLOG D4); see Portal.ProjectStatus.cs.
 
-        [McpServerTool(Name = "GetProjectStatus", Title = "Get project status", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetProjectStatus", Title = "Get project status", ReadOnly = true, Idempotent = true, OpenWorld = false),
          Description("Use to check before saving or closing whether the open project has unsaved changes, and to read its project history (date and text of events such as created, upgraded, compiled), last modified time and user. Changes nothing")]
         public static ResponseProjectStatus GetProjectStatus(
             [Description("historyCount: number of most recent history entries to list (default 10; 0 lists none)")] int historyCount = 10)

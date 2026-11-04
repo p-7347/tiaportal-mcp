@@ -13,7 +13,7 @@ namespace TiaMcpServer.ModelContextProtocol
         // Search an export folder offline, e.g. an older export when the project is not open.
         // Pure file reading like CompareExports - no lock, no connection.
 
-        [McpServerTool(Name = "SearchExports", Title = "Search export folder", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "SearchExports", Title = "Search export folder", ReadOnly = true, Idempotent = true, OpenWorld = false),
          Description("Search the files of an export folder (SimaticML XML, SCL, documents, ...) for a tag, block, member or comment text, without TIA Portal. In XML a symbolic access is matched as one path, so '\"G2U1Assy\".PLC_Ins.Pitch' finds every use of that member, and each match names its network. Results reflect the export, not later changes in the project")]
         public static ResponseSearchExports SearchExports(
             [Description("path: the export folder to search (recursively)")] string path,

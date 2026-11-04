@@ -14,7 +14,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region read
 
-        [McpServerTool(Name = "GetHmiDynamizations", Title = "Get HMI dynamizations", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetHmiDynamizations", Title = "Get HMI dynamizations", ReadOnly = true, Idempotent = true, OpenWorld = false),
          Description("Use to find out what drives a property of a WinCC Unified screen item, e.g. which tag value or bit turns a lamp green. Lists each dynamization in full: the tag with its mapping table (value, range or bit -> property value, colors as '#RRGGBB') or formula, script code with its trigger, flashing colors and rate, resource list. Only items that have a dynamization are listed")]
         public static ResponseHmiDynamizations GetHmiDynamizations(
             [Description(HmiPathDescription)] string softwarePath,
@@ -57,7 +57,7 @@ namespace TiaMcpServer.ModelContextProtocol
         #region write
 
         [WriteTool]
-        [McpServerTool(Name = "SetHmiTagDynamization", Title = "Set HMI tag dynamization", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "SetHmiTagDynamization", Title = "Set HMI tag dynamization", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Use to make a property of a WinCC Unified screen item follow an HMI tag, e.g. a lamp's BackColor green at 0 and red at 1. Binds the tag and, when 'mapping' or 'formula' is given, replaces how tag values map to property values. A property that already has another kind of dynamization (script, flashing) must be cleared with 'DeleteHmiDynamization' first. The previous dynamization is backed up as JSON. Returns the dynamization as read back")]
         public static ResponseHmiDynamizationWrite SetHmiTagDynamization(
             [Description(HmiPathDescription)] string softwarePath,
@@ -76,7 +76,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "SetHmiScriptDynamization", Title = "Set HMI script dynamization", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "SetHmiScriptDynamization", Title = "Set HMI script dynamization", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Use to compute a property of a WinCC Unified screen item with a script, e.g. a text or color from several tags. Creates the script dynamization or changes its code and trigger. A property that already has another kind of dynamization must be cleared with 'DeleteHmiDynamization' first. The previous dynamization is backed up as JSON. Returns the dynamization as read back")]
         public static ResponseHmiDynamizationWrite SetHmiScriptDynamization(
             [Description(HmiPathDescription)] string softwarePath,
@@ -97,7 +97,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "SetHmiFlashingDynamization", Title = "Set HMI flashing dynamization", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "SetHmiFlashingDynamization", Title = "Set HMI flashing dynamization", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Use to make a color property of a WinCC Unified screen item flash between two colors. Creates the flashing dynamization or changes it; arguments left empty keep their value. A property that already has another kind of dynamization must be cleared with 'DeleteHmiDynamization' first (a tag mapping entry can flash on its own: see 'SetHmiTagDynamization'). The previous dynamization is backed up as JSON. Returns the dynamization as read back")]
         public static ResponseHmiDynamizationWrite SetHmiFlashingDynamization(
             [Description(HmiPathDescription)] string softwarePath,
@@ -117,7 +117,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "DeleteHmiDynamization", Title = "Delete HMI dynamization", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "DeleteHmiDynamization", Title = "Delete HMI dynamization", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Use to remove the dynamization (tag, script, flashing, ...) of one property of a WinCC Unified screen item; the property keeps its static value. The removed dynamization is returned and backed up as JSON")]
         public static ResponseHmiDynamizationWrite DeleteHmiDynamization(
             [Description(HmiPathDescription)] string softwarePath,

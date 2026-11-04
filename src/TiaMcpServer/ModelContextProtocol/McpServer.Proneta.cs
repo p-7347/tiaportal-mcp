@@ -12,7 +12,7 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         #region network topology comparison (PRONETA CSV)
 
-        [McpServerTool(Name = "CompareNetworkCsv", Title = "Compare PRONETA network CSV", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Compare a PRONETA 'Device Table (CSV)' export (with 'Include device details') against the open project's devices. Read-only. Matches by device name, case-insensitive (Openness has no MAC address). matchMethod null = no TIA device of that name; ipDiffers = live IP differs from the project. Have a human confirm a mismatch before calling 'SetIpAddress'.")]
+        [McpServerTool(Name = "CompareNetworkCsv", Title = "Compare PRONETA network CSV", ReadOnly = true, OpenWorld = false), Description("Compare a PRONETA 'Device Table (CSV)' export (with 'Include device details') against the open project's devices. Read-only. Matches by device name, case-insensitive (Openness has no MAC address). matchMethod null = no TIA device of that name; ipDiffers = live IP differs from the project. Have a human confirm a mismatch before calling 'SetIpAddress'.")]
         public static ResponseCompareNetworkCsv CompareNetworkCsv(
             [Description("csvPath: full path to the PRONETA CSV export file")] string csvPath)
         {

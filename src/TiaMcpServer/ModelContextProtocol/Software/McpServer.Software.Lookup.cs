@@ -23,7 +23,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region lookup
 
-        [McpServerTool(Name = "ResolveObjectPath", Title = "Resolve object path", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "ResolveObjectPath", Title = "Resolve object path", ReadOnly = true, OpenWorld = false),
          Description("Turn a bare or partial object name into the root-relative path the other tools need, searching program blocks, PLC data types, tags, tag tables, watch tables and external sources. Exact matches win; substring matches are only reported when nothing matches exactly")]
         public static ResponseResolveObjectPath ResolveObjectPath(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,

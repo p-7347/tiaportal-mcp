@@ -12,7 +12,7 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         // Start values of data block members without exporting the DB. See Portal.DbStartValues.cs.
 
-        [McpServerTool(Name = "GetDbStartValues", Title = "Get DB start values", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetDbStartValues", Title = "Get DB start values", ReadOnly = true, Idempotent = true, OpenWorld = false),
          Description("List the members of a data block (global or instance DB) with data type and start value, including members inside structs, UDTs and arrays, e.g. 'S[3].OriginOffset'. Needs no export. Filter with 'regexName' on the member path. Reads only; change one value with 'SetDbStartValue'")]
         public static ResponseDbStartValues GetDbStartValues(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -57,7 +57,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "SetDbStartValue", Title = "Set DB start value", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "SetDbStartValue", Title = "Set DB start value", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Change the start value of one data block member in the offline project, e.g. 'S[3].OriginOffset' to '2.0', without touching anything else in the DB. The DB is backed up first. The PLC uses it only after compile and a download that reinitializes the DB (actual values stay until then)")]
         public static ResponseDbStartValueSet SetDbStartValue(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,

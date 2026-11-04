@@ -17,7 +17,7 @@ namespace TiaMcpServer.ModelContextProtocol
         private const string HmiAlarmKindDescription = "kind: 'discrete' (default) or 'analog'";
 
         [WriteTool]
-        [McpServerTool(Name = "SetHmiAlarms", Title = "Create or change HMI alarms", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "SetHmiAlarms", Title = "Create or change HMI alarms", Destructive = true, OpenWorld = false),
          Description("Use to create or change WinCC Unified discrete or analog alarms, one or many per call: texts (all project languages), class, trigger tag and bit, priority, area or any other property by its Openness name (as 'GetHmiDiscreteAlarms'/'GetHmiAnalogAlarms' list them). All entries are checked first; nothing changes when one is wrong. Previous values go to a .json backup")]
         public static ResponseHmiAlarmWrite SetHmiAlarms(
             [Description(HmiPathDescription)] string softwarePath,
@@ -43,7 +43,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "DeleteHmiAlarms", Title = "Delete HMI alarms", Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "DeleteHmiAlarms", Title = "Delete HMI alarms", Destructive = true, Idempotent = false, OpenWorld = false),
          Description("Delete WinCC Unified discrete or analog alarms by name and/or regular expression. Every name is checked first and nothing is deleted when one does not exist. The deleted alarms' properties are saved as a .json backup")]
         public static ResponseHmiAlarmWrite DeleteHmiAlarms(
             [Description(HmiPathDescription)] string softwarePath,
@@ -67,7 +67,7 @@ namespace TiaMcpServer.ModelContextProtocol
             });
         }
 
-        [McpServerTool(Name = "GetHmiScriptModules", Title = "Get HMI script modules", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetHmiScriptModules", Title = "Get HMI script modules", ReadOnly = true, Idempotent = true, OpenWorld = false),
          Description("Use to read the global script modules (JavaScript functions and global definitions) of a WinCC Unified HMI. Returns the module names and, with 'includeCode', the exported files with their text. With 'exportPath' the files are also written to that folder, ready to edit and bring back with 'ImportHmiScriptModules'. Changes nothing in the project")]
         public static ResponseHmiScriptModules GetHmiScriptModules(
             [Description(HmiPathDescription)] string softwarePath,
@@ -96,7 +96,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "ImportHmiScriptModules", Title = "Import HMI script modules", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "ImportHmiScriptModules", Title = "Import HMI script modules", Destructive = true, OpenWorld = false),
          Description("Use to create or replace WinCC Unified global script modules from files, typically a folder written by 'GetHmiScriptModules' with 'exportPath' and then edited. All existing modules are saved as a .json backup first")]
         public static ResponseHmiScriptModules ImportHmiScriptModules(
             [Description(HmiPathDescription)] string softwarePath,

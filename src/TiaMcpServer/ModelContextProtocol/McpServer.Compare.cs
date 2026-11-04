@@ -26,7 +26,7 @@ namespace TiaMcpServer.ModelContextProtocol
         private static readonly Regex DocumentInfoPattern =
             new Regex(@"<DocumentInfo>.*?</DocumentInfo>", RegexOptions.Singleline | RegexOptions.Compiled);
 
-        [McpServerTool(Name = "CompareExports", Title = "Compare export folders", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "CompareExports", Title = "Compare export folders", ReadOnly = true, Idempotent = true, OpenWorld = false),
          Description("Compare two export folders file by file (recursively, matched by relative path) and list files only in one folder and files that differ, with the changed line range of each. Ignores the export timestamp in SimaticML <DocumentInfo> and line-ending differences. Reads files only; TIA Portal is not needed")]
         public static ResponseCompareExports CompareExports(
             [Description("pathA: the first export folder, e.g. the export before a change")] string pathA,

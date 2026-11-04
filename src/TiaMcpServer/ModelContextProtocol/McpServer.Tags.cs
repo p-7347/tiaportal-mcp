@@ -17,15 +17,15 @@ namespace TiaMcpServer.ModelContextProtocol
         //
         // Callers: registered through Program.BuildTools() and invoked directly by the tag test
         // class. Affected API: additive only - this is a new partial of the existing McpServer type.
-        // Data: returns the ResponseTagTable*/ResponseTag*/ResponseConstant* DTOs as MCP
-        // structuredContent. Only ExportXmlTagTable touches the file system, writing one .xml.
+        // Data: returns the ResponseTagTable*/ResponseTag*/ResponseConstant* DTOs as the JSON
+        // text of the reply. Only ExportXmlTagTable touches the file system, writing one .xml.
         //
         // Every tool follows the house pattern: call Portal, translate a null/empty result into a
         // specific McpException, and wrap anything unexpected with 'when (ex is not McpException)'.
 
         #region tags
 
-        [McpServerTool(Name = "GetTagTables", Title = "Get tag tables", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetTagTables", Title = "Get tag tables", ReadOnly = true, OpenWorld = false),
          Description("List the PLC tag tables of a PLC software, optionally filtered by a regular expression on the table name")]
         public static ResponseTagTables GetTagTables(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -48,7 +48,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GetTagTableInfo", Title = "Get tag table info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetTagTableInfo", Title = "Get tag table info", ReadOnly = true, OpenWorld = false),
          Description("Get the details of a single PLC tag table, including its tag and constant counts")]
         public static ResponseTagTableInfo GetTagTableInfo(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -72,7 +72,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GetTags", Title = "Get tags", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetTags", Title = "Get tags", ReadOnly = true, OpenWorld = false),
          Description("Use to look up PLC tag names and addresses. List PLC tags, either of one tag table or of every tag table of the PLC software, optionally filtered by a regular expression on the tag name")]
         public static ResponseTags GetTags(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -96,7 +96,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GetTagInfo", Title = "Get tag info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetTagInfo", Title = "Get tag info", ReadOnly = true, OpenWorld = false),
          Description("Get the details of a single PLC tag, including data type, logical address and external access flags")]
         public static ResponseTagInfo GetTagInfo(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -120,7 +120,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GetConstants", Title = "Get constants", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetConstants", Title = "Get constants", ReadOnly = true, OpenWorld = false),
          Description("List PLC user and/or system constants, either of one tag table or of every tag table of the PLC software")]
         public static ResponseConstants GetConstants(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -177,7 +177,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "ExportXmlTagTable", Title = "Export tag table as XML", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "ExportXmlTagTable", Title = "Export tag table as XML", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Export one PLC tag table as an XML file into exportPath, below its tag table group folders when preservePath is true")]
         public static ResponseExportXmlTagTable ExportXmlTagTable(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -266,12 +266,12 @@ namespace TiaMcpServer.ModelContextProtocol
         //
         // Callers: registered through Program.BuildTools() and invoked directly by the watch
         // table test class. Affected API: additive only - a new partial of the existing McpServer
-        // type. Data: returns ResponseWatchTable*/TableEntryInfo as MCP structuredContent; only
+        // type. Data: returns ResponseWatchTable*/TableEntryInfo as the JSON text of the reply; only
         // ExportXmlWatchTable touches the file system, writing one .xml.
 
         #region watch and force tables
 
-        [McpServerTool(Name = "GetWatchTables", Title = "Get watch tables", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetWatchTables", Title = "Get watch tables", ReadOnly = true, OpenWorld = false),
          Description("List the PLC watch tables of a PLC software, optionally filtered by a regular expression on the table name. Entries are omitted; use GetWatchTableInfo for one table's rows")]
         public static ResponseWatchTables GetWatchTables(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -294,7 +294,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GetWatchTableInfo", Title = "Get watch table info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetWatchTableInfo", Title = "Get watch table info", ReadOnly = true, OpenWorld = false),
          Description("Get a single PLC watch table including all of its entries (address, display format, monitor and modify settings)")]
         public static ResponseWatchTableInfo GetWatchTableInfo(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -318,7 +318,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GetForceTables", Title = "Get force tables", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetForceTables", Title = "Get force tables", ReadOnly = true, OpenWorld = false),
          Description("List the PLC force tables of a PLC software including their entries. A force table is created and owned by the system: it cannot be created or deleted through Openness")]
         public static ResponseWatchTables GetForceTables(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath)
@@ -340,7 +340,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "ExportXmlWatchTable", Title = "Export watch table as XML", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "ExportXmlWatchTable", Title = "Export watch table as XML", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Export one PLC watch table as an XML file into exportPath, below its watch table group folders when preservePath is true")]
         public static ResponseExportXmlWatchTable ExportXmlWatchTable(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -480,7 +480,7 @@ namespace TiaMcpServer.ModelContextProtocol
         #region tag tables (write)
 
         [WriteTool]
-        [McpServerTool(Name = "CreateTagTable", Title = "Create tag table", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "CreateTagTable", Title = "Create tag table", Destructive = true, OpenWorld = false),
          Description("Create a PLC tag table in a tag table group")]
         public static ResponseCreated CreateTagTable(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -495,7 +495,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "DeleteTagTable", Title = "Delete tag table", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "DeleteTagTable", Title = "Delete tag table", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Delete a PLC tag table with all of its tags and user constants. The default tag table cannot be deleted")]
         public static ResponseDeleted DeleteTagTable(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -509,7 +509,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "RenameTagTable", Title = "Rename tag table", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "RenameTagTable", Title = "Rename tag table", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Rename a PLC tag table")]
         public static ResponseRenamed RenameTagTable(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -524,7 +524,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "CreateTagTableGroup", Title = "Create tag table group", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "CreateTagTableGroup", Title = "Create tag table group", Destructive = true, OpenWorld = false),
          Description("Create a group below the PLC tags root of the PLC software")]
         public static ResponseCreated CreateTagTableGroup(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -539,7 +539,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "DeleteTagTableGroup", Title = "Delete tag table group", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "DeleteTagTableGroup", Title = "Delete tag table group", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Delete a tag table group and everything inside it. The PLC tags system group itself cannot be deleted")]
         public static ResponseDeleted DeleteTagTableGroup(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -553,7 +553,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "ImportXmlTagTable", Title = "Import tag table from XML", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "ImportXmlTagTable", Title = "Import tag table from XML", Destructive = true, OpenWorld = false),
          Description("Import a PLC tag table from an XML file into a tag table group. An existing table of the same name is replaced unless overwrite is false")]
         public static ResponseImported ImportXmlTagTable(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -573,7 +573,7 @@ namespace TiaMcpServer.ModelContextProtocol
         #region tags (write)
 
         [WriteTool]
-        [McpServerTool(Name = "CreateTag", Title = "Create tag", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "CreateTag", Title = "Create tag", Destructive = true, OpenWorld = false),
          Description("Create a PLC tag in a tag table")]
         public static ResponseCreated CreateTag(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -590,7 +590,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "UpdateTag", Title = "Update tag", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "UpdateTag", Title = "Update tag", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Change one or more properties of an existing PLC tag. Every argument left empty or null keeps the current value")]
         public static ResponseRenamed UpdateTag(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -622,7 +622,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "DeleteTag", Title = "Delete tag", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "DeleteTag", Title = "Delete tag", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Delete a PLC tag from its tag table")]
         public static ResponseDeleted DeleteTag(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -640,7 +640,7 @@ namespace TiaMcpServer.ModelContextProtocol
         #region user constants (write)
 
         [WriteTool]
-        [McpServerTool(Name = "CreateUserConstant", Title = "Create user constant", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "CreateUserConstant", Title = "Create user constant", Destructive = true, OpenWorld = false),
          Description("Create a user constant in a tag table. System constants are read-only and cannot be created")]
         public static ResponseCreated CreateUserConstant(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -657,7 +657,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "UpdateUserConstant", Title = "Update user constant", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "UpdateUserConstant", Title = "Update user constant", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Change the name, data type or value of an existing user constant. Every argument left null keeps the current value")]
         public static ResponseRenamed UpdateUserConstant(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -686,7 +686,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "DeleteUserConstant", Title = "Delete user constant", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "DeleteUserConstant", Title = "Delete user constant", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Delete a user constant from a tag table. System constants cannot be deleted")]
         public static ResponseDeleted DeleteUserConstant(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -705,7 +705,7 @@ namespace TiaMcpServer.ModelContextProtocol
         #region watch tables (write)
 
         [WriteTool]
-        [McpServerTool(Name = "CreateWatchTable", Title = "Create watch table", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "CreateWatchTable", Title = "Create watch table", Destructive = true, OpenWorld = false),
          Description("Create a PLC watch table. Force tables cannot be created: the system owns the single force table per PLC")]
         public static ResponseCreated CreateWatchTable(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -720,7 +720,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "RenameWatchTable", Title = "Rename watch table", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "RenameWatchTable", Title = "Rename watch table", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Rename a PLC watch table")]
         public static ResponseRenamed RenameWatchTable(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -735,7 +735,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "DeleteWatchTable", Title = "Delete watch table", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "DeleteWatchTable", Title = "Delete watch table", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Delete a PLC watch table with all of its entries. Force tables cannot be deleted")]
         public static ResponseDeleted DeleteWatchTable(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -749,7 +749,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "CreateWatchTableGroup", Title = "Create watch table group", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "CreateWatchTableGroup", Title = "Create watch table group", Destructive = true, OpenWorld = false),
          Description("Create a group below the Watch and force tables root of the PLC software")]
         public static ResponseCreated CreateWatchTableGroup(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -764,7 +764,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "DeleteWatchTableGroup", Title = "Delete watch table group", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "DeleteWatchTableGroup", Title = "Delete watch table group", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Delete a watch table group and everything inside it. The Watch and force tables system group itself cannot be deleted")]
         public static ResponseDeleted DeleteWatchTableGroup(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -778,7 +778,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "ImportWatchTable", Title = "Import watch table from XML", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "ImportWatchTable", Title = "Import watch table from XML", Destructive = true, OpenWorld = false),
          Description("Import a PLC watch table from an XML file into a watch table group. An existing table of the same name is replaced unless overwrite is false")]
         public static ResponseImported ImportWatchTable(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,

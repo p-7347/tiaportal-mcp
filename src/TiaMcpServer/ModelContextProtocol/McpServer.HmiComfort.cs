@@ -15,7 +15,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         private const string ComfortPathDescription = "softwarePath: path of the classic WinCC (Comfort/Basic panel) HMI software, e.g. 'HMI_1/HMI_RT_1'; 'GetProjectTree' shows it as 'HmiTarget'";
 
-        [McpServerTool(Name = "GetComfortScreens", Title = "Get Comfort screens", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetComfortScreens", Title = "Get Comfort screens", ReadOnly = true, OpenWorld = false),
          Description("List the screens, screen templates and pop-up screens of a classic WinCC HMI (Comfort/Basic panels), including those in subfolders, with their folder. For WinCC Unified use 'GetHmiScreens'")]
         public static ResponseComfortScreens GetComfortScreens(
             [Description(ComfortPathDescription)] string softwarePath,
@@ -43,7 +43,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GetComfortScreenItems", Title = "Get Comfort screen items", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetComfortScreenItems", Title = "Get Comfort screen items", ReadOnly = true, OpenWorld = false),
          Description("List the items of one classic WinCC screen, template or pop-up (Comfort/Basic panels) with their kind, layer, position, size, texts, linked tags/text lists/graphic lists and event functions (e.g. what a button does when clicked), read from an XML export of the screen. Group and faceplate contents are under 'children'. Use it to rebuild a Comfort screen in WinCC Unified. For WinCC Unified screens use 'GetHmiScreenItems'")]
         public static ResponseComfortScreenItems GetComfortScreenItems(
             [Description(ComfortPathDescription)] string softwarePath,

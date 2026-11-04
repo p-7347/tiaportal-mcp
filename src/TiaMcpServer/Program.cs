@@ -102,6 +102,9 @@ namespace TiaMcpServer
         /// which is what keeps them out of 'tools/list' rather than merely refusing them when
         /// called. Tools are created one by one (the SDK's type-based registration would take
         /// every [McpServerTool] method of the class).
+        /// No tool sets UseStructuredContent: with it the SDK sends every reply twice (as text and as
+        /// structuredContent) and lists an output schema per tool (~97k characters in tools/list);
+        /// the JSON text alone carries the same data.
         /// </summary>
         public static IEnumerable<global::ModelContextProtocol.Server.McpServerTool> BuildTools(bool allowWrite)
         {

@@ -106,7 +106,7 @@ namespace TiaMcpServer.ModelContextProtocol
             return null;
         }
 
-        public static BlockGroupInfo BuildBlockHierarchy(PlcBlockGroup group, TiaMcpServer.Siemens.Portal? portal = null)
+        public static BlockGroupInfo BuildBlockHierarchy(PlcBlockGroup group, TiaMcpServer.Siemens.Portal? portal = null, bool includeAttributes = false)
         {
             var groupInfo = new BlockGroupInfo
             {
@@ -116,7 +116,7 @@ namespace TiaMcpServer.ModelContextProtocol
             var blockList = new List<ResponseBlockInfo>();
             foreach (var block in group.Blocks)
             {
-                var attributes = Helper.GetAttributeList(block, Helper.BlockFields);
+                var attributes = includeAttributes ? Helper.GetAttributeList(block, Helper.BlockFields) : null;
                 blockList.Add(new ResponseBlockInfo
                 {
                     Path = portal == null ? null : portal.GetBlockPath(block),
@@ -137,7 +137,7 @@ namespace TiaMcpServer.ModelContextProtocol
             var groupList = new List<BlockGroupInfo>();
             foreach (var subGroup in group.Groups)
             {
-                groupList.Add(BuildBlockHierarchy(subGroup, portal));
+                groupList.Add(BuildBlockHierarchy(subGroup, portal, includeAttributes));
             }
             groupInfo.Groups = groupList;
 

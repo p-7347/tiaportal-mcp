@@ -18,7 +18,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region read
 
-        [McpServerTool(Name = "GetHmiScreenItems", Title = "Get HMI screen items", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetHmiScreenItems", Title = "Get HMI screen items", ReadOnly = true, OpenWorld = false),
          Description("List the items of one WinCC Unified screen with their kind, position, size, text, IO field process value and tag bindings (dynamizations); for faceplates also the faceplate type and interface values/tags; with includeScripts the event scripts of each item and of the screen itself (e.g. what a button does when pressed)")]
         public static ResponseHmiScreenItems GetHmiScreenItems(
             [Description(HmiPathDescription)] string softwarePath,
@@ -62,7 +62,7 @@ namespace TiaMcpServer.ModelContextProtocol
         #region write
 
         [WriteTool]
-        [McpServerTool(Name = "CreateHmiScreen", Title = "Create HMI screen", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "CreateHmiScreen", Title = "Create HMI screen", Destructive = true, OpenWorld = false),
          Description("Create an empty WinCC Unified screen at the root of the HMI software's screens")]
         public static ResponseCreated CreateHmiScreen(
             [Description(HmiPathDescription)] string softwarePath,
@@ -83,7 +83,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "DeleteHmiScreen", Title = "Delete HMI screen", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "DeleteHmiScreen", Title = "Delete HMI screen", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Delete a WinCC Unified screen and all its items")]
         public static ResponseDeleted DeleteHmiScreen(
             [Description(HmiPathDescription)] string softwarePath,
@@ -97,7 +97,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "CreateHmiScreenItem", Title = "Create HMI screen item", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "CreateHmiScreenItem", Title = "Create HMI screen item", Destructive = true, OpenWorld = false),
          Description("Add an item to a WinCC Unified screen: Button, IOField, Label, Text or Rectangle. Optionally set its position, size and text, for an IOField bind its ProcessValue to an HMI tag, and add one event script ('eventType' + 'scriptCode'). Returns the item as read back")]
         public static ResponseHmiScreenItemWrite CreateHmiScreenItem(
             [Description(HmiPathDescription)] string softwarePath,
@@ -121,7 +121,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "UpdateHmiScreenItem", Title = "Update HMI screen item", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "UpdateHmiScreenItem", Title = "Update HMI screen item", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Change the position, size, text or visibility of an item on a WinCC Unified screen. Every argument left empty keeps the current value. Returns the item as read back. For colors, border, font or output format use 'SetHmiScreenItemProperties'")]
         public static ResponseHmiScreenItemWrite UpdateHmiScreenItem(
             [Description(HmiPathDescription)] string softwarePath,
@@ -142,7 +142,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "DeleteHmiScreenItem", Title = "Delete HMI screen item", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "DeleteHmiScreenItem", Title = "Delete HMI screen item", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Delete one item from a WinCC Unified screen")]
         public static ResponseDeleted DeleteHmiScreenItem(
             [Description(HmiPathDescription)] string softwarePath,
@@ -157,7 +157,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "BindHmiTag", Title = "Bind HMI tag to screen item", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "BindHmiTag", Title = "Bind HMI tag to screen item", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Bind an HMI tag to a property of a WinCC Unified screen item (a tag dynamization), e.g. an IOField's 'ProcessValue' or a Rectangle's 'BackColor'. An existing tag binding on that property is re-pointed. Returns the item as read back")]
         public static ResponseHmiScreenItemWrite BindHmiTag(
             [Description(HmiPathDescription)] string softwarePath,
@@ -174,7 +174,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "CreateHmiFaceplate", Title = "Create HMI faceplate", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "CreateHmiFaceplate", Title = "Create HMI faceplate", Destructive = true, OpenWorld = false),
          Description("Place a faceplate (faceplate container) on a WinCC Unified screen. The faceplate type must already be in the project library; 'GetHmiScreenItems' shows the 'faceplateType' and interface of faceplates already placed. Set its interface with 'SetHmiFaceplateInterface'. Returns the item as read back, with its interface properties")]
         public static ResponseHmiScreenItemWrite CreateHmiFaceplate(
             [Description(HmiPathDescription)] string softwarePath,
@@ -194,7 +194,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "SetHmiFaceplateInterface", Title = "Set HMI faceplate interface", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "SetHmiFaceplateInterface", Title = "Set HMI faceplate interface", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Set one interface property of a faceplate on a WinCC Unified screen, either to a static 'value' or to an HMI 'tag' (pass exactly one). A tag-typed property (e.g. a UDT tag) stores the tag name as its value, as TIA Portal itself does; texts are given as plain text. Returns the faceplate as read back, with all its interface properties")]
         public static ResponseHmiScreenItemWrite SetHmiFaceplateInterface(
             [Description(HmiPathDescription)] string softwarePath,
@@ -216,7 +216,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "CreateHmiTag", Title = "Create HMI tag", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "CreateHmiTag", Title = "Create HMI tag", Destructive = true, OpenWorld = false),
          Description("Create a WinCC Unified HMI tag in a tag table. Pass 'connection' and 'plcTag' to link it to a PLC tag; otherwise it is an internal tag of 'dataType'. Returns the tag as read back")]
         public static ResponseHmiTagWrite CreateHmiTag(
             [Description(HmiPathDescription)] string softwarePath,

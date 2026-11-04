@@ -33,7 +33,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region type documents
 
-        [McpServerTool(Name = "ExportTypeAsDocuments", Title = "Export type as documents", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "ExportTypeAsDocuments", Title = "Export type as documents", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Export type as documents (.s7dcl plus an optional .s7res)")]
         public static ResponseExportTypeAsDocuments ExportTypeAsDocuments(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -64,7 +64,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "ExportTypesAsDocuments", Title = "Export types as documents", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "ExportTypesAsDocuments", Title = "Export types as documents", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Export types as documents (.s7dcl plus optional .s7res)")]
         public static async Task<ResponseExportTypesAsDocuments> ExportTypesAsDocuments(
             IProgress<ProgressNotificationValue> progress,
@@ -189,7 +189,7 @@ namespace TiaMcpServer.ModelContextProtocol
         #region type documents (write)
 
         [WriteTool]
-        [McpServerTool(Name = "ImportTypeFromDocuments", Title = "Import type from documents", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "ImportTypeFromDocuments", Title = "Import type from documents", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Import type from documents (.s7dcl plus an optional .s7res)")]
         public static ResponseImportTypeFromDocuments ImportTypeFromDocuments(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -215,7 +215,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "ImportTypesFromDocuments", Title = "Import types from documents", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "ImportTypesFromDocuments", Title = "Import types from documents", Destructive = true, OpenWorld = false),
          Description("Import types from documents (.s7dcl plus an optional .s7res)")]
         public static async Task<ResponseImportTypesFromDocuments> ImportTypesFromDocuments(
             IProgress<ProgressNotificationValue> progress,

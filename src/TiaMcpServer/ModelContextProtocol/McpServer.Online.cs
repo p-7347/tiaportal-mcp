@@ -11,7 +11,7 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         #region online connection (engineering station)
 
-        [McpServerTool(Name = "GetOnlineState", Title = "Get online state", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get the engineering station's online connection state (Offline/Connecting/Online/...) for a device or device item. This is just the connection used for diagnostics/monitoring - it never starts, stops, or otherwise commands the PLC.")]
+        [McpServerTool(Name = "GetOnlineState", Title = "Get online state", ReadOnly = true, OpenWorld = false), Description("Get the engineering station's online connection state (Offline/Connecting/Online/...) for a device or device item. This is just the connection used for diagnostics/monitoring - it never starts, stops, or otherwise commands the PLC.")]
         public static ResponseOnlineState GetOnlineState(
             [Description("path: defines the path in the project structure to the device or device item")] string path)
         {
@@ -40,7 +40,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GoOnline", Title = "Go online", Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Establish the engineering station's online connection to a device or device item for diagnostics/monitoring. Does not start, stop, or otherwise command the PLC - use TIA Portal itself for Run/Stop control. Confirm with the user before calling this against a real (non-PLCSIM) PLC.")]
+        [McpServerTool(Name = "GoOnline", Title = "Go online", Destructive = false, Idempotent = true, OpenWorld = false), Description("Establish the engineering station's online connection to a device or device item for diagnostics/monitoring. Does not start, stop, or otherwise command the PLC - use TIA Portal itself for Run/Stop control. Confirm with the user before calling this against a real (non-PLCSIM) PLC.")]
         public static ResponseOnlineState GoOnline(
             [Description("path: defines the path in the project structure to the device or device item")] string path)
         {
@@ -65,7 +65,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GoOffline", Title = "Go offline", Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Disconnect the engineering station's online connection to a device or device item. Does not stop the PLC - the PLC keeps running regardless of this connection.")]
+        [McpServerTool(Name = "GoOffline", Title = "Go offline", Destructive = false, Idempotent = true, OpenWorld = false), Description("Disconnect the engineering station's online connection to a device or device item. Does not stop the PLC - the PLC keeps running regardless of this connection.")]
         public static ResponseGoOffline GoOffline(
             [Description("path: defines the path in the project structure to the device or device item")] string path)
         {

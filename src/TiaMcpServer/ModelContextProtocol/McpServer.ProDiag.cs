@@ -12,7 +12,7 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         // ProDiag supervisions and their assignment to instance DBs. See Portal.ProDiag.cs.
 
-        [McpServerTool(Name = "GetProDiagInfo", Title = "Get ProDiag info", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetProDiagInfo", Title = "Get ProDiag info", ReadOnly = true, Idempotent = true, OpenWorld = false),
          Description("Use to see how ProDiag is set up in a PLC before configuring alarms or the WinCC PLC code view: lists the ProDiag FBs (version, settings, instance DBs), the FBs that define supervisions on their members (count, and supervised operand, conditions and categories of the first ones), and the instance DBs assigned to a ProDiag FB. Walks the blocks of a group; reads only")]
         public static ResponseProDiagInfo GetProDiagInfo(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -71,7 +71,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "ExportProDiagSupervisions", Title = "Export ProDiag supervisions", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "ExportProDiagSupervisions", Title = "Export ProDiag supervisions", ReadOnly = true, Idempotent = true, OpenWorld = false),
          Description("Use to get ProDiag supervisions as an Excel file to review or edit them in bulk: exports the global supervisions of the PLC (TIA 'Global overview' of supervisions), or those of one ProDiag FB, with their settings to .xlsx. Edit the file and bring it back with 'ImportProDiagSupervisions'. Does not change the project")]
         public static ResponseProDiagSupervisionsXlsx ExportProDiagSupervisions(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -109,7 +109,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "ImportProDiagSupervisions", Title = "Import ProDiag supervisions", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "ImportProDiagSupervisions", Title = "Import ProDiag supervisions", Destructive = true, OpenWorld = false),
          Description("Use to add or change ProDiag supervisions in bulk from an .xlsx file made by 'ExportProDiagSupervisions': imports into the global supervisions of the PLC or into one ProDiag FB. The current supervisions of that scope are exported to the backup folder first; a failed import is rolled back. Compile and download afterwards")]
         public static ResponseProDiagSupervisionsXlsx ImportProDiagSupervisions(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -137,7 +137,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "SetAssignedProDiagFB", Title = "Set assigned ProDiag FB", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "SetAssignedProDiagFB", Title = "Set assigned ProDiag FB", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Use to put an FB instance (or a UDT instance in a global DB) under ProDiag supervision: sets which ProDiag FB evaluates its supervisions (TIA attribute 'AssignedProDiagFB'). An empty proDiagFb removes the assignment. The DB is backed up first. Compile and download afterwards")]
         public static ResponseProDiagAssignmentSet SetAssignedProDiagFB(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,

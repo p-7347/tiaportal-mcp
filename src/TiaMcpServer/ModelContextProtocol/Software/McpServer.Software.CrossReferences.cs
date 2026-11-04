@@ -18,7 +18,7 @@ namespace TiaMcpServer.ModelContextProtocol
         //
         // Callers: registered through Program.BuildTools() and invoked directly by the cross
         // reference test class. Affected API: additive only - a new partial of the existing
-        // McpServer type. Data: returns ResponseCrossReferences as MCP structuredContent. No file I/O.
+        // McpServer type. Data: returns ResponseCrossReferences as the JSON text of the reply. No file I/O.
         //
         // Output size is the real constraint here: Sources -> References -> Locations nests three
         // deep and SourceObject.Children recurses, so an unfiltered AllObjects query on a real PLC
@@ -68,7 +68,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GetCrossReferences", Title = "Get cross references", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetCrossReferences", Title = "Get cross references", ReadOnly = true, OpenWorld = false),
          Description("Use to see where a tag or block is used, with locations. Get cross references for a PLC software or for one block, type, tag table, tag or block group inside it. Watch tables, force tables and external sources have no cross references")]
         public static ResponseCrossReferences GetCrossReferences(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -233,7 +233,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region insight
 
-        [McpServerTool(Name = "WhereUsed", Title = "Where used", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "WhereUsed", Title = "Where used", ReadOnly = true, OpenWorld = false),
          Description("Use for a quick 'who uses X' by name. Answer 'what uses this?' for a tag, block, PLC data type or tag table by name. Resolves the name, picks the right object kind and flattens the cross-reference tree to a plain list of users, including the uses of a DB's or data type's members ('member'). Use 'GetCrossReferences' instead when the full nested result or a specific filter is needed")]
         public static ResponseWhereUsed WhereUsed(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,

@@ -15,7 +15,7 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         #region plc software
 
-        [McpServerTool(Name = "GetSoftwareInfo", Title = "Get software info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Show name, description and attributes of one PLC software")]
+        [McpServerTool(Name = "GetSoftwareInfo", Title = "Get software info", ReadOnly = true, OpenWorld = false), Description("Show name, description and attributes of one PLC software")]
         public static ResponseSoftwareInfo GetSoftwareInfo(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath)
         {
@@ -51,7 +51,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "CompileSoftware", Title = "Compile software", Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "CompileSoftware", Title = "Compile software", Destructive = false, Idempotent = true, OpenWorld = false),
          Description("Compile the PLC software and report every compiler message with the object it belongs to, so errors can be fixed without re-reading the whole PLC. Warnings are reported as a successful compile with detail; only errors fail the call")]
         public static ResponseCompileSoftware CompileSoftware(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -76,7 +76,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "CompileCodeBlock", Title = "Compile code block", Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "CompileCodeBlock", Title = "Compile code block", Destructive = false, Idempotent = true, OpenWorld = false),
          Description("Use after every block change to check it. Compile one code block (OB, FC, FB or DB) instead of the whole PLC, for example right after importing it, and report its compiler messages like 'CompileSoftware' does. Warnings are reported as a successful compile with detail; only errors fail the call")]
         public static ResponseCompileSoftware CompileCodeBlock(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
