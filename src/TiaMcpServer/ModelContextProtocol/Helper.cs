@@ -7,6 +7,12 @@ namespace TiaMcpServer.ModelContextProtocol
 {
     public class Helper
     {
+        /// <summary>
+        /// An empty namespace or header name is left out of block and type entries (null is not
+        /// serialized): on a PLC with 800 blocks '"namespace":"","headerName":""' alone was 25k characters.
+        /// </summary>
+        public static string? NullIfEmpty(string? value) => string.IsNullOrEmpty(value) ? null : value;
+
         /// <summary>Attributes a block reply already carries as its own fields (name, language, ...).</summary>
         public static readonly HashSet<string> BlockFields = new(StringComparer.Ordinal)
         {
@@ -122,11 +128,11 @@ namespace TiaMcpServer.ModelContextProtocol
                     Path = portal == null ? null : portal.GetBlockPath(block),
                     Name = block.Name,
                     TypeName = block.GetType().Name,
-                    Namespace = block.Namespace,
+                    Namespace = Helper.NullIfEmpty(block.Namespace),
                     ProgrammingLanguage = Enum.GetName(typeof(ProgrammingLanguage), block.ProgrammingLanguage),
                     MemoryLayout = Enum.GetName(typeof(MemoryLayout), block.MemoryLayout),
                     IsConsistent = block.IsConsistent,
-                    HeaderName = block.HeaderName,
+                    HeaderName = Helper.NullIfEmpty(block.HeaderName),
                     ModifiedDate = block.ModifiedDate,
                     IsKnowHowProtected = block.IsKnowHowProtected,
                     Attributes = attributes,
