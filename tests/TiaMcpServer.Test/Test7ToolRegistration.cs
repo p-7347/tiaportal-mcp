@@ -46,6 +46,33 @@ namespace TiaMcpServer.Test
         }
 
         [TestMethod]
+        public void Test_716_ToolFilter_ListsOnlyMatchingToolsPlusTheSessionTools()
+        {
+            try
+            {
+                // Act
+                ToolFilter.Configure("Get*,-GetHmi*");
+                var names = Program.BuildTools(allowWrite: true).Select(t => t.ProtocolTool.Name).ToList();
+
+                // Assert
+                Assert.IsTrue(names.Contains("GetBlocks"), "An included tool must be listed");
+                Assert.IsFalse(names.Contains("GetHmiScreens"), "An excluded tool must not be listed");
+                Assert.IsFalse(names.Contains("FindInCode"), "A tool no pattern includes must not be listed");
+                foreach (var always in ToolFilter.AlwaysListed)
+                {
+                    Assert.IsTrue(names.Contains(always), $"'{always}' must stay listed under any filter");
+                }
+            }
+            finally
+            {
+                ToolFilter.Configure(null);
+            }
+
+            // Without a filter every tool is listed again
+            Assert.IsTrue(Program.BuildTools(allowWrite: true).Any(t => t.ProtocolTool.Name == "FindInCode"));
+        }
+
+        [TestMethod]
         public void Test_701_BuildTools_WithAllowWrite_AddsExactlyTheWriteTools()
         {
             // Arrange

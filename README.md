@@ -48,6 +48,7 @@ has since diverged with its own feature set below; it no longer tracks upstream 
 | `--preserve-path <bool>`  | Preset for the `preservePath` tool argument (`true` or `false`). See below. |
 | `--backup-path <path>`    | Folder for the XML backups taken before a delete or replacing import. Default `%TEMP%\tiaportal-mcp-backups`. |
 | `--with-dependencies <bool>` | Preset for the `withDependencies` argument of the `ExportSource*` tools (`true` or `false`). See below. |
+| `--tools <patterns>`      | List only the matching tools, for clients that send every tool definition with each request. Comma-separated names, `*` wildcard, `-` excludes, e.g. `"Get*,Find*,*Hmi*"` or `"-*Comfort*,-*PlcDirect,-*Device*"`. `Connect`, `GetPortals`, `GetState`, `Doctor`, `GetProject` and `GetProjectTree` always stay. Default: every tool. |
 
 ## HMI tags with Excel (no MCP client)
 
