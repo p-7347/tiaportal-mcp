@@ -142,7 +142,7 @@ a change summary.
 
 ## Tools
 
-195 tools total. Read-only/ungated tools (105) are always available.
+196 tools total. Read-only/ungated tools (105) are always available; `--tools` can list fewer.
 
 | Area                          | Tools                                                                                                                                                                                                  |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -416,8 +416,8 @@ These are not gaps in this server - the underlying API offers no operation for t
 - Built on the [ModelContextProtocol](https://www.nuget.org/packages/ModelContextProtocol) .NET SDK **2.2.0**.
 - Protocol revisions negotiated during `initialize`: `2024-11-05`, `2025-03-26`, `2025-06-18`, `2025-11-25` (the SDK picks the highest the client also supports).
 - Every tool advertises a human-readable `title` and behaviour annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`).
-- 175 of the 195 tools publish an `outputSchema` and return `structuredContent` (90 of 105
-  read-only, 85 of 90 write).
+- Replies are JSON text only. The tools publish no `outputSchema` and return no `structuredContent`:
+  the SDK would send each reply twice and list a schema per tool (about 97k characters in `tools/list`).
 - Long-running export/import tools report progress via `notifications/progress` when the client supplies a `progressToken`.
 - Independently of that, `GetState` can report the progress of another call still running on the
   same TIA Portal instance (tool name, processed/total, current object, time since last progress)

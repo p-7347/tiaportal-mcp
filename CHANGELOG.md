@@ -4,10 +4,30 @@
 
 ### Added
 
+- `--tools <patterns>`: optional command line filter that lists only the matching tools (comma-separated names, `*` wildcard, `-` excludes), for clients that send every tool definition with each request. `Connect`, `GetPortals`, `GetState`, `Doctor`, `GetProject` and `GetProjectTree` always stay; the server instructions say when a filter is active. Without it every tool is listed as before. `"Get*,Find*"` lists 63 tools (44k characters instead of 167k).
+- `GetBlockSource` format `text`: a compact reading of LAD/FBD and mixed blocks, one line per coil (`operand := condition;`, S/R coils, boxes as calls, shared branch logic factored), SCL networks as SCL, about 1/15 of the XML. Read-only, not importable. `GetNetworkSource` returns the same text for LAD/FBD networks.
+- `SetHmiItemZOrder` (write): bring WinCC Unified screen items to the front or send them to the back, by re-creating them with everything `CopyHmiScreen` copies.
+- `hmitags` command (`TiaMcpServer.exe hmitags <file.xlsx>`): edit WinCC Unified HMI tags from TIA Portal's own Excel tag export on site, without an AI client; preview by default, `--apply` writes.
+
+### Fixed
+
+- `CopyHmiScreen`/`CopyHmiScreens`: copied screens crashed the TIA Portal V20 editor whenever they were opened, because the screen and its items were created in one transaction. The screen is now created first and each item in its own transaction; a half-made screen is deleted on failure. Copies made with older builds have to be deleted and copied again.
+- TIA Portal instances that were closed stay attached no longer: they are dropped, so calls without `portalId` stop failing with "N instances attached".
+- The server no longer dies at start (FileNotFoundException Siemens.Engineering) when a `Portal` field type names a Siemens type before the Openness resolver is installed.
+- Block names with `[ ]` (e.g. `5_G2U1_Home[0]`) are found without escaping, also as a bare name without its group path when the name is unique. SCL text quotes such names (`#"Home[0]"`).
+
+### Added
+
 - ProDiag (backlog D7): `GetProDiagInfo` lists the ProDiag FBs (version, settings, instance DBs), the FBs that define supervisions (count, and supervised operand, conditions and categories of the first ones) and the instance DBs assigned to a ProDiag FB. `ExportProDiagSupervisions` exports the global supervisions of a PLC, or those of one ProDiag FB, to .xlsx. Write tools: `ImportProDiagSupervisions` imports such a file (supervisions or settings only, optional overwrite; the current supervisions are exported to the backup folder first and a failed import is rolled back), `SetAssignedProDiagFB` sets or removes the ProDiag FB of an instance DB or of a UDT member of a global DB (DB backed up first). This is the PLC side the WinCC PLC code view needs to jump from an alarm to the LAD/FBD network.
 - `CreateFB`, `CreateInstanceDB`: with `autoNumber` and no `number` the new block got number 0, which does not compile ("invalid number 0"); they now start the search at 1.
 
 ### Changed
+
+- Token use (no tool added or removed): parameter descriptions lose their repeated `name:` prefix and a plain `(default x)` the schema already states; `portalId`, `softwarePath` and 36 long tool descriptions are shorter. Text the model reads in `tools/list` (write mode): 218k -> 167k characters, plus the 97k characters of output schemas that are no longer sent.
+- Replies are sent once, as JSON text; no tool returns `structuredContent` or publishes an `outputSchema` any more. The text is unchanged.
+- `GetBlocks`, `GetTypes` and `GetBlocksWithHierarchy`: `includeAttributes` defaults to false (new argument on `GetBlocksWithHierarchy`); name, path, language and consistency come either way. Block and type entries no longer carry `description` (the .NET type name, same as `typeName`), and their attribute lists skip attributes already returned as fields. `GetHmiScreens` leaves out empty display names.
+- `FindInCode`: LAD and mixed blocks are searched as the compact network text plus interface member names (result format `text`) instead of their XML; exported text is kept per object while its modified date is unchanged, so repeat searches are fast. A call stops after about 40 s and returns `nextStartAt`. `GetHmiDiscreteAlarms`/`GetHmiAnalogAlarms` stop the same way with `nextOffset`.
+- `WhereUsed` also finds uses of DB members (`member` field) and takes `maxResults` (default 300, `total` in the reply).
 
 - `GetTechnologyObjectParameters`: coded values of axis technology objects (booleans and mode numbers such as `Homing.ApproachDirection`, `Sensor[n].ActiveHoming.Mode`/`Direction`/`SideInput`/`SwitchLevel`, `PositionLimits_HW.*`, units) come with their meaning in the new field `valueText`, from the tag tables of the positioning axis (technology version V9.0). Existing fields are unchanged.
 - `EditBlockNetwork`: new optional argument `addStatics` (at the end) adds Static members ('name : type [:= start]', separated by ';' or line breaks) to the block in the same import, so an SCL network that needs a new variable takes one call. When the SCL text does not compile in the scratch FB, the error now says that the block itself was not changed and whether the errors look real (undefined names) or like artefacts of the scratch FB.
