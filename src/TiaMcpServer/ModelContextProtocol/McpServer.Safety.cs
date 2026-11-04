@@ -18,7 +18,7 @@ namespace TiaMcpServer.ModelContextProtocol
         // 'saveFile' / 'compareFile' (BACKLOG D5) keep the F-block signatures in a plain JSON file:
         // { "softwarePath", "groupPath", "regexName", "takenAt", "complete", "signatureHash", "blocks": { path: "16#..." } }
 
-        [McpServerTool(Name = "GetSafetyInfo", Title = "Get safety program info", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetSafetyInfo", Title = "Get safety program info", ReadOnly = true, Idempotent = true, OpenWorld = false),
          Description("Read the safety program status of an F-CPU: safety password set/logged on, safety settings and runtime groups (F-OB, main safety block, cycle times), and every F-block's offline signature. 'signatureHash' combines them (not TIA's collective signature); 16#00000000 = no valid signature (changed since compile). 'saveFile' before a change and 'compareFile' after it (and a compile) list which F-blocks changed. Read-only")]
         public static ResponseSafetyInfo GetSafetyInfo(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,

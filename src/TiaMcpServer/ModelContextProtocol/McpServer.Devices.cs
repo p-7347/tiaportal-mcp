@@ -15,7 +15,7 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         #region devices
 
-        [McpServerTool(Name = "GetDeviceInfo", Title = "Get device info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Show name, description and attributes of one device in the current project or session")]
+        [McpServerTool(Name = "GetDeviceInfo", Title = "Get device info", ReadOnly = true, OpenWorld = false), Description("Show name, description and attributes of one device in the current project or session")]
         public static ResponseDeviceInfo GetDeviceInfo(
             [Description("devicePath: defines the path in the project structure to the device")] string devicePath)
         {
@@ -51,7 +51,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GetDeviceItemInfo", Title = "Get device item info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Show name, description and attributes of one device item in the current project or session")]
+        [McpServerTool(Name = "GetDeviceItemInfo", Title = "Get device item info", ReadOnly = true, OpenWorld = false), Description("Show name, description and attributes of one device item in the current project or session")]
         public static ResponseDeviceItemInfo GetDeviceItemInfo(
             [Description("deviceItemPath: defines the path in the project structure to the device item")] string deviceItemPath)
         {
@@ -87,7 +87,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GetDevices", Title = "Get devices", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("List all devices of the current project or session")]
+        [McpServerTool(Name = "GetDevices", Title = "Get devices", ReadOnly = true, OpenWorld = false), Description("List all devices of the current project or session")]
         public static ResponseDevices GetDevices()
         {
             try
@@ -133,7 +133,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GetGsdDependencies", Title = "Get GSD device dependencies", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("List the third-party (GSD-based) devices and items in the hardware config with their GSD identity, e.g. to check before moving a project to another PC. Devices whose GSD is missing are not loaded at all and do not appear; empty GetDevices after Connect points to that.")]
+        [McpServerTool(Name = "GetGsdDependencies", Title = "Get GSD device dependencies", ReadOnly = true, OpenWorld = false), Description("List the third-party (GSD-based) devices and items in the hardware config with their GSD identity, e.g. to check before moving a project to another PC. Devices whose GSD is missing are not loaded at all and do not appear; empty GetDevices after Connect points to that.")]
         public static ResponseGsdDependencies GetGsdDependencies(
             [Description("devicePath: optional - scope the scan to a single device (its name, e.g. 'S7-1500/ET200MP station_1'); omit to scan every device in the project")] string? devicePath = null)
         {
@@ -175,7 +175,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region device master copies / hardware catalog search
 
-        [McpServerTool(Name = "GetDeviceMasterCopies", Title = "Get device master copies", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("List master copies (saved device/module templates) in the project library. To build a device prefer 'CreateDevice'/'CreateDeviceWithItem' with a catalog TypeIdentifier; use master copies only to replicate a saved template.")]
+        [McpServerTool(Name = "GetDeviceMasterCopies", Title = "Get device master copies", ReadOnly = true, OpenWorld = false), Description("List master copies (saved device/module templates) in the project library. To build a device prefer 'CreateDevice'/'CreateDeviceWithItem' with a catalog TypeIdentifier; use master copies only to replicate a saved template.")]
         public static ResponseDeviceMasterCopies GetDeviceMasterCopies()
         {
             try
@@ -197,7 +197,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "FindHardwareCatalogEntries", Title = "Search hardware catalog", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Search the TIA Portal hardware catalog by text (article number, fragment or product name like \"G120C\" or \"6ES7 510\"). Returns TypeIdentifier/ArticleNumber/Version of each match. Use its TypeIdentifier for 'CreateDevice'/'CreateDeviceWithItem'; one read off a placed device is refused.")]
+        [McpServerTool(Name = "FindHardwareCatalogEntries", Title = "Search hardware catalog", ReadOnly = true, OpenWorld = false), Description("Search the TIA Portal hardware catalog by text (article number, fragment or product name like \"G120C\" or \"6ES7 510\"). Returns TypeIdentifier/ArticleNumber/Version of each match. Use its TypeIdentifier for 'CreateDevice'/'CreateDeviceWithItem'; one read off a placed device is refused.")]
         public static ResponseHardwareCatalogEntries FindHardwareCatalogEntries(
             [Description("Filter text, e.g. an article number or product name fragment")] string filter)
         {

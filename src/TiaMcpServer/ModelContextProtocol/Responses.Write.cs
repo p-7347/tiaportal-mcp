@@ -6,7 +6,7 @@ namespace TiaMcpServer.ModelContextProtocol
     /// Shared response shapes for the project-mutating tools in McpServer (the [WriteTool] methods).
     ///
     /// Callers: every [WriteTool] tool in McpServer. Affected API: additive only - new DTOs, no
-    /// existing response changed. Data: serialized into MCP structuredContent; all fields are
+    /// existing response changed. Data: serialized into the JSON text of the reply; all fields are
     /// nullable strings or string collections, no dates. No file I/O.
     ///
     /// Three shapes cover roughly thirty tools deliberately: minting one DTO per operation would

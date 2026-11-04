@@ -18,7 +18,7 @@ namespace TiaMcpServer.ModelContextProtocol
             "eventType: the event, as TIA Portal names it: 'Tapped' (click), 'Down' (press), 'Up' (release), 'Activated', 'Deactivated', 'KeyDown', 'KeyUp', 'ContextTapped'; for a screen 'Loaded', 'Unloaded'. 'Click', 'Press' and 'Release' are accepted too";
 
         [WriteTool]
-        [McpServerTool(Name = "SetHmiItemEventScript", Title = "Set HMI item event script", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "SetHmiItemEventScript", Title = "Set HMI item event script", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Use to create or replace the JavaScript of one event (click, press, release, ...) on one or many WinCC Unified screen items or the screen itself. With 'itemValues' each item gets its own script from one template ('{item}' = item name, '{value}' = its value). All checked first; nothing changes when one is wrong. Previous scripts go to a .json backup. Property scripts: 'SetHmiScriptDynamization'")]
         public static ResponseHmiEventScriptWrite SetHmiItemEventScript(
             [Description(HmiPathDescription)] string softwarePath,
@@ -50,7 +50,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "DeleteHmiItemEventScript", Title = "Delete HMI item event script", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "DeleteHmiItemEventScript", Title = "Delete HMI item event script", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Delete the script of one event on one or many WinCC Unified screen items, or on the screen itself. Items without that event are left as they are. Deleted scripts are saved as a .json backup and returned")]
         public static ResponseHmiEventScriptWrite DeleteHmiItemEventScript(
             [Description(HmiPathDescription)] string softwarePath,

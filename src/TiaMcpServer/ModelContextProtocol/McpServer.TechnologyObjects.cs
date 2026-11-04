@@ -12,7 +12,7 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         // Technology objects (axes, encoders, PID, counters, ...). See Portal.TechnologyObjects.cs.
 
-        [McpServerTool(Name = "GetTechnologyObjects", Title = "Get technology objects", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetTechnologyObjects", Title = "Get technology objects", ReadOnly = true, Idempotent = true, OpenWorld = false),
          Description("List the technology objects of a PLC software (axes, encoders, cams, PID, counters, ...) with their type and version. They are not program blocks, so the block tools do not show them; read one with 'GetTechnologyObjectParameters'")]
         public static ResponseTechnologyObjects GetTechnologyObjects(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -43,7 +43,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GetTechnologyObjectParameters", Title = "Get technology object parameters", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetTechnologyObjectParameters", Title = "Get technology object parameters", ReadOnly = true, Idempotent = true, OpenWorld = false),
          Description("Read the offline configuration parameters of one technology object, e.g. an axis (homing, limits, limit switches, encoder, drive, mechanics) as name/value pairs. Addresses show the PLC tag as 'Name (%I10.0)'; coded axis values come with 'valueText', e.g. Homing.ApproachDirection true = 'Negative direction'. Filter with 'regexName', e.g. 'Homing|PositionLimits'")]
         public static ResponseTechnologyObjectParameters GetTechnologyObjectParameters(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -102,7 +102,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "SetTechnologyObjectParameter", Title = "Set technology object parameter", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "SetTechnologyObjectParameter", Title = "Set technology object parameter", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Change one configuration parameter of a technology object in the offline project, e.g. an axis homing mode or a limit switch setting. The value is converted to the parameter's type; TIA Portal checks the range and refuses read-only parameters. Takes effect in the PLC only after compile and download")]
         public static ResponseTechnologyObjectParameterSet SetTechnologyObjectParameter(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,

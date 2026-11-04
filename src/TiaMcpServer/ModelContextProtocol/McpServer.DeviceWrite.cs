@@ -10,7 +10,7 @@ namespace TiaMcpServer.ModelContextProtocol
         #region device write CRUD
 
         [WriteTool]
-        [McpServerTool(Name = "CreateDevice", Title = "Create device", Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "CreateDevice", Title = "Create device", Destructive = true, Idempotent = false, OpenWorld = false),
          Description("Create a single-item hardware device. Most devices (CPU stations, drives, HMI panels, maybe switches) are station+item pairs and fail here with 'the object cannot be created, it is of the wrong type': use 'CreateDeviceWithItem' for those. typeIdentifier must come from 'FindHardwareCatalogEntries' ('OrderNumber:<article>/<version>'); the 'System:Device.X' identifiers of placed devices are rejected")]
         public static ResponseCreated CreateDevice(
             [Description("typeIdentifier: a creation-ready catalog TypeIdentifier from FindHardwareCatalogEntries, e.g. 'OrderNumber:6SL3210-1KE11-8AF2/4.7.14' - NOT the TypeIdentifier attribute off an existing device")] string typeIdentifier,
@@ -25,7 +25,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "CreateDeviceWithItem", Title = "Create device with item", Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "CreateDeviceWithItem", Title = "Create device with item", Destructive = true, Idempotent = false, OpenWorld = false),
          Description("Create a hardware device with a station and its first item in one call, e.g. a CPU station or drive (Device 'S7-1500/ET200MP station_1' containing 'PLC_1'); a CPU comes with its real interfaces. typeIdentifier must come from 'FindHardwareCatalogEntries' ('OrderNumber:<article>/<version>'); 'System:Device.X' identifiers of placed devices are rejected. The resulting device name follows deviceItemName, not name")]
         public static ResponseCreated CreateDeviceWithItem(
             [Description("typeIdentifier: a creation-ready catalog TypeIdentifier from FindHardwareCatalogEntries, e.g. 'OrderNumber:6ES7 516-3AN01-0AB0/V2.1' - NOT the TypeIdentifier attribute off an existing device")] string typeIdentifier,
@@ -41,7 +41,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "DeleteDevice", Title = "Delete device", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "DeleteDevice", Title = "Delete device", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Delete a hardware device. Dry run unless confirm=true: first call previews, second with confirm=true deletes. Hardware is tied to wiring and GSD matching and TIA's undo ends at the next save, so ask the user before confirm=true on a real project")]
         public static ResponseDeviceDelete DeleteDevice(
             [Description("devicePath: full path to the device")] string devicePath,
@@ -66,7 +66,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "CreateDeviceGroup", Title = "Create device group", Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "CreateDeviceGroup", Title = "Create device group", Destructive = true, Idempotent = false, OpenWorld = false),
          Description("Create a new device group (folder) in the project, for organizing devices.")]
         public static ResponseCreated CreateDeviceGroup(
             [Description("parentGroupPath: path to the parent group to create the new group under, e.g. 'Group/Subgroup' (empty for the project root)")] string parentGroupPath,
@@ -80,7 +80,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "DeleteDeviceGroup", Title = "Delete device group", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "DeleteDeviceGroup", Title = "Delete device group", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Delete a device group (folder) from the project - also deletes every device inside it. Confirm with the user before calling this against a real (non-disposable) project.")]
         public static ResponseDeleted DeleteDeviceGroup(
             [Description("groupPath: full path to the group, e.g. 'Group/Subgroup'")] string groupPath)

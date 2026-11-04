@@ -12,7 +12,7 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         #region network topology (read)
 
-        [McpServerTool(Name = "GetSubnets", Title = "Get subnets", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("List every subnet in the project (network topology) with its type and the devices/IO systems connected to it. Only works when attached to a full project - subnets aren't exposed for a multiuser local session (.als), returns an empty list there rather than erroring.")]
+        [McpServerTool(Name = "GetSubnets", Title = "Get subnets", ReadOnly = true, OpenWorld = false), Description("List every subnet in the project (network topology) with its type and the devices/IO systems connected to it. Only works when attached to a full project - subnets aren't exposed for a multiuser local session (.als), returns an empty list there rather than erroring.")]
         public static ResponseSubnets GetSubnets()
         {
             try
@@ -42,7 +42,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GetNetworkInterfaceInfo", Title = "Get network interface info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get network topology info (nodes, subnet, IO controller/device role, per-port wiring) for a device's network interface. 'path' may be the device or any item above the interface (e.g. 'PLC_1'); 'resolvedPath' shows what was used, and an ambiguous path lists the interfaces found. Port partners are the project's planned topology (may be empty), not what is plugged in on the line.")]
+        [McpServerTool(Name = "GetNetworkInterfaceInfo", Title = "Get network interface info", ReadOnly = true, OpenWorld = false), Description("Get network topology info (nodes, subnet, IO controller/device role, per-port wiring) for a device's network interface. 'path' may be the device or any item above the interface (e.g. 'PLC_1'); 'resolvedPath' shows what was used, and an ambiguous path lists the interfaces found. Port partners are the project's planned topology (may be empty), not what is plugged in on the line.")]
         public static ResponseNetworkInterfaceInfo GetNetworkInterfaceInfo(
             [Description("path: a device or device item path, e.g. 'S7-1500/ET200MP station_1/PLC_1' or just 'HMI_1' - doesn't need to be the exact interface DeviceItem")] string path)
         {
@@ -94,7 +94,7 @@ namespace TiaMcpServer.ModelContextProtocol
         #region network topology (write)
 
         [WriteTool]
-        [McpServerTool(Name = "SetIpAddress", Title = "Set IP address", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "SetIpAddress", Title = "Set IP address", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Set IP address, subnet mask and router of a device's network interface (path as in 'GetNetworkInterfaceInfo'). Changes only the project: nothing reaches hardware until compiled and downloaded, and a new address can change the PROFINET device name and break the online match. Ask the user before using it on a real project")]
         public static ResponseSetIpAddress SetIpAddress(
             [Description("path: a device or device item path, same auto-resolving rules as GetNetworkInterfaceInfo")] string path,
@@ -116,7 +116,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "ConnectToSubnet", Title = "Connect to subnet", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "ConnectToSubnet", Title = "Connect to subnet", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Connect a device's network interface to a named subnet (must already exist - see GetSubnets). Same auto-resolving path as GetNetworkInterfaceInfo, and same project-metadata-only caveat as SetIpAddress - nothing reaches real hardware until compiled and downloaded. Confirm with the user before calling this against a real (non-disposable) project.")]
         public static ResponseConnectToSubnet ConnectToSubnet(
             [Description("path: a device or device item path, same auto-resolving rules as GetNetworkInterfaceInfo")] string path,
@@ -137,7 +137,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "DisconnectFromSubnet", Title = "Disconnect from subnet", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "DisconnectFromSubnet", Title = "Disconnect from subnet", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Disconnect a device's network interface from its subnet. Same auto-resolving path as GetNetworkInterfaceInfo. Confirm with the user before calling this against a real (non-disposable) project.")]
         public static ResponseDisconnectFromSubnet DisconnectFromSubnet(
             [Description("path: a device or device item path, same auto-resolving rules as GetNetworkInterfaceInfo")] string path)

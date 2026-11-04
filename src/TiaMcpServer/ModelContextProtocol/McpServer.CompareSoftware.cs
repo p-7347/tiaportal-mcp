@@ -14,7 +14,7 @@ namespace TiaMcpServer.ModelContextProtocol
         // TIA's own software compare and the project archive; see Portal.CompareSoftware.cs and
         // Portal.Archive.cs. Neither changes the project.
 
-        [McpServerTool(Name = "CompareSoftware", Title = "Compare PLC software", ReadOnly = true, Idempotent = true, OpenWorld = true, UseStructuredContent = true),
+        [McpServerTool(Name = "CompareSoftware", Title = "Compare PLC software", ReadOnly = true, Idempotent = true, OpenWorld = true),
          Description("Compare a PLC software with the connected PLC (online, the default) or with another PLC software in the project, using TIA Portal's own compare, and list the blocks, types and tags that differ or exist on one side only. Use it before a download or after an upload to see whether project and PLC match. Reads only; the online compare needs the PLC to be reachable")]
         public static ResponseCompareSoftware CompareSoftware(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -71,7 +71,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "ArchiveProject", Title = "Archive project", Destructive = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "ArchiveProject", Title = "Archive project", Destructive = false, Idempotent = false, OpenWorld = false),
          Description("Write the saved project as a TIA Portal archive (.zapXX) into a folder, e.g. as a backup before importing or changing blocks. The open project stays where it is (unlike SaveAs). Fails while the project has unsaved changes, because TIA only archives the saved state")]
         public static ResponseArchiveProject ArchiveProject(
             [Description("targetDirectory: absolute path of the folder for the archive")] string targetDirectory,

@@ -48,6 +48,7 @@ namespace TiaMcpServer
 
             // Before the host registers its tool types: Apply reads the presets.
             ToolDefaults.Configure(options);
+            ToolFilter.Configure(options.Tools);
 
             // '--doctor' only reports the environment - it must run before the user group gate below,
             // because a missing group membership is one of the things it is meant to diagnose.
@@ -102,6 +103,9 @@ namespace TiaMcpServer
         /// which is what keeps them out of 'tools/list' rather than merely refusing them when
         /// called. Tools are created one by one (the SDK's type-based registration would take
         /// every [McpServerTool] method of the class).
+        /// No tool sets UseStructuredContent: with it the SDK sends every reply twice (as text and as
+        /// structuredContent) and lists an output schema per tool (~97k characters in tools/list);
+        /// the JSON text alone carries the same data.
         /// </summary>
         public static IEnumerable<global::ModelContextProtocol.Server.McpServerTool> BuildTools(bool allowWrite)
         {
@@ -109,6 +113,7 @@ namespace TiaMcpServer
                 .GetMethods(BindingFlags.Public | BindingFlags.Static)
                 .Where(m => m.GetCustomAttribute<global::ModelContextProtocol.Server.McpServerToolAttribute>() != null)
                 .Where(m => allowWrite || m.GetCustomAttribute<WriteToolAttribute>() == null)
+                .Where(m => ToolFilter.Includes(m.GetCustomAttribute<global::ModelContextProtocol.Server.McpServerToolAttribute>()!.Name ?? m.Name))
                 .Select(m => ToolSchemaCompaction.Apply(ToolDefaults.Apply(m, PortalSelection.Apply(m, global::ModelContextProtocol.Server.McpServerTool.Create(m)))))
                 .ToList();
         }
@@ -151,6 +156,8 @@ namespace TiaMcpServer
                             break;
                     }
                 }
+
+                var tools = BuildTools(WritePolicy.AllowWrite).ToList();
 
                 builder.Services
                     .AddMcpServer(serverOptions =>
@@ -214,7 +221,8 @@ namespace TiaMcpServer
                                 : " Read-only mode: the server was started without '--allow-write', so the tools that change " +
                                   "the project (create, rename, delete, import, HMI screen edits and copies) are not listed. " +
                                   "If the user asks for such a change, tell them to add \"--allow-write\" to this server's " +
-                                  "args in the MCP client configuration and restart the client.");
+                                  "args in the MCP client configuration and restart the client.") +
+                            ToolFilter.Summary(tools.Count);
                     })
                     .WithStdioServerTransport()
                     .WithRequestFilters(filters =>
@@ -225,7 +233,7 @@ namespace TiaMcpServer
                         filters.AddListToolsFilter(ToolOrdering.Filter);
                         filters.AddGetPromptFilter(PromptArguments.Filter);
                     })
-                    .WithTools(BuildTools(WritePolicy.AllowWrite))
+                    .WithTools(tools)
                     .WithPrompts((IEnumerable<Type>)new[] { typeof(McpPrompts) });
 
                 // Register the Portal service for dependency injection

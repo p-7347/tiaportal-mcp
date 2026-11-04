@@ -11,7 +11,7 @@ namespace TiaMcpServer.ModelContextProtocol
     public static partial class McpServer
     {
         [WriteTool]
-        [McpServerTool(Name = "CopyHmiScreen", Title = "Copy HMI screen", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "CopyHmiScreen", Title = "Copy HMI screen", Destructive = true, OpenWorld = false),
          Description("Copy a WinCC Unified screen to a new screen in the same folder, item by item: writable properties, texts, tag and script dynamizations, event scripts, faceplate interfaces. 'replace' rewrites text in every copied string, e.g. 'Servo01=>Servo02'. What Openness cannot read is listed under 'skipped'; a refused write aborts the copy")]
         public static ResponseHmiScreenCopy CopyHmiScreen(
             [Description(HmiPathDescription)] string softwarePath,
@@ -64,7 +64,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "SetHmiItemZOrder", Title = "Bring HMI items to front or send to back", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "SetHmiItemZOrder", Title = "Bring HMI items to front or send to back", Destructive = true, OpenWorld = false),
          Description("Use to bring WinCC Unified screen items to the front or send them to the back. Openness has no z-order call, so items are deleted and re-created on top with everything 'CopyHmiScreen' copies and the same names: 'front' re-creates the named items, 'back' all the others. Refused when an affected item has something Openness cannot read. Ask the user to close the screen in the editor first")]
         public static ResponseHmiZOrder SetHmiItemZOrder(
             [Description(HmiPathDescription)] string softwarePath,
@@ -98,7 +98,7 @@ namespace TiaMcpServer.ModelContextProtocol
         private static (string Key, DateTime ReadAt, HmiScreenSnapshot Snapshot)? _seriesSnapshot;
 
         [WriteTool]
-        [McpServerTool(Name = "CopyHmiScreens", Title = "Copy HMI screen to a series", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "CopyHmiScreens", Title = "Copy HMI screen to a series", Destructive = true, OpenWorld = false),
          Description("Make a numbered series of WinCC Unified screens from one screen, e.g. servo 2..60 from servo 1. Each copy works like 'CopyHmiScreen'; in 'newScreenName' and 'replace' %n% is the number, %n2%/%n3% zero-padded. Stops after about 40 s and returns 'nextNumber': call again with from=nextNumber. Existing screens are skipped, so repeating is safe")]
         public static ResponseHmiScreenCopies CopyHmiScreens(
             [Description(HmiPathDescription)] string softwarePath,

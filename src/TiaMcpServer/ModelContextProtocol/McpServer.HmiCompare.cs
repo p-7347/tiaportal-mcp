@@ -11,7 +11,7 @@ namespace TiaMcpServer.ModelContextProtocol
 {
     public static partial class McpServer
     {
-        [McpServerTool(Name = "CompareHmiScreens", Title = "Compare HMI screens", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "CompareHmiScreens", Title = "Compare HMI screens", ReadOnly = true, OpenWorld = false),
          Description("Compare two WinCC Unified screens item by item: items on one side only, and every differing property, text, dynamization, event script and faceplate interface value. 'replace' is applied to the first screen first, so 'S{1}=>S{2}' lists only what breaks the pattern, e.g. to check 'CopyHmiScreens' results or find hand edits")]
         public static ResponseHmiScreenCompare CompareHmiScreens(
             [Description(HmiPathDescription)] string softwarePath,

@@ -12,7 +12,7 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         // HMI tag usage search (BACKLOG A6); see Portal.HmiTagUsage.cs.
 
-        [McpServerTool(Name = "GetHmiTagUsage", Title = "Get HMI tag usage", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetHmiTagUsage", Title = "Get HMI tag usage", ReadOnly = true, Idempotent = true, OpenWorld = false),
          Description("Use before changing or renaming a PLC or HMI tag to find where it shows up on a WinCC Unified HMI: the HMI tags connected to the PLC tag, then every dynamization, faceplate interface binding, event or dynamization script and alarm using them. A DB or struct name also finds its members. Screens are indexed once; on a big HMI the first calls may stop early - call again with the same arguments to continue")]
         public static ResponseHmiTagUsage GetHmiTagUsage(
             [Description("softwarePath: HMI software, e.g. 'HMI_1/HMI_RT_1'")] string softwarePath,

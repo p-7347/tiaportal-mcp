@@ -18,7 +18,7 @@ namespace TiaMcpServer.ModelContextProtocol
         private const string ItemPropertyNames =
             "Names as TIA Portal's property list and 'GetHmiScreenItemProperties' show them, e.g. 'BackColor', 'BorderColor', 'BorderWidth', 'ForeColor', 'OutputFormat', 'Font.Size'";
 
-        [McpServerTool(Name = "GetHmiScreenItemProperties", Title = "Get HMI screen item properties", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetHmiScreenItemProperties", Title = "Get HMI screen item properties", ReadOnly = true, OpenWorld = false),
          Description("List the settable properties of one WinCC Unified screen item with their current value and type (colors as '#RRGGBB', enums with their allowed values), including part objects such as 'Font.Size'. Use it to find the property names for 'SetHmiScreenItemProperties' and 'CopyHmiItemStyle'")]
         public static ResponseHmiItemProperties GetHmiScreenItemProperties(
             [Description(HmiPathDescription)] string softwarePath,
@@ -49,7 +49,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "SetHmiScreenItemProperties", Title = "Set HMI screen item properties", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "SetHmiScreenItemProperties", Title = "Set HMI screen item properties", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Use to set static properties (colors, border, font, format, alignment, ...) of one or many WinCC Unified screen items. Values are text: colors '#RRGGBB', '#AARRGGBB', 'R, G, B' or a name; enums by name; numbers; true/false. All checked first; nothing changes when one is wrong. Previous values go to a .json backup and are returned with the new ones")]
         public static ResponseHmiItemPropertyWrite SetHmiScreenItemProperties(
             [Description(HmiPathDescription)] string softwarePath,
@@ -68,7 +68,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "CopyHmiItemStyle", Title = "Copy HMI item style", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "CopyHmiItemStyle", Title = "Copy HMI item style", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Use to give WinCC Unified screen items the look of another item (format painter): static properties like colors, border, font, alignment, formats, but not position, size, name, texts or tag bindings. Targets on any screen, by name or regular expression; properties a target lacks are listed as skipped; 'properties' limits the copy. Previous values go to a .json backup")]
         public static ResponseHmiItemPropertyWrite CopyHmiItemStyle(
             [Description(HmiPathDescription)] string softwarePath,

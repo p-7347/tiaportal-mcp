@@ -18,7 +18,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region insight
 
-        [McpServerTool(Name = "GetPlcSummary", Title = "Get PLC summary", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetPlcSummary", Title = "Get PLC summary", ReadOnly = true, OpenWorld = false),
          Description("Counts, programming languages and health of one PLC software in a single call - replaces listing blocks, types, tags, tag tables and watch tables separately just to see what is there. Also names the inconsistent objects (which refuse to export until compiled) and the know-how protected ones (whose content cannot be read)")]
         public static ResponsePlcSummary GetPlcSummary(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath)

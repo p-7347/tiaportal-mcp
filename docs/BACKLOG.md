@@ -4,7 +4,9 @@ Open work for this fork, in priority order within each group. The HMI group (C) 
 request titled with its id (see "Contributing to this fork" in [AGENTS.md](../AGENTS.md)) so nobody else
 picks it up. Remove the item here in the same pull request that finishes it.
 
-Done so far: software checksum (A0), network-level block edit with LAD flow order and SCL text (A1), backup
+Since 2026-10-30 the focus is fixing existing tools and cutting token use (tool descriptions, reply sizes); new tools only when there is a clear need, agreed first.
+
+Done so far: software checksum (A0), network-level block edit with LAD flow order and SCL text (A1), backup, LAD/FBD as compact text and FindInCode over it, shorter tools/list and single-copy replies, optional `--tools` filter.
 before delete or replacing import (A2), DB start values read/write (A3), V21 build switch (part of D12), HMI screen item dynamizations read/write (C6), block and UDT member add/change/delete (`EditBlockInterface`, `EditTypeInterface`), change log of write calls (B4, `GetChangeLog`), unsaved-change flag and project history (D4, `GetProjectStatus`), safety signature compare (D5, `GetSafetyInfo` saveFile/compareFile), HMI tag usage search (A6, `GetHmiTagUsage`), HMI alarm classes read (C8, `GetHmiAlarmClasses`), HMI alarm write (C1 part, `SetHmiAlarms`), global script modules (C7, `GetHmiScriptModules`/`ImportHmiScriptModules`), HMI tag delete (`DeleteHmiTags`), network copy with renames (`CopyNetwork`).
 
 ## C. HMI (WinCC Unified), alarms, texts - current priority

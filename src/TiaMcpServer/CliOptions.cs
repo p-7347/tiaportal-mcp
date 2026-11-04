@@ -12,6 +12,7 @@
         public bool? PreservePath { get; set; } // preset for the 'preservePath' tool argument
         public bool? WithDependencies { get; set; } // preset for the 'withDependencies' tool argument
         public string? BackupPath { get; set; } // folder for the XML backups taken before delete/replace
+        public string? Tools { get; set; } // optional tool name filter, see ModelContextProtocol.ToolFilter
 
         public static CliOptions ParseArgs(string[] args)
         {
@@ -86,6 +87,14 @@
                         if (i + 1 < args.Length && !string.IsNullOrWhiteSpace(args[i + 1]))
                         {
                             options.BackupPath = args[++i];
+                        }
+                        break;
+
+                    case "-tools":
+                    case "--tools":
+                        if (i + 1 < args.Length && !string.IsNullOrWhiteSpace(args[i + 1]))
+                        {
+                            options.Tools = args[++i];
                         }
                         break;
 

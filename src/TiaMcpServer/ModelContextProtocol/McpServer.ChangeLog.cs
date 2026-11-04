@@ -13,7 +13,7 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         // The change log written by AuditLog (BACKLOG B4).
 
-        [McpServerTool(Name = "GetChangeLog", Title = "Get change log", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetChangeLog", Title = "Get change log", ReadOnly = true, Idempotent = true, OpenWorld = false),
          Description("Use to list what this server changed in the project on a day, e.g. to write a change summary or find a backup. Every write tool call is logged with time, tool, arguments, ok or error, its reply and the backup file. Works without a TIA connection")]
         public static ResponseChangeLog GetChangeLog(
             [Description("day: optional date as 'yyyy-MM-dd', e.g. '2026-10-22'. Empty (default) is today")] string day = "",

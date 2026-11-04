@@ -117,7 +117,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [PortalIndependent]
-        [McpServerTool(Name = "GetPortals", Title = "Get portals", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetPortals", Title = "Get portals", ReadOnly = true, OpenWorld = false),
          Description("List the running TIA Portal instances with their 'portalId', open project path and whether this server is attached. The top-level 'portalId' is the attached instance tools use by default (empty when none or several are attached). Use it to choose the 'portalId' when more than one instance is running")]
         public static ResponsePortals GetPortals()
         {
@@ -152,7 +152,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region state
 
-        [McpServerTool(Name = "GetState", Title = "Get server state", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Show the attached portalId, connection, open project and session, and whether write mode is on. Also shows 'progress' of a long call (e.g. FindInCode) running on this instance, to tell stuck from slow from a second request. Never waits for a busy instance")]
+        [McpServerTool(Name = "GetState", Title = "Get server state", ReadOnly = true, OpenWorld = false), Description("Show the attached portalId, connection, open project and session, and whether write mode is on. Also shows 'progress' of a long call (e.g. FindInCode) running on this instance, to tell stuck from slow from a second request. Never waits for a busy instance")]
         public static ResponseState GetState(
             [Description("portalId: process id of the TIA Portal instance to report on (see 'GetPortals'). Leave empty when at most one instance is attached")] int? portalId = null)
         {
@@ -208,7 +208,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "Doctor", Title = "Run Doctor diagnostics", ReadOnly = true, OpenWorld = true, UseStructuredContent = true), Description("Diagnose the environment: server version, connection, open project, active and installed TIA Portal versions, Openness group membership, and the git commit this exe was built from - with checkRemote (default) also whether the source moved on since (rebuild) or is behind GitHub (pull)")]
+        [McpServerTool(Name = "Doctor", Title = "Run Doctor diagnostics", ReadOnly = true, OpenWorld = true), Description("Diagnose the environment: server version, connection, open project, active and installed TIA Portal versions, Openness group membership, and the git commit this exe was built from - with checkRemote (default) also whether the source moved on since (rebuild) or is behind GitHub (pull)")]
         public static ResponseDoctor Doctor(
             [Description("checkRemote: also check origin/main on GitHub via 'git ls-remote' (default true). Set false to stay offline/local-only.")] bool checkRemote = true)
         {
@@ -268,7 +268,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region project/session
 
-        [McpServerTool(Name = "GetProject", Title = "Get open project", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("List the projects and local sessions open in the connected TIA Portal, with name and path")]
+        [McpServerTool(Name = "GetProject", Title = "Get open project", ReadOnly = true, OpenWorld = false), Description("List the projects and local sessions open in the connected TIA Portal, with name and path")]
         public static ResponseGetProjects GetProjects()
         {
             try
@@ -511,7 +511,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region devices
 
-        [McpServerTool(Name = "GetProjectTree", Title = "Get project tree", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Use right after Connect to learn the device and software paths (e.g. 'PLC_1'). Show the structure of the current project or session as a tree of devices, device items, groups and PLC/HMI software. Use it to find the device and software paths other tools expect")]
+        [McpServerTool(Name = "GetProjectTree", Title = "Get project tree", ReadOnly = true, OpenWorld = false), Description("Use right after Connect to learn the device and software paths (e.g. 'PLC_1'). Show the structure of the current project or session as a tree of devices, device items, groups and PLC/HMI software. Use it to find the device and software paths other tools expect")]
         public static ResponseProjectTree GetProjectTree()
         {
             try
@@ -546,7 +546,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region lookup
 
-        [McpServerTool(Name = "OpenTiaProject", Title = "Connect/open a project", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "OpenTiaProject", Title = "Connect/open a project", Destructive = true, Idempotent = true, OpenWorld = false),
          Description("Connect to TIA Portal if not already connected, open the given project or session, and return the 'portalId' plus the device and PLC software paths the other tools need. Replaces the Connect then OpenProject then GetProjectTree sequence")]
         public static async Task<ResponseOpenTiaProject> OpenTiaProject(
             [Description("path: full path of the .apXX project or .alsXX session file on the machine running this server")] string path,
@@ -628,7 +628,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region preview
 
-        [McpServerTool(Name = "PreviewImport", Title = "Preview import", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "PreviewImport", Title = "Preview import", ReadOnly = true, OpenWorld = false),
          Description("Report what importing a directory would create, overwrite or collide with, without touching the project. Checks each file against the objects already in the PLC, including the rule that a PLC data type name must be unique across the whole PLC - importing an existing type name into a different group fails even with importOption 'Override'")]
         public static ResponseImportPreview PreviewImport(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,

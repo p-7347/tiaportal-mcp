@@ -89,7 +89,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "BrowsePlcTagsDirect", Title = "Browse PLC tags (S7CommPlus)", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("EXPERIMENTAL. Lists symbolic tags the directly-connected CPU exposes (name, data type, internal access sequence) - requires ConnectPlcDirect first. Read-only; does not modify anything on the PLC. Every sub-member of every nested FB instance is its own tag - a real project can expose hundreds of thousands of them, confirmed live, so pass regexName (e.g. a DB name) rather than browsing unfiltered.")]
+        [McpServerTool(Name = "BrowsePlcTagsDirect", Title = "Browse PLC tags (S7CommPlus)", ReadOnly = true, OpenWorld = false), Description("EXPERIMENTAL. Lists symbolic tags the directly-connected CPU exposes (name, data type, internal access sequence) - requires ConnectPlcDirect first. Read-only; does not modify anything on the PLC. Every sub-member of every nested FB instance is its own tag - a real project can expose hundreds of thousands of them, confirmed live, so pass regexName (e.g. a DB name) rather than browsing unfiltered.")]
         public static ResponseS7TagBrowse BrowsePlcTagsDirect(
             [Description("regexName: optional case-insensitive regex to filter tag names, e.g. 'MainAssy' or '^MyDb\\\\.'")] string? regexName = null)
         {
@@ -119,7 +119,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "ReadPlcTagValuesDirect", Title = "Read live PLC tag values (S7CommPlus)", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("EXPERIMENTAL. Read live values from the CPU connected with 'ConnectPlcDirect' by symbolic name, dotted without quotes (e.g. 'MainAssy.Mode.Dry_Run', 'MyTag'). Read-only; a bad tag is reported per item instead of failing the call")]
+        [McpServerTool(Name = "ReadPlcTagValuesDirect", Title = "Read live PLC tag values (S7CommPlus)", ReadOnly = true, OpenWorld = false), Description("EXPERIMENTAL. Read live values from the CPU connected with 'ConnectPlcDirect' by symbolic name, dotted without quotes (e.g. 'MainAssy.Mode.Dry_Run', 'MyTag'). Read-only; a bad tag is reported per item instead of failing the call")]
         public static ResponseS7TagValues ReadPlcTagValuesDirect(
             [Description("tagNames: symbolic tag names to read, e.g. [\"MainAssy.Mode.Dry_Run\", \"MyGlobalDb.Counter\"]")] string[] tagNames)
         {
@@ -151,7 +151,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "WritePlcTagValueDirect", Title = "Write live PLC tag values (S7CommPlus)", Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true), Description("EXPERIMENTAL and DESTRUCTIVE. Write values to the CPU connected with 'ConnectPlcDirect'. PLCSIM ONLY: the protocol cannot tell PLCSIM from a real CPU, so you are the only safety check - never confirm against a possibly real CPU. Writes only with confirm=true AND confirmPlcSimOnly=true; otherwise returns a preview (current and new value). Types: Bool (true/false/1/0), Int, DInt, Real, Time (integer ms or e.g. '300ms', '10s'). Refuses more than 10 tags and names that look like F-DB/safety tags (best effort). Returns old and new values")]
+        [McpServerTool(Name = "WritePlcTagValueDirect", Title = "Write live PLC tag values (S7CommPlus)", Destructive = true, Idempotent = false, OpenWorld = false), Description("EXPERIMENTAL and DESTRUCTIVE. Write values to the CPU connected with 'ConnectPlcDirect'. PLCSIM ONLY: the protocol cannot tell PLCSIM from a real CPU, so you are the only safety check - never confirm against a possibly real CPU. Writes only with confirm=true AND confirmPlcSimOnly=true; otherwise returns a preview (current and new value). Types: Bool (true/false/1/0), Int, DInt, Real, Time (integer ms or e.g. '300ms', '10s'). Refuses more than 10 tags and names that look like F-DB/safety tags (best effort). Returns old and new values")]
         public static ResponseS7TagWrites WritePlcTagValueDirect(
             [Description("tagNames: symbolic tag names to write, same dotted format as ReadPlcTagValuesDirect, e.g. [\"MainAssy.Mode.Dry_Run\"]")] string[] tagNames,
             [Description("values: new value for each tag, same order/length as tagNames, e.g. [\"true\"]")] string[] values,
@@ -198,7 +198,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GetActivePlcAlarmsDirect", Title = "Get active PLC alarms (S7CommPlus)", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("EXPERIMENTAL. Snapshot of currently active (coming) and not-yet-cleared (going) alarms straight off the directly-connected CPU - requires ConnectPlcDirect first. This is a one-time poll, not a live subscription - call it again to refresh. Covers ProDiag/user-program alarms, not the classic SZL-based diagnostic buffer (S7CommPlus has no SZL access). Read-only.")]
+        [McpServerTool(Name = "GetActivePlcAlarmsDirect", Title = "Get active PLC alarms (S7CommPlus)", ReadOnly = true, OpenWorld = false), Description("EXPERIMENTAL. Snapshot of currently active (coming) and not-yet-cleared (going) alarms straight off the directly-connected CPU - requires ConnectPlcDirect first. This is a one-time poll, not a live subscription - call it again to refresh. Covers ProDiag/user-program alarms, not the classic SZL-based diagnostic buffer (S7CommPlus has no SZL access). Read-only.")]
         public static ResponseS7Alarms GetActivePlcAlarmsDirect(
             [Description("languageId: Windows LCID for alarm text language, default 1033 (en-US); e.g. 1042 for ko-KR, 1031 for de-DE")] int languageId = 1033)
         {

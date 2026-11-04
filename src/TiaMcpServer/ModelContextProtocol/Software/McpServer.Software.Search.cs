@@ -12,7 +12,7 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         #region insight
 
-        [McpServerTool(Name = "FindInCode", Title = "Find in code", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "FindInCode", Title = "Find in code", ReadOnly = true, OpenWorld = false),
          Description("Use to find where code mentions a name or text: a regular expression over the source text of blocks and PLC data types (all other filters match names only). Returns object path, line number and line. Objects are exported the first time (slow on a big PLC: narrow with 'nameFilter'), unchanged ones are then searched from memory. LAD and mixed blocks are searched as compact network text plus interface member names (format 'text'); uncompiled objects are listed in 'unsearchable'. Stops after about 40 s with 'nextStartAt': call again with startAt=nextStartAt")]
         public static ResponseCodeSearch FindInCode(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,

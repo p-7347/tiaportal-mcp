@@ -18,7 +18,7 @@ namespace TiaMcpServer.ModelContextProtocol
         // See Portal.Fingerprints.cs. The saved file is plain JSON:
         // { "softwarePath", "groupPath", "regexName", "takenAt", "complete", "blocks": { path: { id: value } } }
 
-        [McpServerTool(Name = "GetBlockFingerprints", Title = "Get block fingerprints", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetBlockFingerprints", Title = "Get block fingerprints", ReadOnly = true, Idempotent = true, OpenWorld = false),
          Description("Read the fingerprints (checksums of interface, program code, comments, properties, ...) of the program blocks in a group, without exporting anything. Save them with 'saveFile' and later pass that file as 'compareFile' to list exactly which blocks changed and in which aspect, e.g. 'what changed since yesterday'. Fingerprints reflect what users edited, not compile results; inconsistent blocks must be compiled first")]
         public static ResponseBlockFingerprints GetBlockFingerprints(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -157,7 +157,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GetSoftwareChecksum", Title = "Get software checksum", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetSoftwareChecksum", Title = "Get software checksum", ReadOnly = true, Idempotent = true, OpenWorld = false),
          Description("Read the checksum of the compiled program of a PLC software (and of its text lists), as TIA Portal shows it. Two equal checksums mean the same compiled program, e.g. before and after a change, or project and CPU. Empty until the program is compiled")]
         public static ResponseSoftwareChecksum GetSoftwareChecksum(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath)
