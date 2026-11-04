@@ -60,7 +60,7 @@ namespace TiaMcpServer.ModelContextProtocol
         public static ResponseTypes GetTypes(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
             [Description("regexName: regular expression on the type name, matched anywhere (^...$ for an exact name); empty finds all")] string regexName = "",
-            [Description("includeAttributes: return every Openness attribute of each type (about 30 each). Default true. Pass false on a large PLC when only names and paths are needed - reading the attributes is most of this tool's run time")] bool includeAttributes = true)
+            [Description("includeAttributes: also return every Openness attribute of each type (about 30 each; reading them is most of this tool's run time). Name, path, language and consistency come either way")] bool includeAttributes = false)
         {
             try
             {

@@ -67,7 +67,7 @@ namespace TiaMcpServer.ModelContextProtocol
         public static ResponseBlocks GetBlocks(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
             [Description("regexName: regular expression on the block name, matched anywhere ('G3U' also matches G3U10; ^...$ for an exact name); empty finds all")] string regexName = "",
-            [Description("includeAttributes: return every Openness attribute of each block (about 30 each). Default true. Pass false on a large PLC when only names and paths are needed - reading the attributes is most of this tool's run time")] bool includeAttributes = true,
+            [Description("includeAttributes: also return every Openness attribute of each block (about 30 each; reading them is most of this tool's run time). Name, path, language and consistency come either way")] bool includeAttributes = false,
             [Description("offset: number of matching blocks to skip, for paging through a large PLC. Default 0")] int offset = 0,
             [Description("limit: maximum number of blocks to return; 0 (default) returns all. 'totalCount' in the reply is the number of matches before paging")] int limit = 0,
             [Description("modifiedSince: optional date/time; only blocks changed in TIA Portal after it are returned (REQUESTS.md P6). ISO 8601, e.g. '2026-10-13T09:00:00' (no offset = local time of the server PC) or '2026-10-13T00:00:00Z'. 'modifiedDate' in the reply is UTC")] string modifiedSince = "")
