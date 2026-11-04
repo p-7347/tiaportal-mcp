@@ -152,7 +152,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region state
 
-        [McpServerTool(Name = "GetState", Title = "Get server state", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Show the portalId this server is attached to, whether it is connected, the open project and session, and whether write mode (--allow-write) is enabled. Also reports 'progress' while a long-running call (e.g. FindInCode) is in flight on this instance - call this from a second request to check whether such a call looks stuck or just slow, without waiting for it to finish. Declares 'portalId' itself and never waits for a busy instance, unlike other tools")]
+        [McpServerTool(Name = "GetState", Title = "Get server state", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Show the attached portalId, connection, open project and session, and whether write mode is on. Also shows 'progress' of a long call (e.g. FindInCode) running on this instance, to tell stuck from slow from a second request. Never waits for a busy instance")]
         public static ResponseState GetState(
             [Description("portalId: process id of the TIA Portal instance to report on (see 'GetPortals'). Leave empty when at most one instance is attached")] int? portalId = null)
         {
@@ -208,7 +208,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "Doctor", Title = "Run Doctor diagnostics", ReadOnly = true, OpenWorld = true, UseStructuredContent = true), Description("Diagnose the TIA Portal environment: server version, connection, open project, active and installed TIA Portal versions, Openness user group membership. Also reports which git commit this running exe was actually built from and - unless checkRemote=false - whether the source tree has moved on since (needs rebuilding) or is behind its branch on GitHub (needs a pull); a quick 'git ls-remote', no fetch/pull. Added after a rebuilt exe was confirmed to silently keep serving old code with no way to tell from outside it.")]
+        [McpServerTool(Name = "Doctor", Title = "Run Doctor diagnostics", ReadOnly = true, OpenWorld = true, UseStructuredContent = true), Description("Diagnose the environment: server version, connection, open project, active and installed TIA Portal versions, Openness group membership, and the git commit this exe was built from - with checkRemote (default) also whether the source moved on since (rebuild) or is behind GitHub (pull)")]
         public static ResponseDoctor Doctor(
             [Description("checkRemote: also check origin/main on GitHub via 'git ls-remote' (default true). Set false to stay offline/local-only.")] bool checkRemote = true)
         {
@@ -631,7 +631,7 @@ namespace TiaMcpServer.ModelContextProtocol
         [McpServerTool(Name = "PreviewImport", Title = "Preview import", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
          Description("Report what importing a directory would create, overwrite or collide with, without touching the project. Checks each file against the objects already in the PLC, including the rule that a PLC data type name must be unique across the whole PLC - importing an existing type name into a different group fails even with importOption 'Override'")]
         public static ResponseImportPreview PreviewImport(
-            [Description("softwarePath: PLC software as 'GetProjectTree' names it, e.g. 'PLC_1' or 'PC-System_1/Software PLC_1'")] string softwarePath,
+            [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
             [Description("importPath: directory holding the files to import (.s7dcl source documents or .xml)")] string importPath,
             [Description("kind: what the files contain - 'type' for PLC data types, 'block' for program blocks")] string kind,
             [Description("groupPath: the group the import would target; empty means the root of that area. A leading system folder segment is accepted")] string groupPath = "")

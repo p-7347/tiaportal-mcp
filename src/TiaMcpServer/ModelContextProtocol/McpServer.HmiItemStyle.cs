@@ -50,7 +50,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "SetHmiScreenItemProperties", Title = "Set HMI screen item properties", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Use to set static properties (colors, border, font, output format, alignment, ...) of one or many WinCC Unified screen items in one call, e.g. every IO field's 'OutputFormat' or the back color of a row of rectangles. Values are text converted to the property's type: colors '#RRGGBB', '#AARRGGBB', 'R, G, B' or a name; enums by name; numbers; true/false. Every item and property is checked first and nothing changes when one is wrong. The previous values are saved as a .json backup and returned with the new ones")]
+         Description("Use to set static properties (colors, border, font, format, alignment, ...) of one or many WinCC Unified screen items. Values are text: colors '#RRGGBB', '#AARRGGBB', 'R, G, B' or a name; enums by name; numbers; true/false. All checked first; nothing changes when one is wrong. Previous values go to a .json backup and are returned with the new ones")]
         public static ResponseHmiItemPropertyWrite SetHmiScreenItemProperties(
             [Description(HmiPathDescription)] string softwarePath,
             [Description("screenName: name of the screen")] string screenName,
@@ -69,7 +69,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "CopyHmiItemStyle", Title = "Copy HMI item style", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Use to give WinCC Unified screen items the look of another item (format painter): copies its static properties - colors, border, font, alignment, formats - but not position, size, name, texts or tag bindings. Targets on the same or another screen, by name or regular expression; a target of another kind gets the properties it has, the rest is listed as skipped. 'properties' limits the copy to named properties. The previous values are saved as a .json backup")]
+         Description("Use to give WinCC Unified screen items the look of another item (format painter): static properties like colors, border, font, alignment, formats, but not position, size, name, texts or tag bindings. Targets on any screen, by name or regular expression; properties a target lacks are listed as skipped; 'properties' limits the copy. Previous values go to a .json backup")]
         public static ResponseHmiItemPropertyWrite CopyHmiItemStyle(
             [Description(HmiPathDescription)] string softwarePath,
             [Description("screenName: screen of the source item")] string screenName,

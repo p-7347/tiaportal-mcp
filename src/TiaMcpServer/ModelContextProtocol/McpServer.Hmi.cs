@@ -17,7 +17,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [McpServerTool(Name = "GetHmiTagTables", Title = "Get HMI tag tables", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get a list of HMI tag tables from a device's HMI software (Unified Comfort/Advanced Panels only - classic WinCC Comfort/Basic panels aren't supported by this tool). Read-only: there's no export tool for HMI tag tables, this Openness version doesn't expose one.")]
         public static ResponseHmiTagTables GetHmiTagTables(
-            [Description("softwarePath: defines the path in the project structure to the HMI device/device item, e.g. 'HMI_1/HMI_RT_1'")] string softwarePath,
+            [Description("softwarePath: HMI software, e.g. 'HMI_1/HMI_RT_1'")] string softwarePath,
             [Description("regexName: defines the name or regular expression to find the tag table. Use empty string (default) to find all")] string regexName = "")
         {
             try
@@ -44,7 +44,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [McpServerTool(Name = "GetHmiTags", Title = "Get HMI tags", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get a list of tags from a specific HMI tag table (Unified Comfort/Advanced Panels only), including address/PLC-link/connection info")]
         public static ResponseHmiTags GetHmiTags(
-            [Description("softwarePath: defines the path in the project structure to the HMI device/device item, e.g. 'HMI_1/HMI_RT_1'")] string softwarePath,
+            [Description("softwarePath: HMI software, e.g. 'HMI_1/HMI_RT_1'")] string softwarePath,
             [Description("tagTablePath: full path to the HMI tag table, e.g. 'Group/Subgroup/Name' (single names allowed at root level)")] string tagTablePath,
             [Description("regexName: defines the name or regular expression to find the tag. Use empty string (default) to find all")] string regexName = "")
         {
@@ -90,7 +90,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [McpServerTool(Name = "GetHmiScreens", Title = "Get HMI screens", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Use to list the screens of an HMI. Get a list of screens in a device's HMI software (Unified Comfort/Advanced Panels only)")]
         public static ResponseHmiScreens GetHmiScreens(
-            [Description("softwarePath: defines the path in the project structure to the HMI device/device item, e.g. 'HMI_1/HMI_RT_1'")] string softwarePath,
+            [Description("softwarePath: HMI software, e.g. 'HMI_1/HMI_RT_1'")] string softwarePath,
             [Description("regexName: defines the name or regular expression to find the screen. Use empty string (default) to find all")] string regexName = "")
         {
             try
@@ -154,8 +154,8 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [McpServerTool(Name = "GetHmiDiscreteAlarms", Title = "Get HMI discrete alarms", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get a list of discrete (bit-triggered) alarms from a device's HMI software (Unified Comfort/Advanced Panels only). A long list stops after about 40 s with 'nextOffset'; call again with offset=nextOffset for the rest")]
         public static ResponseHmiAlarms GetHmiDiscreteAlarms(
-            [Description("softwarePath: defines the path in the project structure to the HMI device/device item, e.g. 'HMI_1/HMI_RT_1'")] string softwarePath,
-            [Description("regexName: defines the name or regular expression to find the alarm. Use empty string (default) to find all")] string regexName = "",
+            [Description("softwarePath: HMI software, e.g. 'HMI_1/HMI_RT_1'")] string softwarePath,
+            [Description("regexName: regular expression on the alarm name; empty finds all")] string regexName = "",
             [Description("offset: continue a list that stopped on time: the 'nextOffset' of the previous call with the same regexName (default 0)")] int offset = 0)
         {
             try
@@ -192,8 +192,8 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [McpServerTool(Name = "GetHmiAnalogAlarms", Title = "Get HMI analog alarms", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get a list of analog (limit-triggered) alarms from a device's HMI software (Unified Comfort/Advanced Panels only). A long list stops after about 40 s with 'nextOffset'; call again with offset=nextOffset for the rest")]
         public static ResponseHmiAlarms GetHmiAnalogAlarms(
-            [Description("softwarePath: defines the path in the project structure to the HMI device/device item, e.g. 'HMI_1/HMI_RT_1'")] string softwarePath,
-            [Description("regexName: defines the name or regular expression to find the alarm. Use empty string (default) to find all")] string regexName = "",
+            [Description("softwarePath: HMI software, e.g. 'HMI_1/HMI_RT_1'")] string softwarePath,
+            [Description("regexName: regular expression on the alarm name; empty finds all")] string regexName = "",
             [Description("offset: continue a list that stopped on time: the 'nextOffset' of the previous call with the same regexName (default 0)")] int offset = 0)
         {
             try
@@ -231,7 +231,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [McpServerTool(Name = "GetHmiAlarmClasses", Title = "Get HMI alarm classes", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Use to list the alarm classes defined in an HMI software. Get a list of alarm classes (Unified Comfort/Advanced Panels only), including priority, state machine, acknowledgment and state colors")]
         public static ResponseHmiAlarmClasses GetHmiAlarmClasses(
-            [Description("softwarePath: defines the path in the project structure to the HMI device/device item, e.g. 'HMI_1/HMI_RT_1'")] string softwarePath,
+            [Description("softwarePath: HMI software, e.g. 'HMI_1/HMI_RT_1'")] string softwarePath,
             [Description("regexName: defines the name or regular expression to find the alarm class. Use empty string (default) to find all")] string regexName = "")
         {
             try
@@ -297,7 +297,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [McpServerTool(Name = "GetHmiTextLists", Title = "Get HMI text lists", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get a list of text list names from a device's HMI software (Unified Comfort/Advanced Panels only). Names only - this Openness version has no way to read individual text list entries/values.")]
         public static ResponseHmiTextLists GetHmiTextLists(
-            [Description("softwarePath: defines the path in the project structure to the HMI device/device item, e.g. 'HMI_1/HMI_RT_1'")] string softwarePath,
+            [Description("softwarePath: HMI software, e.g. 'HMI_1/HMI_RT_1'")] string softwarePath,
             [Description("regexName: defines the name or regular expression to find the text list. Use empty string (default) to find all")] string regexName = "")
         {
             try

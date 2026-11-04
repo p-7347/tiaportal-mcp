@@ -12,7 +12,7 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         [WriteTool]
         [McpServerTool(Name = "CopyHmiScreen", Title = "Copy HMI screen", Destructive = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Copy a WinCC Unified screen to a new screen in the same folder, item by item: every writable property (position, size, colors, fonts, ...), texts, tag and script dynamizations, event scripts and faceplate interfaces. 'replace' rewrites text in every copied string (tag names, texts, scripts, interface values), e.g. 'Servo01=>Servo02' to make the screen of the next axis. Openness has no screen copy of its own, so anything it cannot read is listed under 'skipped'. A refused write aborts the whole copy")]
+         Description("Copy a WinCC Unified screen to a new screen in the same folder, item by item: writable properties, texts, tag and script dynamizations, event scripts, faceplate interfaces. 'replace' rewrites text in every copied string, e.g. 'Servo01=>Servo02'. What Openness cannot read is listed under 'skipped'; a refused write aborts the copy")]
         public static ResponseHmiScreenCopy CopyHmiScreen(
             [Description(HmiPathDescription)] string softwarePath,
             [Description("screenName: the screen to copy, as 'GetHmiScreens' lists it")] string screenName,
@@ -65,7 +65,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "SetHmiItemZOrder", Title = "Bring HMI items to front or send to back", Destructive = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Use to put WinCC Unified screen items in front of or behind the others (bring to front / send to back). Openness has no z-order call, so the items are deleted and created again on top, with everything 'CopyHmiScreen' copies (properties, texts, dynamizations, event scripts, faceplate interfaces) and the same names: 'front' re-creates the named items, 'back' re-creates all the other items. Refused when an affected item has something Openness cannot read. Ask the user to close the screen in the TIA Portal editor first")]
+         Description("Use to bring WinCC Unified screen items to the front or send them to the back. Openness has no z-order call, so items are deleted and re-created on top with everything 'CopyHmiScreen' copies and the same names: 'front' re-creates the named items, 'back' all the others. Refused when an affected item has something Openness cannot read. Ask the user to close the screen in the editor first")]
         public static ResponseHmiZOrder SetHmiItemZOrder(
             [Description(HmiPathDescription)] string softwarePath,
             [Description("screenName: name of the screen")] string screenName,
@@ -99,7 +99,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "CopyHmiScreens", Title = "Copy HMI screen to a series", Destructive = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Make a numbered series of WinCC Unified screens from one screen, e.g. the screens of servo 2..60 from the screen of servo 1. Each copy works like 'CopyHmiScreen'; in 'newScreenName' and 'replace' the placeholder %n% is the number, %n2%/%n3% the number with leading zeros. Each screen and each of its items is its own transaction. Stops before a copy that would end after about 40 s, to stay inside the client timeout and returns 'nextNumber' - call again with from=nextNumber to continue. Screens that already exist are skipped, so a repeated call is safe. A continued call within 10 minutes reuses the source as the previous call read it")]
+         Description("Make a numbered series of WinCC Unified screens from one screen, e.g. servo 2..60 from servo 1. Each copy works like 'CopyHmiScreen'; in 'newScreenName' and 'replace' %n% is the number, %n2%/%n3% zero-padded. Stops after about 40 s and returns 'nextNumber': call again with from=nextNumber. Existing screens are skipped, so repeating is safe")]
         public static ResponseHmiScreenCopies CopyHmiScreens(
             [Description(HmiPathDescription)] string softwarePath,
             [Description("screenName: the screen to copy, as 'GetHmiScreens' lists it")] string screenName,

@@ -19,9 +19,9 @@ namespace TiaMcpServer.ModelContextProtocol
         // { "softwarePath", "groupPath", "regexName", "takenAt", "complete", "signatureHash", "blocks": { path: "16#..." } }
 
         [McpServerTool(Name = "GetSafetyInfo", Title = "Get safety program info", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Read the safety program status of an F-CPU without changing anything: whether a safety password is set and logged on, the safety settings and runtime groups (F-OB, main safety block, cycle times), and the offline signature of every F-block. 'signatureHash' combines all F-block signatures, so comparing it with an earlier call shows whether any F-block changed (it is not TIA's F-collective signature). A signature of 16#00000000 means the block has no valid signature, e.g. changed since the last compile. Use 'saveFile' before a change and 'compareFile' after it (and a compile) to list exactly which F-block signatures changed")]
+         Description("Read the safety program status of an F-CPU: safety password set/logged on, safety settings and runtime groups (F-OB, main safety block, cycle times), and every F-block's offline signature. 'signatureHash' combines them (not TIA's collective signature); 16#00000000 = no valid signature (changed since compile). 'saveFile' before a change and 'compareFile' after it (and a compile) list which F-blocks changed. Read-only")]
         public static ResponseSafetyInfo GetSafetyInfo(
-            [Description("softwarePath: PLC software as 'GetProjectTree' names it, e.g. 'PLC_1' or 'PC-System_1/Software PLC_1'")] string softwarePath,
+            [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
             [Description("includeSignatures: read the F-block signatures (default true); false returns only the status, settings and runtime groups")] bool includeSignatures = true,
             [Description("groupPath: optional block group to look in, e.g. '005_Safety'; empty checks every block (slower on a large PLC)")] string groupPath = "",
             [Description("regexName: optional regular expression on the block name")] string regexName = "",

@@ -18,7 +18,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "SetHmiAlarms", Title = "Create or change HMI alarms", Destructive = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Use to create or change WinCC Unified discrete or analog alarms, one or many per call: texts, alarm class, trigger tag and bit, priority, area and any other alarm property by its Openness name, as 'GetHmiDiscreteAlarms'/'GetHmiAnalogAlarms' and the error for an unknown property list them. Texts are written to every project language. Every entry is checked first and nothing is changed when one is wrong. The previous values are saved as a .json backup")]
+         Description("Use to create or change WinCC Unified discrete or analog alarms, one or many per call: texts (all project languages), class, trigger tag and bit, priority, area or any other property by its Openness name (as 'GetHmiDiscreteAlarms'/'GetHmiAnalogAlarms' list them). All entries are checked first; nothing changes when one is wrong. Previous values go to a .json backup")]
         public static ResponseHmiAlarmWrite SetHmiAlarms(
             [Description(HmiPathDescription)] string softwarePath,
             [Description("alarms: JSON array, one object per alarm with 'name' and the properties to set, e.g. '[{\"name\":\"Alarm_U1_Door\",\"EventText\":\"Unit 1 door open\",\"AlarmClass\":\"Alarm\",\"RaisedStateTag\":\"HMI_Alarm_Word_1\",\"RaisedStateTagBitNumber\":3}]'")] string alarms,

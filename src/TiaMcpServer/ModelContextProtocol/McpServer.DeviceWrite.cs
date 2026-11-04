@@ -11,7 +11,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "CreateDevice", Title = "Create device", Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true),
-         Description("Create a new single-item hardware device in the project. Most real device types (drives, CPU stations, HMI panels, and - unverified claims to the contrary in earlier notes aside - possibly switches too) are modeled by Siemens as a station+item pair and need CreateDeviceWithItem instead - this fails with 'the object cannot be created, it is of the wrong type' for those even with a correct TypeIdentifier, so try CreateDeviceWithItem if this fails. typeIdentifier MUST come from FindHardwareCatalogEntries (format 'OrderNumber:<article>/<version>') - the TypeIdentifier attribute GetDevices/GetDeviceInfo expose off an already-placed device (format 'System:Device.X') is query-only and is rejected by this API.")]
+         Description("Create a single-item hardware device. Most devices (CPU stations, drives, HMI panels, maybe switches) are station+item pairs and fail here with 'the object cannot be created, it is of the wrong type': use 'CreateDeviceWithItem' for those. typeIdentifier must come from 'FindHardwareCatalogEntries' ('OrderNumber:<article>/<version>'); the 'System:Device.X' identifiers of placed devices are rejected")]
         public static ResponseCreated CreateDevice(
             [Description("typeIdentifier: a creation-ready catalog TypeIdentifier from FindHardwareCatalogEntries, e.g. 'OrderNumber:6SL3210-1KE11-8AF2/4.7.14' - NOT the TypeIdentifier attribute off an existing device")] string typeIdentifier,
             [Description("name: name for the new device")] string name,
@@ -26,7 +26,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "CreateDeviceWithItem", Title = "Create device with item", Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true),
-         Description("Create a new hardware device that has both a station-level name and a first sub-item name in one call - e.g. a CPU station or a drive (mirrors how existing devices are shaped: Device 'S7-1500/ET200MP station_1' containing DeviceItem 'PLC_1'). Use this instead of CreateDevice for anything that isn't a bare single-item catalog entry - verified live for a CPU 1516-3 PN/DP, which came up with real DP/PROFINET interface DeviceItems, not an empty shell. typeIdentifier MUST come from FindHardwareCatalogEntries (format 'OrderNumber:<article>/<version>') - the TypeIdentifier attribute GetDevices/GetDeviceInfo expose off an already-placed device (format 'System:Device.X') is query-only and is rejected by this API ('the object cannot be created, it is of the wrong type'). Note: the resulting Device.Name mirrors deviceItemName, not name - the 'name' argument does not become the queryable device name in practice.")]
+         Description("Create a hardware device with a station and its first item in one call, e.g. a CPU station or drive (Device 'S7-1500/ET200MP station_1' containing 'PLC_1'); a CPU comes with its real interfaces. typeIdentifier must come from 'FindHardwareCatalogEntries' ('OrderNumber:<article>/<version>'); 'System:Device.X' identifiers of placed devices are rejected. The resulting device name follows deviceItemName, not name")]
         public static ResponseCreated CreateDeviceWithItem(
             [Description("typeIdentifier: a creation-ready catalog TypeIdentifier from FindHardwareCatalogEntries, e.g. 'OrderNumber:6ES7 516-3AN01-0AB0/V2.1' - NOT the TypeIdentifier attribute off an existing device")] string typeIdentifier,
             [Description("name: name for the new device (station) - note this does not end up as the queryable Device.Name; use deviceItemName for the path you'll query/reference afterward")] string name,
@@ -42,7 +42,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "DeleteDevice", Title = "Delete device", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Delete a hardware device from the project. DRY-RUN BY DEFAULT: without confirm=true, this only reports what device would be deleted and changes nothing - call it once to preview, then again with confirm=true to actually delete. TIA's own undo only survives until the next save, and hardware config is entangled with physical wiring/GSD matching, so recovery is more expensive than a block/tag delete - confirm with the user before ever passing confirm=true against a real (non-disposable) project.")]
+         Description("Delete a hardware device. Dry run unless confirm=true: first call previews, second with confirm=true deletes. Hardware is tied to wiring and GSD matching and TIA's undo ends at the next save, so ask the user before confirm=true on a real project")]
         public static ResponseDeviceDelete DeleteDevice(
             [Description("devicePath: full path to the device")] string devicePath,
             [Description("confirm: must be explicitly true to actually delete - false (default) only previews what would be deleted")] bool confirm = false)

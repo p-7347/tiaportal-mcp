@@ -95,7 +95,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "SetIpAddress", Title = "Set IP address", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Set IP address/subnet mask/router on a device's network interface (same auto-resolving path as GetNetworkInterfaceInfo). IMPORTANT: this only changes the TIA project's saved metadata - nothing reaches real hardware until the project is compiled and downloaded. Changing the address can also regenerate the PROFINET device name hash used to match physical hardware on the wire; if that no longer matches what's actually downloaded to a switch/drive, the online connection to that device breaks. Confirm with the user before calling this against a real (non-disposable) project, and make clear to them that this alone does not reach the PLC/line.")]
+         Description("Set IP address, subnet mask and router of a device's network interface (path as in 'GetNetworkInterfaceInfo'). Changes only the project: nothing reaches hardware until compiled and downloaded, and a new address can change the PROFINET device name and break the online match. Ask the user before using it on a real project")]
         public static ResponseSetIpAddress SetIpAddress(
             [Description("path: a device or device item path, same auto-resolving rules as GetNetworkInterfaceInfo")] string path,
             [Description("ipAddress: e.g. '192.168.0.1'")] string ipAddress,

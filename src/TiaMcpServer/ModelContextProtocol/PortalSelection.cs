@@ -37,7 +37,7 @@ namespace TiaMcpServer.ModelContextProtocol
         public const string ArgumentName = "portalId";
 
         private const string ArgumentDescription =
-            "TIA Portal instance (process id from 'Connect'/'GetPortals'); only when several are attached";
+            "TIA Portal process id, only when several are attached";
 
         private static readonly HashSet<string> _scopedTools = new(StringComparer.Ordinal);
 
