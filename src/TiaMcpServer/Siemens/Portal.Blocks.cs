@@ -13,6 +13,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
+using System.Xml;
 
 namespace TiaMcpServer.Siemens
 {
@@ -238,7 +240,7 @@ namespace TiaMcpServer.Siemens
             }
         }
 
-        public bool ImportXmlBlock(string softwarePath, string groupPath, string importPath)
+        public bool ImportXmlBlock(string softwarePath, string? groupPath, string importPath, List<string>? notes = null)
         {
             _logger?.LogInformation($"Importing block from path: {importPath}");
 
@@ -269,6 +271,16 @@ namespace TiaMcpServer.Siemens
                             $"No PLC software found at '{softwarePath}'. 'GetProjectTree' lists the valid software paths.");
                     }
 
+                    if (groupPath == null)
+                    {
+                        // No group given: an existing block of the same name keeps its group, a new one goes to the root.
+                        var existing = ReadSimaticMlName(importPath, "SW.Blocks.") is string name ? FindBlockByName(softwarePath, name) : null;
+                        groupPath = existing?.Parent is PlcBlockGroup ? GroupPathOf(GetBlockPath(existing)) : string.Empty;
+                        notes?.Add(existing != null
+                            ? $"No groupPath given: replaced the existing block in '{(groupPath.Length == 0 ? "Program blocks" : groupPath)}'."
+                            : "No groupPath given and no block of that name exists: imported into the Program blocks root.");
+                    }
+
                     var group = GetPlcBlockGroupByPath(softwarePath, groupPath)
                         ?? throw new PortalException(PortalErrorCode.NotFound,
                             $"Group not found at '{groupPath}'. 'GetSoftwareTree' lists the valid group paths.");
@@ -277,9 +289,21 @@ namespace TiaMcpServer.Siemens
 
                     RefuseLibraryTypeInstance(softwarePath, importPath);
 
+                    // TIA refuses LAD/FBD networks whose <Parts> are not in flow order. Sort them the way
+                    // EditBlockNetwork does, in a scratch copy, so the caller's file stays as it is.
+                    // Checked 2026-11-09 on 111 exported files: TIA's own exports never change.
+                    using var scope = new SourceScope(_logger);
+                    var importFile = fileInfo;
+                    var reordered = SortedCopy(importPath, scope.Directory, out var sortedFile);
+                    if (reordered > 0)
+                    {
+                        importFile = new FileInfo(sortedFile);
+                        notes?.Add($"{reordered} LAD/FBD part(s) were moved into flow order (in a copy; your file is unchanged).");
+                    }
+
                     try
                     {
-                        list = group.Blocks.Import(fileInfo, ImportOptions.Override);
+                        list = group.Blocks.Import(importFile, ImportOptions.Override);
                     }
                     catch (Exception ex)
                     {
@@ -287,6 +311,7 @@ namespace TiaMcpServer.Siemens
 
                         throw new PortalException(PortalErrorCode.ImportFailed,
                             $"TIA Portal rejected the block import from '{importPath}': {reason}" +
+                            NetworkAtLine(importFile.FullName, reason, reordered > 0) +
                             FlowOrderHint(reason) +
                             (OnlineHint(GetSoftwareContainer(softwarePath)) ?? string.Empty), null, ex);
                     }
@@ -308,6 +333,74 @@ namespace TiaMcpServer.Siemens
         /// the 900+ element network was wrongly thought too big). Placing the new part right after the part
         /// that feeds it, as TIA's own export lists them, imported fine.
         /// </summary>
+        /// <summary>
+        /// Writes a copy of the block XML with every LAD/FBD network's parts in flow order; returns how many
+        /// parts moved (0: no copy needed, nothing written).
+        /// </summary>
+        private static int SortedCopy(string importPath, string directory, out string sortedFile)
+        {
+            sortedFile = string.Empty;
+            XDocument doc;
+            try
+            {
+                doc = XDocument.Load(importPath);
+            }
+            catch
+            {
+                return 0; // not XML: let TIA's import say why
+            }
+
+            var moved = doc.Descendants().Where(e => e.Name.LocalName == "FlgNet").Sum(SortFlgNetParts);
+            if (moved == 0)
+            {
+                return 0;
+            }
+
+            sortedFile = Path.Combine(directory, Path.GetFileName(importPath));
+            doc.Save(sortedFile);
+            return moved;
+        }
+
+        /// <summary>
+        /// TIA names a failing network only by its line in the file ("... at line number 1359"); this adds
+        /// which network that is (1-based, as the editor counts) and its title.
+        /// </summary>
+        private static string NetworkAtLine(string file, string reason, bool sortedCopy)
+        {
+            var match = Regex.Match(reason, @"line number (\d+)");
+            if (!match.Success)
+            {
+                return string.Empty;
+            }
+
+            try
+            {
+                var line = int.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+                var doc = XDocument.Load(file, LoadOptions.SetLineInfo);
+                var units = doc.Descendants().Where(e => e.Name.LocalName == "SW.Blocks.CompileUnit").ToList();
+                var hit = units.FirstOrDefault(u => ((IXmlLineInfo)u).LineNumber == line)
+                    ?? units.LastOrDefault(u => ((IXmlLineInfo)u).LineNumber <= line);
+                if (hit == null)
+                {
+                    return string.Empty;
+                }
+
+                var title = NetworkText(hit, "Title")?.Descendants().FirstOrDefault(e => e.Name.LocalName == "Text" && !string.IsNullOrWhiteSpace(e.Value))?.Value;
+                return $" That line is in network {units.IndexOf(hit) + 1}" + (title != null ? $" '{title.Trim()}'" : string.Empty) +
+                       (sortedCopy ? " (line of the flow-ordered copy)" : string.Empty) + ".";
+            }
+            catch
+            {
+                return string.Empty; // best effort only
+            }
+        }
+
+        private static string GroupPathOf(string blockPath)
+        {
+            var slash = blockPath.LastIndexOf('/');
+            return slash < 0 ? string.Empty : blockPath.Substring(0, slash);
+        }
+
         private static string FlowOrderHint(string reason) =>
             reason.IndexOf("sorted according to the current flow", StringComparison.OrdinalIgnoreCase) >= 0
                 ? " Hint: in <Parts>, put each added <Part> directly after the part that feeds it (the order TIA's own export uses), not at the end of the list; the UId named in the message is the misplaced element."

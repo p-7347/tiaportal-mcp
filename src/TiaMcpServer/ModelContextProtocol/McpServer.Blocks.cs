@@ -330,11 +330,11 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "ImportXmlBlock", Title = "Import block from XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Use to bring in a whole block from XML; to change one network prefer 'EditBlockNetwork'. Import one program block from an XML file into a block group. An existing block of the same name is replaced; its previous XML is saved first and returned as 'backup'. Refused when that block was changed after the file was written (e.g. an older copy of the file), unless 'allowOlderFile'")]
+        [McpServerTool(Name = "ImportXmlBlock", Title = "Import block from XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Use to bring in a whole block from XML; to change one network prefer 'EditBlockNetwork'. Import one program block from an XML file into a block group; LAD/FBD parts out of flow order are sorted in a copy first. An existing block of the same name is replaced; its previous XML is saved first and returned as 'backup'. Refused when that block was changed after the file was written (e.g. an older copy of the file), unless 'allowOlderFile'")]
         public static ResponseImportXmlBlock ImportXmlBlock(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
-            [Description("groupPath: block group that receives the block, relative to 'Program blocks' and '/'-separated, e.g. '009_Servo/zGDBs'; empty string for the Program blocks root")] string groupPath,
             [Description("importPath: absolute path of the .xml file on the PC running this server, e.g. one written by 'ExportXmlBlock'")] string importPath,
+            [Description("groupPath: block group that receives the block, relative to 'Program blocks' and '/'-separated, e.g. '009_Servo/zGDBs'; empty string for the Program blocks root. Left out: the group of the existing block of that name, else the root")] string? groupPath = null,
             [Description("allowOlderFile: import even when the object it replaces was changed in TIA Portal after the file was written (default false: refused, an older file would undo that change)")] bool allowOlderFile = false)
         {
             WritePolicy.EnsureEnabled(nameof(ImportXmlBlock));
@@ -343,13 +343,15 @@ namespace TiaMcpServer.ModelContextProtocol
             {
                 var backup = Portal.BackupBlockReplacedByImport(softwarePath, importPath, nameof(ImportXmlBlock), allowOlderFile);
 
-                if (Portal.ImportXmlBlock(softwarePath, groupPath, importPath))
+                var notes = new List<string>();
+                if (Portal.ImportXmlBlock(softwarePath, groupPath, importPath, notes))
                 {
                     return new ResponseImportXmlBlock
                     {
                         Backup = backup.Path,
                         BackupWarning = backup.Warning,
-                        Message = $"Block imported from '{importPath}' to '{groupPath}'" + BackupNote(backup),
+                        Message = $"Block imported from '{importPath}'" + (groupPath != null ? $" to '{groupPath}'" : string.Empty) +
+                                  (notes.Count > 0 ? ". " + string.Join(" ", notes) : string.Empty) + BackupNote(backup),
                         Meta = new JsonObject
                         {
                             ["timestamp"] = DateTime.Now,
@@ -607,7 +609,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "EditBlockNetwork", Title = "Replace, insert or delete a network", Destructive = true, Idempotent = false, OpenWorld = false),
-         Description("Use to replace, insert or delete one network of a block instead of editing the whole block XML: the new network comes from an XML file (e.g. another block's export) or SCL text ('sclFile'). LAD/FBD parts are put into the flow order TIA requires and IDs renumbered; the block is backed up first; 'previewFile' only writes the edited XML. The block must be consistent. The whole block is re-imported, so its interface timestamp changes: an FB's instance DBs recompile and may be reinitialized at the next download")]
+         Description("Use to replace, insert or delete one network of a block instead of editing the whole block XML: the new network comes from an XML file (e.g. another block's export) or SCL text ('sclFile'). LAD/FBD parts are put into the flow order TIA requires and IDs renumbered; the block is backed up first; 'previewFile' only writes the edited XML. An inconsistent block is compiled on its own first. The whole block is re-imported, so its interface timestamp changes: an FB's instance DBs recompile and may be reinitialized at the next download")]
         public static ResponseNetworkEdit EditBlockNetwork(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
             [Description("blockPath: root-relative path of the block, e.g. 009_Servo/FB_PitchHome_Inch")] string blockPath,
@@ -654,7 +656,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "CopyNetwork", Title = "Copy a network to another block", Destructive = true, Idempotent = false, OpenWorld = false),
-         Description("Use to copy one network into another block (or the same one) with names replaced, e.g. a G2U5 network rolled out to G2U6 with 'G2U5'->'G2U6'. LAD, FBD and SCL; replacements are literal, in order, over the whole network incl. title and comment, and the reply counts each one. Inserts or replaces like 'EditBlockNetwork'; 'addStatics' adds Static members the copy needs; 'previewFile' writes the edited XML without importing. Both blocks must be consistent")]
+         Description("Use to copy one network into another block (or the same one) with names replaced, e.g. a G2U5 network rolled out to G2U6 with 'G2U5'->'G2U6'. LAD, FBD and SCL; replacements are literal, in order, over the whole network incl. title and comment, and the reply counts each one. Inserts or replaces like 'EditBlockNetwork'; 'addStatics' adds Static members the copy needs; 'previewFile' writes the edited XML without importing. Inconsistent blocks are compiled on their own first")]
         public static ResponseNetworkEdit CopyNetwork(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
             [Description("sourceBlockPath: root-relative path of the block to copy from, e.g. '19_Vision/19_G2U5_Vision_2D_Interface'")] string sourceBlockPath,
@@ -707,6 +709,11 @@ namespace TiaMcpServer.ModelContextProtocol
             var message = result.PreviewFile != null
                 ? $"Preview: network {networkIndex} {verb} in '{result.BlockPath}' ({result.NetworksBefore} -> {result.NetworksAfter} networks), written to '{result.PreviewFile}'. Nothing was imported."
                 : $"Network {networkIndex} {verb} in '{result.BlockPath}' ({result.NetworksBefore} -> {result.NetworksAfter} networks). Compile the block to check it ('CompileCodeBlock'). {SaveHint}";
+
+            if (result.CompiledFirst.Count > 0)
+            {
+                message += $" Compiled first because it was inconsistent: {string.Join(", ", result.CompiledFirst.Select(n => $"'{n}'"))}.";
+            }
 
             if (result.PartsReordered > 0)
             {
@@ -924,6 +931,11 @@ namespace TiaMcpServer.ModelContextProtocol
             var message = result.PreviewFile != null
                 ? $"Preview: {edited}, written to '{result.PreviewFile}'. Nothing was imported."
                 : $"{edited}. {compileNote} {SaveHint}";
+
+            if (result.CompiledFirst)
+            {
+                message += $" '{result.BlockPath}' was inconsistent and was compiled first.";
+            }
 
             var backup = new Portal.BackupResult { Path = result.Backup, Warning = result.BackupWarning };
 
