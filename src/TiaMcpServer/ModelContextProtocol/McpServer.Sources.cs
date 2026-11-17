@@ -26,7 +26,7 @@ namespace TiaMcpServer.ModelContextProtocol
         #region source
 
         [McpServerTool(Name = "GetBlockSource", Title = "Get block source", ReadOnly = true, OpenWorld = false),
-         Description("Use to read what a block does: the source text of one block. 'document' is readable SCL/LAD/STL (V20+); STL and mixed-language blocks fall back to XML, and the reply names the format. For LAD/FBD and mixed blocks prefer 'text': one line per coil or box, SCL networks as SCL, about 1/15 of the XML - read-only, not importable")]
+         Description("Use to read what a block does: the source text of one block. 'document' is readable SCL/LAD/STL (V20+); a block without a document comes back as 'text' (mixed LAD/SCL) or XML (STL), and the reply names the format. For LAD/FBD and mixed blocks prefer 'text': one line per coil or box, SCL networks as SCL, about 1/15 of the XML - read-only, not importable")]
         public static ResponseSourceText GetBlockSource(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
             [Description("blockPath: root-relative path of the block, e.g. '0_OBs/Main'. Use 'ResolveObjectPath' if you only know the name")] string blockPath,

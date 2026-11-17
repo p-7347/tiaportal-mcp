@@ -29,6 +29,9 @@ namespace TiaMcpServer.Siemens
         private static readonly Dictionary<string, string> CompareOps = new Dictionary<string, string>(StringComparer.Ordinal)
             { ["Eq"] = "=", ["Ne"] = "<>", ["Gt"] = ">", ["Ge"] = ">=", ["Lt"] = "<", ["Le"] = "<=" };
 
+        /// <summary>Part of the line written for a network this renderer cannot show (STL, GRAPH).</summary>
+        internal const string NotRenderedMarker = " network not rendered";
+
         private static readonly Regex PlainIdentifier = new Regex(@"^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
 
         /// <param name="includeInterface">also list the top-level interface members, one per line
@@ -115,7 +118,7 @@ namespace TiaMcpServer.Siemens
                 }
                 else
                 {
-                    sb.Append("  (").Append(language).AppendLine(" network not rendered - read it with format 'xml')");
+                    sb.Append("  (").Append(language).Append(NotRenderedMarker).AppendLine(" - read it with format 'xml')");
                 }
             }
 

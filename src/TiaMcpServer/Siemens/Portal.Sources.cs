@@ -359,6 +359,22 @@ namespace TiaMcpServer.Siemens
                         ClearDirectory(scope.Directory);
                         exportXml(scope.Directory);
                         used = "xml";
+
+                        // A block with networks reads far shorter as text than as XML (about 1/15), so a
+                        // mixed LAD/SCL block that has no document comes back as 'text', not as up to
+                        // maxChars of XML. Anything the text renderer cannot show (STL, GRAPH) stays XML.
+                        var compact = RenderNetworksText(scope.Directory);
+
+                        if (compact != null && compact.IndexOf(LadText.NotRenderedMarker, StringComparison.Ordinal) < 0)
+                        {
+                            return Truncate(new SourceTextResult
+                            {
+                                Name = name,
+                                Path = objectPath,
+                                Format = "text",
+                                FileNames = new List<string> { name + ".xml" }
+                            }, compact, maxChars);
+                        }
                     }
                 }
                 else
