@@ -449,7 +449,8 @@ namespace TiaMcpServer.Siemens
 
                 foreach (var name in components.Skip(1))
                 {
-                    member = members?.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase));
+                    // Openness gives a member name that needs quotes with them: "Tab Flattening Down/Up"
+                    member = members?.FirstOrDefault(m => string.Equals((m.Name ?? string.Empty).Trim('"'), name, StringComparison.OrdinalIgnoreCase));
 
                     if (member == null)
                     {

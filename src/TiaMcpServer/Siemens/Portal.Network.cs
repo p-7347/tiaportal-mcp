@@ -222,7 +222,17 @@ namespace TiaMcpServer.Siemens
                 }
             }
 
-            return null;
+            // No device matches the start of the path: it may start at a device item, as the
+            // "pass one of these as path" list does ('PLC_1/PROFINET interface_1').
+            var item = FindDeviceItemInAnyDevice(segments[0]);
+
+            for (int i = 1; i < segments.Length && item != null; i++)
+            {
+                item = item.DeviceItems.FirstOrDefault(x => x.Name.Equals(segments[i], StringComparison.OrdinalIgnoreCase))
+                    ?? FindDeviceItemBelow(item.DeviceItems, segments[i]);
+            }
+
+            return item;
         }
 
         /// <summary>The first device item of that name anywhere below <paramref name="items"/>, nearest level first.</summary>
