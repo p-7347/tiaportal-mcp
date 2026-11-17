@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Siemens.Engineering;
 using Siemens.Engineering.Compiler;
 using Siemens.Engineering.SW.Blocks;
+using Siemens.Engineering.SW.Blocks.Interface;
 using Siemens.Engineering.SW.ExternalSources;
 using System;
 using System.Collections.Generic;
@@ -248,6 +249,11 @@ namespace TiaMcpServer.Siemens
         {
             var body = File.ReadAllText(sclFile);
             var name = $"_McpSclNet_{Guid.NewGuid():N}".Substring(0, 23);
+
+            // TIA's source import refuses a quoted member name with '/' and the like ("Down/Up"), although
+            // the editor and the XML take it. Such accesses go through the scratch FB as a placeholder
+            // Static of the same data type and are put back into the exported network.
+            var substitutes = SubstituteUnparsableAccesses(softwarePath, ref body);
             var optimized = !string.Equals(
                 blockDoc.Descendants().FirstOrDefault(e => e.Name.LocalName == "MemoryLayout")?.Value, "Standard", StringComparison.OrdinalIgnoreCase);
 
@@ -258,6 +264,8 @@ namespace TiaMcpServer.Siemens
 
             var sections = blockDoc.Descendants().FirstOrDefault(e => e.Name.LocalName == "Interface")?
                 .Descendants().Where(e => e.Name.LocalName == "Section") ?? Enumerable.Empty<XElement>();
+
+            var substitutesDeclared = false;
 
             foreach (var section in sections)
             {
@@ -282,6 +290,28 @@ namespace TiaMcpServer.Siemens
                 foreach (var member in members)
                 {
                     AppendSclDeclaration(source, member, "   ", keyword == "VAR CONSTANT");
+                }
+
+                if (keyword == "VAR" && !substitutesDeclared)
+                {
+                    // in the Static section the block already has, not in a second one
+                    foreach (var substitute in substitutes)
+                    {
+                        source.AppendLine($"   \"{substitute.Placeholder}\" : {substitute.DataType};");
+                    }
+
+                    substitutesDeclared = true;
+                }
+
+                source.AppendLine("END_VAR");
+            }
+
+            if (substitutes.Count > 0 && !substitutesDeclared)
+            {
+                source.AppendLine("VAR");
+                foreach (var substitute in substitutes)
+                {
+                    source.AppendLine($"   \"{substitute.Placeholder}\" : {substitute.DataType};");
                 }
 
                 source.AppendLine("END_VAR");
@@ -320,7 +350,9 @@ namespace TiaMcpServer.Siemens
                 var unit = CompileUnits(XDocument.Load(exportFile)).FirstOrDefault()
                     ?? throw new PortalException(PortalErrorCode.ImportFailed, "The compiled SCL block exported no network.");
 
-                return new XElement(unit);
+                var network = new XElement(unit);
+                RestoreSubstitutedAccesses(network, substitutes);
+                return network;
             }
             finally
             {
@@ -331,6 +363,168 @@ namespace TiaMcpServer.Siemens
                 catch (Exception ex)
                 {
                     _logger?.LogWarning(ex, "Could not delete scratch SCL block '{Path}'", path);
+                }
+            }
+        }
+
+        private sealed class SclSubstitute
+        {
+            public string Placeholder { get; set; } = string.Empty;
+            public string DataType { get; set; } = string.Empty;
+
+            /// <summary>The DB name and member names of the access, unquoted.</summary>
+            public List<string> Components { get; set; } = new List<string>();
+        }
+
+        // "DB".member."quoted member".member - a global access without index brackets.
+        private static readonly System.Text.RegularExpressions.Regex GlobalAccess = new System.Text.RegularExpressions.Regex(
+            "\"(?<c>[^\"\\r\\n]+)\"(?:\\.(?:\"(?<c>[^\"\\r\\n]+)\"|(?<c>[A-Za-z_][A-Za-z0-9_]*)))+",
+            System.Text.RegularExpressions.RegexOptions.Compiled);
+
+        // Characters the SCL source import takes inside a quoted member name (live 2026-11-17: a space
+        // works, '/' gives "Invalid tag definition in STRUCT, data block or instance access").
+        private static readonly System.Text.RegularExpressions.Regex SourceSafeName = new System.Text.RegularExpressions.Regex(
+            "^[A-Za-z0-9_ ]+$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+        /// <summary>
+        /// Replaces every global access that has a member name the source import cannot parse with
+        /// '#placeholder' in <paramref name="body"/>, and returns what each placeholder stands for.
+        /// </summary>
+        private List<SclSubstitute> SubstituteUnparsableAccesses(string softwarePath, ref string body)
+        {
+            var substitutes = new List<SclSubstitute>();
+            var byText = new Dictionary<string, SclSubstitute>(StringComparer.Ordinal);
+
+            body = GlobalAccess.Replace(body, match =>
+            {
+                var components = match.Groups["c"].Captures.Cast<System.Text.RegularExpressions.Capture>().Select(c => c.Value).ToList();
+
+                if (components.Skip(1).All(c => SourceSafeName.IsMatch(c)))
+                {
+                    return match.Value;
+                }
+
+                if (!byText.TryGetValue(match.Value, out var substitute))
+                {
+                    var dataType = GlobalMemberDataType(softwarePath, components);
+
+                    if (string.IsNullOrWhiteSpace(dataType) || dataType!.Trim().StartsWith("Struct", StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new PortalException(PortalErrorCode.InvalidParams,
+                            $"'{match.Value}' has a member name that TIA Portal's SCL source import cannot read (only letters, digits, '_' and spaces work in a quoted name), " +
+                            (string.IsNullOrWhiteSpace(dataType)
+                                ? "and its data type could not be looked up in the data block, so it cannot be put in afterwards."
+                                : "and it is a Struct, which cannot stand in for it.") +
+                            " Read the value in a LAD network ('networkFile') into a Static member and use that member in the SCL text.");
+                    }
+
+                    substitute = new SclSubstitute
+                    {
+                        Placeholder = $"_mcpSub{substitutes.Count + 1}",
+                        DataType = dataType!.Trim(),
+                        Components = components
+                    };
+                    substitutes.Add(substitute);
+                    byText[match.Value] = substitute;
+                }
+
+                return "#" + substitute.Placeholder;
+            });
+
+            return substitutes;
+        }
+
+        /// <summary>The data type of "DB".a.b.c, read from the data block's members; null when it cannot be found.</summary>
+        private string? GlobalMemberDataType(string softwarePath, List<string> components)
+        {
+            try
+            {
+                if (FindBlockByName(softwarePath, components[0]) is not DataBlock block)
+                {
+                    return null;
+                }
+
+                var members = block.Interface?.Members;
+                Member? member = null;
+
+                foreach (var name in components.Skip(1))
+                {
+                    member = members?.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase));
+
+                    if (member == null)
+                    {
+                        return null;
+                    }
+
+                    members = ChildMembers(member);
+                }
+
+                return member?.GetAttribute("DataTypeName")?.ToString();
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Turns each '#placeholder' access of the compiled scratch network back into the global access
+        /// it stands for. In the XML a member name is an attribute value, so any character is fine there.
+        /// </summary>
+        private static void RestoreSubstitutedAccesses(XElement network, List<SclSubstitute> substitutes)
+        {
+            if (substitutes.Count == 0)
+            {
+                return;
+            }
+
+            var byPlaceholder = substitutes.ToDictionary(x => x.Placeholder, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var access in network.Descendants().Where(e => e.Name.LocalName == "Access" && (string?)e.Attribute("Scope") == "LocalVariable").ToList())
+            {
+                var symbol = access.Elements().FirstOrDefault(e => e.Name.LocalName == "Symbol");
+                var first = symbol?.Elements().FirstOrDefault(e => e.Name.LocalName == "Component");
+
+                if (first == null || !byPlaceholder.TryGetValue((string?)first.Attribute("Name") ?? string.Empty, out var substitute))
+                {
+                    continue;
+                }
+
+                var ns = first.Name.Namespace;
+                var replacement = new List<XElement>();
+
+                for (var i = 0; i < substitute.Components.Count; i++)
+                {
+                    if (i > 0)
+                    {
+                        replacement.Add(new XElement(ns + "Token", new XAttribute("Text", ".")));
+                    }
+
+                    var component = new XElement(ns + "Component", new XAttribute("Name", substitute.Components[i]));
+
+                    if (i == 0)
+                    {
+                        component.Add(new XElement(ns + "BooleanAttribute", new XAttribute("Name", "HasQuotes"), "true"));
+                    }
+
+                    replacement.Add(component);
+                }
+
+                // an index written after the placeholder ('#x[1]') belongs to the last member
+                replacement[replacement.Count - 1].Add(first.Elements().Where(e => e.Name.LocalName != "BooleanAttribute").Select(e => new XElement(e)));
+
+                first.ReplaceWith(replacement);
+                access.SetAttributeValue("Scope", "GlobalVariable");
+            }
+
+            // UIds are unique within a network; number them again in document order like an export does.
+            foreach (var text in network.Descendants().Where(e => e.Name.LocalName == "StructuredText"))
+            {
+                var next = 21;
+
+                foreach (var element in text.Descendants())
+                {
+                    element.SetAttributeValue("UId", next++);
                 }
             }
         }
