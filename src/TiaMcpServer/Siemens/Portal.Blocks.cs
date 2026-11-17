@@ -980,9 +980,7 @@ namespace TiaMcpServer.Siemens
 
                     if (block is not DataBlock dataBlock)
                     {
-                        throw new PortalException(PortalErrorCode.NotSupported,
-                            $"'{block.Name}' is a {block.GetType().Name}, and Openness exposes an interface only for data blocks. " +
-                            "Use 'GetBlockSource' and read its declaration part instead.");
+                        return ExportedInterfaceMembers(block);
                     }
 
                     var members = dataBlock.Interface?.Members
@@ -992,6 +990,89 @@ namespace TiaMcpServer.Siemens
                     return members.Select(ToInterfaceMember).ToList();
                 },
                 ("softwarePath", softwarePath), ("blockPath", blockPath));
+        }
+
+        /// <summary>
+        /// The interface of an FB, FC or OB, which Openness offers no accessor for: read from an
+        /// export. Names are 'Section.member' ('Static.aux.bDone' inside a Struct); the attributes
+        /// are Section, Remanence (FB: Retain, NonRetain or SetInIDB), StartValue, Comment and
+        /// whatever else the member carries in the XML.
+        /// </summary>
+        private List<InterfaceMember> ExportedInterfaceMembers(PlcBlock block)
+        {
+            if (!block.IsConsistent)
+            {
+                throw new PortalException(PortalErrorCode.InvalidState,
+                    $"'{block.Name}' is a {block.GetType().Name} and inconsistent; its interface is read from an export, which TIA Portal refuses for " +
+                    "inconsistent blocks. Compile it first ('CompileCodeBlock').");
+            }
+
+            using var scope = new SourceScope(_logger);
+            var exportFile = Path.Combine(scope.Directory, $"{FileNames.Safe(block.Name)}.xml");
+            block.Export(new FileInfo(exportFile), ExportOptions.None);
+
+            var doc = XDocument.Load(exportFile);
+            var sections = doc.Descendants().Where(e => e.Name.LocalName == "Section" && e.Parent?.Parent?.Name.LocalName == "Interface");
+            var result = new List<InterfaceMember>();
+            var isFb = block is FB;
+
+            foreach (var section in sections)
+            {
+                var sectionName = (string?)section.Attribute("Name") ?? string.Empty;
+                var retentive = isFb && (sectionName == "Input" || sectionName == "Output" || sectionName == "InOut" || sectionName == "Static");
+
+                void Add(XElement member, string prefix, bool topLevel)
+                {
+                    var name = prefix + "." + (string?)member.Attribute("Name");
+                    var info = new InterfaceMember { Name = name, DataTypeName = (string?)member.Attribute("Datatype") };
+                    info.Attributes["Section"] = sectionName;
+
+                    foreach (var attribute in member.Attributes().Where(a => a.Name.LocalName != "Name" && a.Name.LocalName != "Datatype" && !a.IsNamespaceDeclaration))
+                    {
+                        info.Attributes[attribute.Name.LocalName] = attribute.Value;
+                    }
+
+                    if (retentive && topLevel && !info.Attributes.ContainsKey("Remanence"))
+                    {
+                        info.Attributes["Remanence"] = "NonRetain";
+                    }
+
+                    foreach (var flag in member.Elements().Where(e => e.Name.LocalName == "AttributeList").Elements())
+                    {
+                        var key = (string?)flag.Attribute("Name");
+                        if (!string.IsNullOrEmpty(key))
+                        {
+                            info.Attributes[key!] = flag.Value;
+                        }
+                    }
+
+                    var start = member.Elements().FirstOrDefault(e => e.Name.LocalName == "StartValue")?.Value;
+                    if (!string.IsNullOrEmpty(start))
+                    {
+                        info.Attributes["StartValue"] = start!;
+                    }
+
+                    var comment = member.Elements().FirstOrDefault(e => e.Name.LocalName == "Comment")?.Elements().Select(e => e.Value).FirstOrDefault(v => v.Length > 0);
+                    if (!string.IsNullOrEmpty(comment))
+                    {
+                        info.Attributes["Comment"] = comment!;
+                    }
+
+                    result.Add(info);
+
+                    foreach (var child in member.Elements().Where(e => e.Name.LocalName == "Member"))
+                    {
+                        Add(child, name, false);
+                    }
+                }
+
+                foreach (var member in section.Elements().Where(e => e.Name.LocalName == "Member"))
+                {
+                    Add(member, sectionName, true);
+                }
+            }
+
+            return result;
         }
 
         private static InterfaceMember ToInterfaceMember(Member member)

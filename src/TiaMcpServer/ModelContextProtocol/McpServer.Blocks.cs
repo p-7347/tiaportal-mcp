@@ -516,10 +516,10 @@ namespace TiaMcpServer.ModelContextProtocol
         #region source
 
         [McpServerTool(Name = "GetBlockInterface", Title = "Get block interface", ReadOnly = true, OpenWorld = false),
-         Description("List the members of a data block with their data type and every attribute TIA Portal reports. Needs no export and works on inconsistent blocks. Data blocks only: Openness offers no interface accessor for FB, FC or OB, whose declarations come from 'GetBlockSource' instead")]
+         Description("List the interface members of a block with data type and attributes. Data block: every attribute TIA Portal reports, no export, works on inconsistent blocks. FB, FC, OB: read from an export (block consistent, PLC offline), names as 'Static.sDone', attributes Section, Remanence (FB: Retain, NonRetain or SetInIDB = decided in each instance DB), StartValue, Comment")]
         public static ResponseBlockInterface GetBlockInterface(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
-            [Description("blockPath: root-relative path of the data block, e.g. '1_Tests/DB_Block_1'")] string blockPath)
+            [Description("blockPath: root-relative path of the block, e.g. '1_Tests/DB_Block_1' or '009_Servo/FB_PitchHome_Inch'")] string blockPath)
         {
             try
             {
@@ -620,7 +620,7 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("previewFile: optional absolute path; the edited block XML is written there and nothing is imported")] string previewFile = "",
             [Description("sclFile: for replace/insert, instead of networkFile: absolute path of a text file with the SCL statements of the new network ('#' names refer to this block's interface). TIA compiles it in a scratch FB that is deleted again, also in preview")] string sclFile = "",
             [Description("title: optional network title for replace/insert, e.g. 'Vision : 2D Result Check'. Empty (default) keeps the replaced network's title and comment when the new network has none (an SCL network never has)")] string title = "",
-            [Description("addStatics: optional new Static members (FB only) added in the same import, as SCL declarations, e.g. 'sDone : Bool; sCnt : Int := 0; aOld : Array[1..2] of Bool'. The new network can use them right away. For Structs or other sections use 'EditBlockInterface'")] string addStatics = "")
+            [Description("addStatics: optional new Static members (FB only) added in the same import, as SCL declarations, e.g. 'sDone : Bool; sCnt : Int := 0; aOld : Array[1..2] of Bool'; a leading RETAIN (or SetInIDB) makes one retentive: 'RETAIN sZero : Real'. The new network can use them right away. For Structs or other sections use 'EditBlockInterface'")] string addStatics = "")
         {
             WritePolicy.EnsureEnabled(nameof(EditBlockNetwork));
 
@@ -783,7 +783,8 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("afterMember: add only, optional name of the member to insert after (same level), e.g. 'Result_Data_Quantity'; empty appends at the end")] string afterMember = "",
             [Description("previewFile: optional absolute path; the edited block XML is written there and nothing is imported")] string previewFile = "",
             [Description("moreMembers: optional JSON array of further member edits done in the same import, one object each with the fields above, e.g. '[{\"memberPath\":\"bDone\",\"dataType\":\"Bool\"},{\"action\":\"delete\",\"section\":\"Temp\",\"memberPath\":\"tOld\"}]'; an item without action or section uses this call's")] string moreMembers = "",
-            [Description("compile: compile the block right after the change and return the compiler result in 'compile' (default false). The change stays even if the compile reports errors")] bool compile = false)
+            [Description("compile: compile the block right after the change and return the compiler result in 'compile' (default false). The change stays even if the compile reports errors")] bool compile = false,
+            [Description("retain: add/update, optional 'Retain', 'NonRetain' or 'SetInIDB' (FB member: decided in each instance DB) for a top-level Input, Output, InOut or Static member; empty leaves it as it is. Also a 'retain' field in 'moreMembers'")] string retain = "")
         {
             WritePolicy.EnsureEnabled(nameof(EditBlockInterface));
 
@@ -795,7 +796,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
 
                 var result = Portal.EditBlockInterface(softwarePath, blockPath, action, section, memberPath, dataType, startValue, comment, afterMember, previewFile,
-                    ParseMoreMembers(moreMembers));
+                    ParseMoreMembers(moreMembers), retain);
                 var (compiled, compileError) = CompileAfterEdit(compile && result.PreviewFile == null,
                     () => Portal.CompileCodeBlock(softwarePath, result.BlockPath));
                 return InterfaceEdited(result, action, "block",

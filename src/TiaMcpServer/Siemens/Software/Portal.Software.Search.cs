@@ -149,7 +149,12 @@ namespace TiaMcpServer.Siemens
 
                             try
                             {
-                                source = ReadSearchText(softwarePath, target.Path, target.Block, target.Type);
+                                source = ReadSearchText(softwarePath, target.Path, target.Block, target.Type, out var staleNote);
+
+                                if (staleNote != null)
+                                {
+                                    result.StaleCache.Add($"{target.Path}: {staleNote}");
+                                }
                             }
                             catch (Exception ex)
                             {
@@ -200,8 +205,10 @@ namespace TiaMcpServer.Siemens
             public SourceTextResult Text { get; }
         }
 
-        private SourceTextResult ReadSearchText(string softwarePath, string path, PlcBlock? block, PlcType? type)
+        private SourceTextResult ReadSearchText(string softwarePath, string path, PlcBlock? block, PlcType? type, out string? staleNote)
         {
+            staleNote = null;
+
             var key = $"{CurrentPortalId}|{_project?.Path?.FullName}|{softwarePath}|{path}";
             var stamp = block?.ModifiedDate ?? type!.ModifiedDate;
 
@@ -210,9 +217,40 @@ namespace TiaMcpServer.Siemens
                 return hit.Text;
             }
 
-            var text = block != null
-                ? ReadBlockSource(block, path, "document", int.MaxValue)
-                : ReadTypeSource(type!, path, "document", int.MaxValue);
+            // The text also stays on disk, so a search right after a server restart, or while the
+            // PLC is online (TIA Portal refuses every export then), still has it.
+            var onDisk = LoadSearchText(softwarePath, path);
+
+            if (onDisk != null && onDisk.Value.Stamp == stamp)
+            {
+                _searchTexts[key] = new SearchTextEntry(stamp, onDisk.Value.Text);
+
+                return onDisk.Value.Text;
+            }
+
+            SourceTextResult text;
+
+            try
+            {
+                text = block != null
+                    ? ReadBlockSource(block, path, "document", int.MaxValue)
+                    : ReadTypeSource(type!, path, "document", int.MaxValue);
+            }
+            catch (Exception ex) when (IsOnlineRefusal(ex))
+            {
+                var old = hit != null ? (hit.Stamp, hit.Text, At: (DateTime?)null) : onDisk != null ? (onDisk.Value.Stamp, onDisk.Value.Text, At: (DateTime?)onDisk.Value.At) : ((DateTime, SourceTextResult, DateTime?)?)null;
+
+                if (old != null)
+                {
+                    staleNote = "PLC online, searched the text read " + (old.Value.Item3.HasValue ? $"at {old.Value.Item3.Value.ToLocalTime():yyyy-MM-dd HH:mm}" : "earlier in this session") +
+                                "; the object was changed since, so lines may differ";
+
+                    return old.Value.Item2;
+                }
+
+                throw new PortalException(PortalErrorCode.InvalidState,
+                    "PLC online and no text of it was kept from an earlier search - TIA Portal exports nothing while online. Go offline ('GoOffline') and search again; later searches then work online too.", null, ex);
+            }
 
             // A block without a source document came back as SimaticML, where a hit is an XML tag
             // line ('<Component Name="x" />') and a common name matched hundreds of them. Search
@@ -242,8 +280,95 @@ namespace TiaMcpServer.Siemens
             }
 
             _searchTexts[key] = new SearchTextEntry(stamp, text);
+            SaveSearchText(softwarePath, path, stamp, text);
 
             return text;
+        }
+
+        private static bool IsOnlineRefusal(Exception ex)
+        {
+            for (var e = ex; e != null; e = e.InnerException)
+            {
+                if (e.Message.IndexOf("online", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>One file per object below the temp path: a header line 'stamp|format|name|written', then the text.</summary>
+        private string? SearchTextFile(string softwarePath, string path)
+        {
+            var project = _project?.Path?.FullName;
+
+            if (string.IsNullOrEmpty(project))
+            {
+                return null;
+            }
+
+            string Hash(string value)
+            {
+                using var sha = System.Security.Cryptography.SHA1.Create();
+
+                return BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(value.ToLowerInvariant()))).Replace("-", string.Empty).Substring(0, 16);
+            }
+
+            return System.IO.Path.Combine(System.IO.Path.GetTempPath(), "TiaMcpServerCache", "search", Hash(project + "|" + softwarePath), Hash(path) + ".txt");
+        }
+
+        private (DateTime Stamp, SourceTextResult Text, DateTime At)? LoadSearchText(string softwarePath, string path)
+        {
+            try
+            {
+                var file = SearchTextFile(softwarePath, path);
+
+                if (file == null || !System.IO.File.Exists(file))
+                {
+                    return null;
+                }
+
+                var content = System.IO.File.ReadAllText(file, Encoding.UTF8);
+                var end = content.IndexOf('\n');
+                var header = (end < 0 ? content : content.Substring(0, end)).Split('|');
+
+                if (end < 0 || header.Length < 4 || !long.TryParse(header[0], out var stamp) || !long.TryParse(header[3], out var at))
+                {
+                    return null;
+                }
+
+                var body = content.Substring(end + 1);
+
+                return (new DateTime(stamp), new SourceTextResult { Name = header[2], Path = path, Format = header[1], Text = body, TotalChars = body.Length }, new DateTime(at, DateTimeKind.Utc));
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogDebug(ex, "Search text of '{Path}' could not be read from disk", path);
+
+                return null;
+            }
+        }
+
+        private void SaveSearchText(string softwarePath, string path, DateTime stamp, SourceTextResult text)
+        {
+            try
+            {
+                var file = SearchTextFile(softwarePath, path);
+
+                if (file == null)
+                {
+                    return;
+                }
+
+                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(file)!);
+                System.IO.File.WriteAllText(file, $"{stamp.Ticks}|{text.Format}|{text.Name.Replace('|', ' ').Replace('\n', ' ')}|{DateTime.UtcNow.Ticks}\n{text.Text}", Encoding.UTF8);
+            }
+            catch (Exception ex)
+            {
+                // The disk copy is a convenience; the search itself has its text.
+                _logger?.LogDebug(ex, "Search text of '{Path}' could not be kept on disk", path);
+            }
         }
 
         // A plain class typed with 'object': a field whose type names PlcBlock (e.g. a tuple) makes the
@@ -372,6 +497,9 @@ namespace TiaMcpServer.Siemens
 
         /// <summary>Objects that could not be read, with the reason.</summary>
         public List<string> Unsearchable { get; set; } = new List<string>();
+
+        /// <summary>Objects searched in text kept from before a change, because the PLC is online and nothing can be exported.</summary>
+        public List<string> StaleCache { get; set; } = new List<string>();
 
         /// <summary>True when maxResults cut the search short, so the list is incomplete.</summary>
         public bool Truncated { get; set; }

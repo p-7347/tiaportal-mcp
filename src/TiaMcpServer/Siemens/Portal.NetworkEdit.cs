@@ -614,7 +614,23 @@ namespace TiaMcpServer.Siemens
                     throw new PortalException(PortalErrorCode.InvalidParams, $"'addStatics': '{text}' is not 'name : type' (e.g. 'sDone : Bool').");
                 }
 
-                var name = text.Substring(0, colon).Trim().Trim('"', '#');
+                var name = text.Substring(0, colon).Trim();
+                var retain = string.Empty;
+
+                // 'RETAIN sZero : Real' - a leading Retain / NonRetain / SetInIDB word, then the name
+                var space = name.IndexOfAny(new[] { ' ', '\t' });
+                if (space > 0 && !name.StartsWith("\"", StringComparison.Ordinal))
+                {
+                    var word = new string(name.Substring(0, space).Where(char.IsLetter).ToArray());
+                    if (word.Equals("Retain", StringComparison.OrdinalIgnoreCase) || word.Equals("NonRetain", StringComparison.OrdinalIgnoreCase)
+                        || word.Equals("SetInIDB", StringComparison.OrdinalIgnoreCase))
+                    {
+                        retain = NormalizeRetain(word);
+                        name = name.Substring(space + 1).Trim();
+                    }
+                }
+
+                name = name.Trim('"', '#');
                 var rest = text.Substring(colon + 1);
                 var assign = rest.IndexOf(":=", StringComparison.Ordinal);
                 var datatype = (assign >= 0 ? rest.Substring(0, assign) : rest).Trim();
@@ -636,13 +652,14 @@ namespace TiaMcpServer.Siemens
                 }
 
                 var member = new XElement(ns + "Member", new XAttribute("Name", name), new XAttribute("Datatype", datatype));
+                SetMemberRemanence(member, retain);
                 if (!string.IsNullOrEmpty(start))
                 {
                     member.Add(new XElement(ns + "StartValue", start));
                 }
 
                 section.Add(member);
-                added.Add($"{name} : {datatype}");
+                added.Add(retain.Length > 0 && retain != "NonRetain" ? $"{name} : {datatype} [{retain}]" : $"{name} : {datatype}");
             }
 
             if (added.Count == 0)

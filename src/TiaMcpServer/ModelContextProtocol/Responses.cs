@@ -707,6 +707,9 @@ namespace TiaMcpServer.ModelContextProtocol
         /// <summary>Objects that could not be read, with the reason.</summary>
         public IEnumerable<string>? Unsearchable { get; set; }
 
+        /// <summary>Objects searched in older text because the PLC is online; absent when none.</summary>
+        public IEnumerable<string>? StaleCache { get; set; }
+
         public bool? Truncated { get; set; }
 
         /// <summary>Objects the filter selected that can be searched, over all calls.</summary>
