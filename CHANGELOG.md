@@ -14,6 +14,7 @@
 
 ### Fixed
 
+- HMI screen texts (`CreateHmiScreenItem`, `UpdateHmiScreenItem`): a line break in plain text is stored as `<br />`, and formatted text that TIA Portal Openness refuses (`<b>`, `<span style=...>`, a second `<p>`) is answered with what is possible instead of "invalid format". The tool description no longer promises formatted text.
 - SCL networks read as text (`GetNetworkSource`, `GetBlockSource` format `text`, `FindInCode`) no longer lose instruction calls: `LIMIT(...)`, `CONCAT(...)`, type conversions and instance calls such as `#timer(IN := ..., PT := ...)` were dropped together with their arguments, so `#x := LIMIT(MN := 0, IN := #a, MX := 9);` read as `#x := ;`. User constants and absolute addresses in SCL are written out instead of `<GlobalConstant>`.
 - LAD/FBD text: a negated input pin of an FBD box (`NOT`) is shown, and an absolute DB address keeps its DB number (`%DB13100.DBX2.0`).
 - `EditBlockNetwork` with `sclFile`: an access to a data block member whose name has `/` or another special character (`"G3U2HW".Cyl."Tab Flattening Down/Up".Comp.Return`) no longer fails in the scratch FB. TIA Portal's SCL source import cannot read such a name; the access now goes through the scratch FB as a placeholder of the same data type and is put back into the network's XML.

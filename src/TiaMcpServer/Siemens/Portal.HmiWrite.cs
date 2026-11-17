@@ -770,12 +770,22 @@ namespace TiaMcpServer.Siemens
                     "The item's text has no project language to write to. Check the project languages in TIA Portal.");
             }
 
-            // Unified screen texts are rich text: TIA Portal stores "<body><p>USE</p></body>" and
-            // rejects a plain string. Plain input is wrapped; input that is already "<body>..." is
-            // written as given so formatted text can be passed through.
-            var value = text.TrimStart().StartsWith("<body", StringComparison.OrdinalIgnoreCase)
+            // Unified screen texts are stored as "<body><p>USE</p></body>" and a plain string is
+            // rejected. Plain input is wrapped, a line break becomes <br />; input that is already
+            // "<body>..." is written as given.
+            var isBody = text.TrimStart().StartsWith("<body", StringComparison.OrdinalIgnoreCase);
+            var value = isBody
                 ? text
-                : $"<body><p>{System.Security.SecurityElement.Escape(text)}</p></body>";
+                : $"<body><p>{System.Security.SecurityElement.Escape(text.Replace("\r\n", "\n")).Replace("\n", "<br />")}</p></body>";
+
+            // Live 2026-11-17 (V20 Update 5): set_Text takes one <p> with text and <br /> only;
+            // <b>, <strong>, <span style=...> and a second <p> all fail with "invalid format".
+            if (isBody && System.Text.RegularExpressions.Regex.IsMatch(text, @"<(?!/?(body|p|br)\b)[A-Za-z/]|</p>\s*<p\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            {
+                throw new PortalException(PortalErrorCode.InvalidParams,
+                    "TIA Portal Openness takes a screen text only as '<body><p>text</p></body>' with '<br />' for a line break: no <b>, <span style=...> or second <p>. " +
+                    "Pass plain text (line breaks allowed) and set bold or color for the whole item with 'SetHmiScreenItemProperties' (Font.Weight, ForeColor).");
+            }
 
             foreach (var entry in target.Items)
             {

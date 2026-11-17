@@ -108,7 +108,7 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("top: optional y position in pixels")] int? top = null,
             [Description("width: optional width in pixels")] uint? width = null,
             [Description("height: optional height in pixels")] uint? height = null,
-            [Description("text: optional text for a Button, Label or Text, written to every project language. Plain text is stored as '<body><p>...</p></body>'; pass '<body>...' yourself for formatted text")] string? text = null,
+            [Description("text: optional text for a Button, Label or Text, written to every project language. Plain text is stored as '<body><p>...</p></body>', a line break as '<br />'. No bold or color inside a text (Openness refuses it): use 'SetHmiScreenItemProperties' (Font.Weight, ForeColor) for the whole item")] string? text = null,
             [Description("tag: optional HMI tag to bind to an IOField's ProcessValue. For other properties use 'BindHmiTag'")] string? tag = null,
             [Description("eventType: optional event for 'scriptCode', e.g. 'Tapped' (click), 'Down' (press), 'Up' (release). For more events or many items use 'SetHmiItemEventScript'")] string? eventType = null,
             [Description("scriptCode: optional JavaScript body of the 'eventType' script, e.g. 'Tags(\"Btn_Sel\").Write(1);'")] string? scriptCode = null)
