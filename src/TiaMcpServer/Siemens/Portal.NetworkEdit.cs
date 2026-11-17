@@ -406,14 +406,14 @@ namespace TiaMcpServer.Siemens
 
                 if (!byText.TryGetValue(match.Value, out var substitute))
                 {
-                    var dataType = GlobalMemberDataType(softwarePath, components);
+                    var dataType = GlobalMemberDataType(softwarePath, components, out var why);
 
                     if (string.IsNullOrWhiteSpace(dataType) || dataType!.Trim().StartsWith("Struct", StringComparison.OrdinalIgnoreCase))
                     {
                         throw new PortalException(PortalErrorCode.InvalidParams,
                             $"'{match.Value}' has a member name that TIA Portal's SCL source import cannot read (only letters, digits, '_' and spaces work in a quoted name), " +
                             (string.IsNullOrWhiteSpace(dataType)
-                                ? "and its data type could not be looked up in the data block, so it cannot be put in afterwards."
+                                ? $"and its data type could not be looked up in the data block ({why}), so it cannot be put in afterwards."
                                 : "and it is a Struct, which cannot stand in for it.") +
                             " Read the value in a LAD network ('networkFile') into a Static member and use that member in the SCL text.");
                     }
@@ -435,12 +435,17 @@ namespace TiaMcpServer.Siemens
         }
 
         /// <summary>The data type of "DB".a.b.c, read from the data block's members; null when it cannot be found.</summary>
-        private string? GlobalMemberDataType(string softwarePath, List<string> components)
+        private string? GlobalMemberDataType(string softwarePath, List<string> components, out string why)
         {
+            why = string.Empty;
+
             try
             {
-                if (FindBlockByName(softwarePath, components[0]) is not DataBlock block)
+                var found = FindBlockByName(softwarePath, components[0]);
+
+                if (found is not DataBlock block)
                 {
+                    why = found == null ? $"no block named '{components[0]}' was found" : $"'{components[0]}' is a {found.GetType().Name}, not a data block";
                     return null;
                 }
 
@@ -450,20 +455,30 @@ namespace TiaMcpServer.Siemens
                 foreach (var name in components.Skip(1))
                 {
                     // Openness gives a member name that needs quotes with them: "Tab Flattening Down/Up"
-                    member = members?.FirstOrDefault(m => string.Equals((m.Name ?? string.Empty).Trim('"'), name, StringComparison.OrdinalIgnoreCase));
+                    var list = members?.ToList() ?? new List<Member>();
+                    member = list.FirstOrDefault(m => string.Equals((m.Name ?? string.Empty).Trim('"'), name, StringComparison.OrdinalIgnoreCase));
 
                     if (member == null)
                     {
+                        why = $"member '{name}' was not found among {list.Count} member(s): {string.Join(", ", list.Take(8).Select(m => m.Name))}";
                         return null;
                     }
 
                     members = ChildMembers(member);
                 }
 
-                return member?.GetAttribute("DataTypeName")?.ToString();
+                var dataType = member?.GetAttribute("DataTypeName")?.ToString();
+
+                if (string.IsNullOrWhiteSpace(dataType))
+                {
+                    why = "the member reports no data type";
+                }
+
+                return dataType;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                why = Operation.DescribeChain(ex);
                 return null;
             }
         }
