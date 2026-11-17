@@ -181,7 +181,8 @@ namespace TiaMcpServer.Siemens
             var segments = path.Split(['/'], StringSplitOptions.RemoveEmptyEntries);
             if (segments.Length < 2)
             {
-                return null;
+                // A bare name such as 'PLC_1' is usually the CPU, a device item, not the station.
+                return FindDeviceByFullName(path) == null ? FindDeviceItemInAnyDevice(path.Trim()) : null;
             }
 
             for (int deviceLen = segments.Length - 1; deviceLen >= 1; deviceLen--)
@@ -203,7 +204,10 @@ namespace TiaMcpServer.Siemens
                         break;
                     }
 
-                    current = items.FirstOrDefault(x => x.Name.Equals(segments[i], StringComparison.OrdinalIgnoreCase));
+                    // The project tree does not show the rack between a station and its CPU
+                    // ('station/Rail_0/PLC_1'), so a segment may sit deeper than the next level.
+                    current = items.FirstOrDefault(x => x.Name.Equals(segments[i], StringComparison.OrdinalIgnoreCase))
+                        ?? FindDeviceItemBelow(items, segments[i]);
                     if (current == null)
                     {
                         break;
@@ -215,6 +219,44 @@ namespace TiaMcpServer.Siemens
                 if (current != null)
                 {
                     return current;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>The first device item of that name anywhere below <paramref name="items"/>, nearest level first.</summary>
+        private static DeviceItem? FindDeviceItemBelow(DeviceItemComposition items, string name)
+        {
+            var queue = new Queue<DeviceItem>(items);
+
+            while (queue.Count > 0)
+            {
+                var item = queue.Dequeue();
+
+                if (item.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+                {
+                    return item;
+                }
+
+                foreach (var child in item.DeviceItems)
+                {
+                    queue.Enqueue(child);
+                }
+            }
+
+            return null;
+        }
+
+        private DeviceItem? FindDeviceItemInAnyDevice(string name)
+        {
+            foreach (var device in GetDevices())
+            {
+                var found = FindDeviceItemBelow(device.DeviceItems, name);
+
+                if (found != null)
+                {
+                    return found;
                 }
             }
 
