@@ -38,6 +38,9 @@ namespace TiaMcpServer.Siemens
             public string? BackupWarning { get; set; }
             public string? PreviewFile { get; set; }
 
+            /// <summary>The block was inconsistent and compiled on its own before the export.</summary>
+            public bool CompiledFirst { get; set; }
+
             /// <summary>Every member edit of the call, in order; the first one is also in Section/MemberPath/Before/After.</summary>
             public List<InterfaceEditItem> Edits { get; set; } = new List<InterfaceEditItem>();
         }
@@ -104,11 +107,7 @@ namespace TiaMcpServer.Siemens
                         }
                     }
 
-                    if (!block.IsConsistent)
-                    {
-                        throw new PortalException(PortalErrorCode.InvalidState,
-                            $"Block '{block.Name}' is inconsistent; TIA Portal does not export inconsistent blocks. Compile it first ('CompileCodeBlock').");
-                    }
+                    var compiledFirst = CompileIfInconsistent(block);
 
                     if (block.Parent is not PlcBlockGroup parentGroup)
                     {
@@ -117,7 +116,7 @@ namespace TiaMcpServer.Siemens
 
                     EnsureNotKnowHowProtected(block);
 
-                    var result = new InterfaceEditResult { BlockPath = GetBlockPath(block) };
+                    var result = new InterfaceEditResult { BlockPath = GetBlockPath(block), CompiledFirst = compiledFirst };
 
                     using var scope = new SourceScope(_logger);
                     var exportFile = Path.Combine(scope.Directory, $"{FileNames.Safe(block.Name)}.xml");

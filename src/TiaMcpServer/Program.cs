@@ -175,7 +175,7 @@ namespace TiaMcpServer
                 .Where(m => m.GetCustomAttribute<global::ModelContextProtocol.Server.McpServerToolAttribute>() != null)
                 .Where(m => allowWrite || m.GetCustomAttribute<WriteToolAttribute>() == null)
                 .Where(m => ToolFilter.Includes(m.GetCustomAttribute<global::ModelContextProtocol.Server.McpServerToolAttribute>()!.Name ?? m.Name))
-                .Select(m => ToolSchemaCompaction.Apply(ToolDefaults.Apply(m, PortalSelection.Apply(m, global::ModelContextProtocol.Server.McpServerTool.Create(m, options: new global::ModelContextProtocol.Server.McpServerToolCreateOptions { SerializerOptions = ReplyJson })))))
+                .Select(m => RequiredArguments.Register(ToolSchemaCompaction.Apply(ToolDefaults.Apply(m, PortalSelection.Apply(m, global::ModelContextProtocol.Server.McpServerTool.Create(m, options: new global::ModelContextProtocol.Server.McpServerToolCreateOptions { SerializerOptions = ReplyJson }))))))
                 .ToList();
         }
 
@@ -291,6 +291,7 @@ namespace TiaMcpServer
                         filters.AddCallToolFilter(PortalSelection.Filter);
                         filters.AddCallToolFilter(ToolDefaults.Filter);
                         filters.AddCallToolFilter(AuditLog.Filter);
+                        filters.AddCallToolFilter(RequiredArguments.Filter);
                         filters.AddListToolsFilter(ToolOrdering.Filter);
                         filters.AddGetPromptFilter(PromptArguments.Filter);
                     })

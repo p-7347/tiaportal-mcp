@@ -67,6 +67,9 @@ namespace TiaMcpServer.Siemens
             /// <summary>Static members added with 'addStatics'.</summary>
             public List<string> StaticsAdded { get; } = new List<string>();
 
+            /// <summary>Blocks that were inconsistent and compiled on their own before the export.</summary>
+            public List<string> CompiledFirst { get; } = new List<string>();
+
             /// <summary>CopyNetwork: each rename 'from' with the number of places it was replaced.</summary>
             public Dictionary<string, int> Renamed { get; } = new Dictionary<string, int>();
         }
@@ -96,11 +99,7 @@ namespace TiaMcpServer.Siemens
                         ?? throw new PortalException(PortalErrorCode.NotFound,
                             $"Block not found at '{blockPath}'. Use 'ResolveObjectPath' or 'GetBlocks' to find its path.");
 
-                    if (!block.IsConsistent)
-                    {
-                        throw new PortalException(PortalErrorCode.InvalidState,
-                            $"Block '{block.Name}' is inconsistent; TIA Portal does not export inconsistent blocks. Compile it first ('CompileCodeBlock').");
-                    }
+                    var compiledFirst = CompileIfInconsistent(block);
 
                     if (block.Parent is not PlcBlockGroup parentGroup)
                     {
@@ -128,6 +127,10 @@ namespace TiaMcpServer.Siemens
 
                     result ??= new NetworkEditResult();
                     result.BlockPath = GetBlockPath(block);
+                    if (compiledFirst)
+                    {
+                        result.CompiledFirst.Add(block.Name);
+                    }
 
                     using var scope = new SourceScope(_logger);
                     var exportFile = Path.Combine(scope.Directory, $"{FileNames.Safe(block.Name)}.xml");
@@ -473,11 +476,7 @@ namespace TiaMcpServer.Siemens
                         ?? throw new PortalException(PortalErrorCode.NotFound,
                             $"Source block not found at '{sourceBlockPath}'. Use 'ResolveObjectPath' or 'GetBlocks' to find its path.");
 
-                    if (!source.IsConsistent)
-                    {
-                        throw new PortalException(PortalErrorCode.InvalidState,
-                            $"Source block '{source.Name}' is inconsistent; TIA Portal does not export inconsistent blocks. Compile it first ('CompileCodeBlock').");
-                    }
+                    var sourceCompiledFirst = CompileIfInconsistent(source);
 
                     EnsureNotKnowHowProtected(source);
 
@@ -487,6 +486,10 @@ namespace TiaMcpServer.Siemens
 
                     var unit = LoadCompileUnit(exportFile, sourceNetworkIndex);
                     var result = new NetworkEditResult();
+                    if (sourceCompiledFirst)
+                    {
+                        result.CompiledFirst.Add(source.Name);
+                    }
 
                     if (renames.Count > 0)
                     {
@@ -521,6 +524,43 @@ namespace TiaMcpServer.Siemens
             }
 
             return count;
+        }
+
+        /// <summary>
+        /// TIA does not export an inconsistent block, so an edit tool compiles it on its own first
+        /// (like EditTypeInterface does for a type) instead of failing and asking for a compile.
+        /// Returns true when it compiled; throws with the first compiler errors when it stays inconsistent.
+        /// </summary>
+        internal static bool CompileIfInconsistent(PlcBlock block)
+        {
+            if (block.IsConsistent)
+            {
+                return false;
+            }
+
+            CompilerResult? compiled = null;
+            string? failure = null;
+            try
+            {
+                compiled = block.GetService<ICompilable>()?.Compile();
+            }
+            catch (Exception ex)
+            {
+                failure = ex.Message;
+            }
+
+            if (block.IsConsistent)
+            {
+                return true;
+            }
+
+            var errors = compiled == null ? new List<string>() : CompilerErrors(compiled.Messages).Distinct().Take(3).ToList();
+            var detail = failure != null
+                ? $"the compile failed: {failure}"
+                : $"compiling it on its own gave {compiled?.ErrorCount ?? 0} error(s)" + (errors.Count > 0 ? ": " + string.Join(" | ", errors) : string.Empty);
+            throw new PortalException(PortalErrorCode.InvalidState,
+                $"Block '{block.Name}' is inconsistent and TIA Portal does not export inconsistent blocks; {detail}. " +
+                "Fix those errors (or 'CompileSoftware' if it depends on other changed blocks or types), then try again.");
         }
 
         private static IEnumerable<string> CompilerErrors(CompilerResultMessageComposition? messages)

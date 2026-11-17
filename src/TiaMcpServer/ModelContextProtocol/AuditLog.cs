@@ -12,6 +12,7 @@ using System.Text.Json.Nodes;
 namespace TiaMcpServer.ModelContextProtocol
 {
     /// <summary>
+    /// Read tools that fail get a line in 'yyyyMMdd-read-errors.jsonl' next to it (not read by GetChangeLog).
     /// Writes one JSON line per write tool call ([WriteTool]) to
     /// '&lt;backup path&gt;\audit\yyyyMMdd.jsonl': time, tool, arguments, ok or error, the reply
     /// message and the backup file. Read back with 'GetChangeLog', so a change list ("what did the
@@ -36,9 +37,31 @@ namespace TiaMcpServer.ModelContextProtocol
             next => async (context, cancellationToken) =>
             {
                 var name = context.Params?.Name;
-                if (name == null || !_writeTools.Contains(name))
+                if (name == null)
                 {
                     return await next(context, cancellationToken);
+                }
+
+                if (!_writeTools.Contains(name))
+                {
+                    // Read tools: only failures, in a separate file that GetChangeLog does not read, so a
+                    // later look can tell what really failed (e.g. a search refused while the PLC was online).
+                    var at = DateTime.Now;
+                    try
+                    {
+                        var read = await next(context, cancellationToken);
+                        if (read.IsError == true)
+                        {
+                            Write(at, name, context.Params!.Arguments, "error", MessageOf(read), null, ReadErrorsSuffix);
+                        }
+
+                        return read;
+                    }
+                    catch (Exception ex)
+                    {
+                        Write(at, name, context.Params!.Arguments, "error", ex.Message, null, ReadErrorsSuffix);
+                        throw;
+                    }
                 }
 
                 var started = DateTime.Now;
@@ -100,7 +123,11 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        private static void Write(DateTime time, string tool, IDictionary<string, JsonElement>? arguments, string outcome, string? message, string? backup)
+        /// <summary>File name suffix of the read-tool failure log: 'yyyyMMdd-read-errors.jsonl'.</summary>
+        private const string ReadErrorsSuffix = "-read-errors";
+
+        private static void Write(DateTime time, string tool, IDictionary<string, JsonElement>? arguments, string outcome, string? message, string? backup,
+            string fileSuffix = "")
         {
             try
             {
@@ -119,7 +146,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 lock (_lock)
                 {
                     System.IO.Directory.CreateDirectory(Directory);
-                    File.AppendAllText(Path.Combine(Directory, time.ToString("yyyyMMdd") + ".jsonl"), line, new UTF8Encoding(false));
+                    File.AppendAllText(Path.Combine(Directory, time.ToString("yyyyMMdd") + fileSuffix + ".jsonl"), line, new UTF8Encoding(false));
                 }
             }
             catch
