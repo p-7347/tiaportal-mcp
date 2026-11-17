@@ -112,7 +112,7 @@ namespace TiaMcpServer.Siemens
                             Name = path,
                             Value = PropertyText(value),
                             Type = PropertyTypeName(value),
-                            Values = value != null && value.GetType().IsEnum ? Enum.GetNames(value.GetType()).ToList() : null
+                            Values = value != null && value.GetType().IsEnum ? SettableEnumNames(path, value.GetType()) : null
                         });
                     }
 
@@ -399,6 +399,22 @@ namespace TiaMcpServer.Siemens
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// The enum's names, without the ones TIA Portal refuses to set: Font.Weight lists Light and
+        /// SemiBold, but a write answers "assign the property as Bold or Normal" (field report 2026-11-17).
+        /// </summary>
+        private static List<string> SettableEnumNames(string path, Type type)
+        {
+            var names = Enum.GetNames(type).ToList();
+
+            if (path.EndsWith("Font.Weight", StringComparison.OrdinalIgnoreCase) && names.Contains("Normal") && names.Contains("Bold"))
+            {
+                names.RemoveAll(n => n == "Light" || n == "SemiBold");
+            }
+
+            return names;
         }
 
         /// <summary>Walks 'Font.Size' down to its owner; null with the reason when a step does not exist or is not writable.</summary>
