@@ -449,29 +449,17 @@ namespace TiaMcpServer.Siemens
                     return null;
                 }
 
-                var members = block.Interface?.Members;
-                Member? member = null;
-
-                foreach (var name in components.Skip(1))
-                {
-                    // Openness gives a member name that needs quotes with them: "Tab Flattening Down/Up"
-                    var list = members?.ToList() ?? new List<Member>();
-                    member = list.FirstOrDefault(m => string.Equals((m.Name ?? string.Empty).Trim('"'), name, StringComparison.OrdinalIgnoreCase));
-
-                    if (member == null)
-                    {
-                        why = $"member '{name}' was not found among {list.Count} member(s): {string.Join(", ", list.Take(8).Select(m => m.Name))}";
-                        return null;
-                    }
-
-                    members = ChildMembers(member);
-                }
-
-                var dataType = member?.GetAttribute("DataTypeName")?.ToString();
+                // Same walk as 'GetDbStartValues' (live 2026-11-17: walking the members here by name
+                // came back empty below the first level, that walk lists them).
+                var pattern = "^" + string.Join(@"\.", components.Skip(1).Select(c => "\"?" + System.Text.RegularExpressions.Regex.Escape(c) + "\"?")) + "$";
+                var listed = GetDbStartValues(softwarePath, GetBlockPath(block), pattern, 1, TimeSpan.FromSeconds(20));
+                var dataType = listed.Members.FirstOrDefault()?.DataType;
 
                 if (string.IsNullOrWhiteSpace(dataType))
                 {
-                    why = "the member reports no data type";
+                    why = listed.Members.Count == 0
+                        ? $"no member matches among {listed.Total} looked at{(listed.StoppedReason == null ? string.Empty : ", " + listed.StoppedReason)}"
+                        : "the member reports no data type";
                 }
 
                 return dataType;
