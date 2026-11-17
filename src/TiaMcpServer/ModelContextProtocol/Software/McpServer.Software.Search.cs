@@ -13,7 +13,7 @@ namespace TiaMcpServer.ModelContextProtocol
         #region insight
 
         [McpServerTool(Name = "FindInCode", Title = "Find in code", ReadOnly = true, OpenWorld = false),
-         Description("Use to find where code mentions a name or text: a regular expression over the source text of blocks and PLC data types (all other filters match names only). Returns object path, line number and line. Objects are exported the first time (slow on a big PLC: narrow with 'nameFilter'), unchanged ones are then searched from memory. LAD and mixed blocks are searched as compact network text plus interface member names (format 'text'); uncompiled objects are listed in 'unsearchable'. Stops after about 40 s with 'nextStartAt': call again with startAt=nextStartAt")]
+         Description("Use to find where code mentions a name or text: a regular expression over the source text of blocks and PLC data types (all other filters match names only). Returns object path, line number and line. Objects are exported the first time (slow on a big PLC: narrow with 'nameFilter'), unchanged ones are then searched from memory. LAD and mixed blocks are searched as compact network text plus interface member names (format 'text'); uncompiled objects are listed in 'unsearchable'. Works while the PLC is online for objects read before (texts are kept on disk). Stops after about 40 s with 'nextStartAt': call again with startAt=nextStartAt")]
         public static ResponseCodeSearch FindInCode(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
             [Description("pattern: regular expression matched against each line, case-insensitive. Plain text works too")] string pattern,
@@ -32,6 +32,9 @@ namespace TiaMcpServer.ModelContextProtocol
                     Message = (result.Unsearchable.Count > 0
                                   ? $"WARNING: {result.Unsearchable.Count} object(s) could not be searched, so the result is incomplete - see 'unsearchable'. "
                                   : string.Empty) +
+                              (result.StaleCache.Count > 0
+                                  ? $"NOTE: PLC online - {result.StaleCache.Count} object(s) changed since they were last read and were searched in the older text, see 'staleCache'. "
+                                  : string.Empty) +
                               $"'{pattern}' matched {result.Items.Count} line(s) across {result.ObjectsSearched} object(s)" +
                               (result.Truncated ? $", stopped at {maxResults}" : string.Empty) +
                               (result.NextStartAt.HasValue
@@ -48,6 +51,7 @@ namespace TiaMcpServer.ModelContextProtocol
                     }).ToList(),
                     ObjectsSearched = result.ObjectsSearched,
                     Unsearchable = result.Unsearchable,
+                    StaleCache = result.StaleCache.Count > 0 ? result.StaleCache : null,
                     Truncated = result.Truncated,
                     NextStartAt = result.NextStartAt,
                     ObjectsTotal = result.ObjectsTotal,

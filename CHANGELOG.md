@@ -4,6 +4,9 @@
 
 ### Added
 
+- Retain settings: `EditBlockInterface` takes `retain` (`Retain`, `NonRetain`, `SetInIDB`; also per item in `moreMembers`) for a top-level Input, Output, InOut or Static member, and `addStatics` of `EditBlockNetwork`/`CopyNetwork` takes a leading word (`RETAIN sZero : Real`).
+- `GetBlockInterface` also reads FB, FC and OB (from an export): members as `Static.sDone` with Section, Remanence, StartValue and Comment. Data blocks are read as before.
+- `FindInCode` works while the PLC is online for objects it read before: the searched texts are kept on disk (temp folder `TiaMcpServerCache`), which also makes the first search after a server restart fast. An object changed since it was read is searched in the older text and listed in `staleCache`; one never read is listed in `unsearchable` with the advice to go offline once.
 - `--tools <patterns>`: optional command line filter that lists only the matching tools (comma-separated names, `*` wildcard, `-` excludes), for clients that send every tool definition with each request. `Connect`, `GetPortals`, `GetState`, `Doctor`, `GetProject` and `GetProjectTree` always stay; the server instructions say when a filter is active. Without it every tool is listed as before. `"Get*,Find*"` lists 63 tools (44k characters instead of 167k).
 - `GetBlockSource` format `text`: a compact reading of LAD/FBD and mixed blocks, one line per coil (`operand := condition;`, S/R coils, boxes as calls, shared branch logic factored), SCL networks as SCL, about 1/15 of the XML. Read-only, not importable. `GetNetworkSource` returns the same text for LAD/FBD networks.
 - `SetHmiItemZOrder` (write): bring WinCC Unified screen items to the front or send them to the back, by re-creating them with everything `CopyHmiScreen` copies.

@@ -55,6 +55,9 @@ namespace TiaMcpServer.Siemens
             public string StartValue { get; set; } = string.Empty;
             public string Comment { get; set; } = string.Empty;
             public string AfterMember { get; set; } = string.Empty;
+
+            /// <summary>'' (leave as is), 'Retain', 'NonRetain' or 'SetInIDB'.</summary>
+            public string Retain { get; set; } = string.Empty;
         }
 
         public sealed class InterfaceEditItem
@@ -76,14 +79,15 @@ namespace TiaMcpServer.Siemens
         /// <param name="comment">add/update: optional member comment.</param>
         /// <param name="afterMember">add: optional sibling to insert after; empty appends at the end of the section or Struct.</param>
         /// <param name="previewFile">When set, the edited block XML is written there and nothing is imported.</param>
+        /// <param name="retain">add/update: optional 'Retain', 'NonRetain' or 'SetInIDB' (FB) for a top-level member.</param>
         public InterfaceEditResult EditBlockInterface(string softwarePath, string blockPath, string action, string section, string memberPath,
             string dataType = "", string startValue = "", string comment = "", string afterMember = "", string previewFile = "",
-            IReadOnlyList<InterfaceEditSpec>? moreEdits = null)
+            IReadOnlyList<InterfaceEditSpec>? moreEdits = null, string retain = "")
         {
             return Operation.Run(_logger, nameof(EditBlockInterface), PortalErrorCode.ImportFailed,
                 () =>
                 {
-                    var edits = CheckInterfaceEdits(action, section, memberPath, dataType, startValue, comment, afterMember, moreEdits, isType: false);
+                    var edits = CheckInterfaceEdits(action, section, memberPath, dataType, startValue, comment, afterMember, moreEdits, isType: false, retain);
 
                     var block = GetBlock(softwarePath, blockPath)
                         ?? throw new PortalException(PortalErrorCode.NotFound,
@@ -233,7 +237,7 @@ namespace TiaMcpServer.Siemens
         /// action or section takes the first edit's. Nothing is exported before all edits pass.
         /// </summary>
         private static List<InterfaceEditSpec> CheckInterfaceEdits(string action, string section, string memberPath, string dataType,
-            string startValue, string comment, string afterMember, IReadOnlyList<InterfaceEditSpec>? moreEdits, bool isType)
+            string startValue, string comment, string afterMember, IReadOnlyList<InterfaceEditSpec>? moreEdits, bool isType, string retain = "")
         {
             var first = new InterfaceEditSpec
             {
@@ -243,7 +247,8 @@ namespace TiaMcpServer.Siemens
                 DataType = dataType ?? string.Empty,
                 StartValue = startValue ?? string.Empty,
                 Comment = comment ?? string.Empty,
-                AfterMember = afterMember ?? string.Empty
+                AfterMember = afterMember ?? string.Empty,
+                Retain = retain ?? string.Empty
             };
 
             var edits = new List<InterfaceEditSpec> { first };
@@ -255,7 +260,8 @@ namespace TiaMcpServer.Siemens
                 DataType = e.DataType ?? string.Empty,
                 StartValue = e.StartValue ?? string.Empty,
                 Comment = e.Comment ?? string.Empty,
-                AfterMember = e.AfterMember ?? string.Empty
+                AfterMember = e.AfterMember ?? string.Empty,
+                Retain = e.Retain ?? string.Empty
             }));
 
             for (var i = 0; i < edits.Count; i++)
@@ -276,15 +282,37 @@ namespace TiaMcpServer.Siemens
                             $"Unknown section '{edit.Section}'{where}. Use one of: {string.Join(", ", InterfaceSections)}.");
                 }
 
-                SplitMemberPath(edit.MemberPath);
+                var path = SplitMemberPath(edit.MemberPath);
+                edit.Retain = NormalizeRetain(edit.Retain, where);
+
+                if (edit.Retain.Length > 0 && edit.Action != "delete")
+                {
+                    if (isType)
+                    {
+                        throw new PortalException(PortalErrorCode.InvalidParams,
+                            $"A PLC data type has no retain setting{where}; set it on the DB or FB member that uses the type.");
+                    }
+
+                    if (edit.Section == "Temp" || edit.Section == "Constant" || edit.Section == "Return")
+                    {
+                        throw new PortalException(PortalErrorCode.InvalidParams, $"A {edit.Section} member has no retain setting ('{edit.MemberPath}'){where}; leave 'retain' empty.");
+                    }
+
+                    if (path.Count > 1)
+                    {
+                        throw new PortalException(PortalErrorCode.InvalidParams,
+                            $"Retain is set for a whole Struct, not for one member inside it ('{edit.MemberPath}'){where}; pass 'retain' with the top-level member '{path[0]}'.");
+                    }
+                }
+
                 if (edit.Action == "add" && string.IsNullOrWhiteSpace(edit.DataType))
                 {
                     throw new PortalException(PortalErrorCode.InvalidParams, $"'dataType' is required to add a member{where}, e.g. 'Bool' or 'Array[1..10] of Int'.");
                 }
 
-                if (edit.Action == "update" && string.IsNullOrWhiteSpace(edit.DataType) && string.IsNullOrEmpty(edit.StartValue) && string.IsNullOrEmpty(edit.Comment))
+                if (edit.Action == "update" && string.IsNullOrWhiteSpace(edit.DataType) && string.IsNullOrEmpty(edit.StartValue) && string.IsNullOrEmpty(edit.Comment) && edit.Retain.Length == 0)
                 {
-                    throw new PortalException(PortalErrorCode.InvalidParams, $"Nothing to update{where}: give 'dataType', 'startValue' or 'comment'.");
+                    throw new PortalException(PortalErrorCode.InvalidParams, $"Nothing to update{where}: give 'dataType', 'startValue', 'comment' or 'retain'.");
                 }
 
                 if (edit.Action != "update" && edit.Section == "Return")
@@ -296,13 +324,41 @@ namespace TiaMcpServer.Siemens
             return edits;
         }
 
+        /// <summary>'' stays '', anything else must be Retain, NonRetain or SetInIDB (any case, '-', '_' and spaces ignored).</summary>
+        internal static string NormalizeRetain(string? retain, string where = "")
+        {
+            var key = new string((retain ?? string.Empty).Where(char.IsLetter).ToArray()).ToLowerInvariant();
+
+            switch (key)
+            {
+                case "": return string.Empty;
+                case "retain": return "Retain";
+                case "nonretain": return "NonRetain";
+                case "setinidb": return "SetInIDB";
+                default:
+                    throw new PortalException(PortalErrorCode.InvalidParams,
+                        $"Unknown retain '{retain}'{where}. Use 'Retain', 'NonRetain' or 'SetInIDB' (FB member: decided in each instance DB).");
+            }
+        }
+
+        /// <summary>Non-retain is the default and has no attribute in the XML.</summary>
+        internal static void SetMemberRemanence(XElement member, string retain)
+        {
+            if (string.IsNullOrEmpty(retain))
+            {
+                return;
+            }
+
+            member.SetAttributeValue("Remanence", retain == "NonRetain" ? null : retain);
+        }
+
         /// <summary>Applies the edits in order to one exported document and records each one.</summary>
         private static void ApplyInterfaceEdits(XDocument doc, string owner, List<InterfaceEditSpec> edits, InterfaceEditResult result)
         {
             foreach (var edit in edits)
             {
                 var (before, after) = EditInterfaceMember(doc, owner, edit.Action, edit.Section, SplitMemberPath(edit.MemberPath),
-                    edit.MemberPath, edit.DataType, edit.StartValue, edit.Comment, edit.AfterMember);
+                    edit.MemberPath, edit.DataType, edit.StartValue, edit.Comment, edit.AfterMember, edit.Retain);
 
                 result.Edits.Add(new InterfaceEditItem
                 {
@@ -327,7 +383,7 @@ namespace TiaMcpServer.Siemens
         /// EditTypeInterface.
         /// </summary>
         private static (string? Before, string? After) EditInterfaceMember(XDocument doc, string owner, string mode, string sectionName,
-            List<string> path, string memberPath, string dataType, string startValue, string comment, string afterMember)
+            List<string> path, string memberPath, string dataType, string startValue, string comment, string afterMember, string retain = "")
         {
             string? before = null;
             string? after = null;
@@ -353,6 +409,7 @@ namespace TiaMcpServer.Siemens
                     }
 
                     var member = new XElement(ns + "Member", new XAttribute("Name", name), new XAttribute("Datatype", dataType.Trim()));
+                    SetMemberRemanence(member, retain);
                     SetMemberComment(member, comment, CommentLanguage(doc));
                     SetMemberStartValue(member, startValue);
 
@@ -388,6 +445,7 @@ namespace TiaMcpServer.Siemens
                         existing.SetAttributeValue("Datatype", dataType.Trim());
                     }
 
+                    SetMemberRemanence(existing, retain);
                     SetMemberComment(existing, comment, CommentLanguage(doc));
                     SetMemberStartValue(existing, startValue);
                     after = DescribeMember(existing);
@@ -536,6 +594,8 @@ namespace TiaMcpServer.Siemens
             var text = $"{(string?)member.Attribute("Name")} : {(string?)member.Attribute("Datatype")}";
             var start = member.Elements().FirstOrDefault(e => e.Name.LocalName == "StartValue")?.Value;
             var comment = member.Elements().FirstOrDefault(e => e.Name.LocalName == "Comment")?.Elements().Select(e => e.Value).FirstOrDefault(v => v.Length > 0);
+            var remanence = (string?)member.Attribute("Remanence");
+            if (!string.IsNullOrEmpty(remanence) && remanence != "NonRetain") text += $" [{remanence}]";
             if (!string.IsNullOrEmpty(start)) text += $" := {start}";
             if (!string.IsNullOrEmpty(comment)) text += $" // {comment}";
             return text;

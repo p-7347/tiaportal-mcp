@@ -945,6 +945,7 @@ Common parameter values:
 - memberPath: '.'-separated into Structs, e.g. 'aux.bNew'
 - moreMembers: optional JSON array of further member edits done in the same import, one object each with action, section, memberPath, dataType, startValue, comment, afterMember; an item without action or section uses the call's
 - compile: true to compile the block right after the change and return the compiler result (default false)
+- retain: optional 'Retain', 'NonRetain' or 'SetInIDB' for a top-level Input, Output, InOut or Static member (also per item in moreMembers)
 
 Use the EditBlockInterface tool with these parameters:
 - softwarePath: {softwarePath}
