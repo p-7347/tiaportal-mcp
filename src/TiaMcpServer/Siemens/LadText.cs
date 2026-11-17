@@ -349,14 +349,18 @@ namespace TiaMcpServer.Siemens
                     return "?";
                 }
 
+                // FBD draws a negation circle on any input pin (<Negated Name="in2"/>); a contact's own
+                // negation (Name="operand") is handled where the contact is rendered.
+                var negated = pin != "operand" && _parts.TryGetValue(uid, out var owner) && IsNegated(owner, pin);
+
                 switch (from.Name.LocalName)
                 {
                     case "Powerrail":
-                        return "TRUE";
+                        return negated ? "FALSE" : "TRUE";
                     case "IdentCon":
-                        return AccessText((string?)from.Attribute("UId"));
+                        return negated ? Not(AccessText((string?)from.Attribute("UId"))) : AccessText((string?)from.Attribute("UId"));
                     case "NameCon":
-                        return Value(Uid(from), Pin(from));
+                        return negated ? Not(Value(Uid(from), Pin(from))) : Value(Uid(from), Pin(from));
                     default:
                         return "?";
                 }
@@ -603,7 +607,7 @@ namespace TiaMcpServer.Siemens
             return scope == "LocalVariable" ? "#" + joined : joined;
         }
 
-        private static string AddressText(XElement? address)
+        internal static string AddressText(XElement? address)
         {
             if (address == null)
             {
@@ -623,12 +627,24 @@ namespace TiaMcpServer.Siemens
             var type = (string?)address.Attribute("Type") ?? string.Empty;
             int.TryParse((string?)address.Attribute("BitOffset"), out var bits);
 
+            var size = type switch
+            {
+                "Byte" or "SInt" or "USInt" or "Char" => "B",
+                "Word" or "Int" or "UInt" => "W",
+                "DWord" or "DInt" or "UDInt" or "Real" or "Time" => "D",
+                _ => ""
+            };
+
+            // an absolute DB address names its block: %DB13100.DBX2.0, %DB13100.DBW4
+            if (area == "DB" && (string?)address.Attribute("BlockNumber") is string db)
+            {
+                return type == "Bool" ? $"%DB{db}.DBX{bits / 8}.{bits % 8}" : $"%DB{db}.DB{size}{bits / 8}";
+            }
+
             if (type == "Bool")
             {
                 return $"%{area}{bits / 8}.{bits % 8}";
             }
-
-            var size = type switch { "Byte" => "B", "Word" => "W", "Int" => "W", "DWord" => "D", "DInt" => "D", "Real" => "D", _ => "" };
 
             return $"%{area}{size}{bits / 8}";
         }

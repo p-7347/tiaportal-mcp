@@ -11,6 +11,9 @@
 
 ### Fixed
 
+- SCL networks read as text (`GetNetworkSource`, `GetBlockSource` format `text`, `FindInCode`) no longer lose instruction calls: `LIMIT(...)`, `CONCAT(...)`, type conversions and instance calls such as `#timer(IN := ..., PT := ...)` were dropped together with their arguments, so `#x := LIMIT(MN := 0, IN := #a, MX := 9);` read as `#x := ;`. User constants and absolute addresses in SCL are written out instead of `<GlobalConstant>`.
+- LAD/FBD text: a negated input pin of an FBD box (`NOT`) is shown, and an absolute DB address keeps its DB number (`%DB13100.DBX2.0`).
+- A rejected block import names the right network when the XML file is written on one line (matched by the network ID in TIA's message, then by line and position).
 - `CopyHmiScreen`/`CopyHmiScreens`: copied screens crashed the TIA Portal V20 editor whenever they were opened, because the screen and its items were created in one transaction. The screen is now created first and each item in its own transaction; a half-made screen is deleted on failure. Copies made with older builds have to be deleted and copied again.
 - TIA Portal instances that were closed stay attached no longer: they are dropped, so calls without `portalId` stop failing with "N instances attached".
 - The server no longer dies at start (FileNotFoundException Siemens.Engineering) when a `Portal` field type names a Siemens type before the Openness resolver is installed.

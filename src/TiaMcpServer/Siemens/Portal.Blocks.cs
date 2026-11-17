@@ -378,8 +378,20 @@ namespace TiaMcpServer.Siemens
                 var line = int.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
                 var doc = XDocument.Load(file, LoadOptions.SetLineInfo);
                 var units = doc.Descendants().Where(e => e.Name.LocalName == "SW.Blocks.CompileUnit").ToList();
-                var hit = units.FirstOrDefault(u => ((IXmlLineInfo)u).LineNumber == line)
-                    ?? units.LastOrDefault(u => ((IXmlLineInfo)u).LineNumber <= line);
+                // A file written on one line has every network on that line (seen 2026-11-12: "line
+                // number 2 at line position 222365"), so the line alone would always name network 1.
+                // The message also carries the network's ID; fall back to line and position.
+                var id = Regex.Match(reason, @"'SW\.Blocks\.CompileUnit' object with Simatic ML ID '([0-9A-Fa-f]+)'");
+                var position = Regex.Match(reason, @"line position (\d+)");
+                var column = position.Success ? int.Parse(position.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) : int.MaxValue;
+                bool StartsAtOrBefore(XElement u)
+                {
+                    var info = (IXmlLineInfo)u;
+                    return info.LineNumber < line || (info.LineNumber == line && info.LinePosition <= column);
+                }
+
+                var hit = (id.Success ? units.FirstOrDefault(u => string.Equals((string?)u.Attribute("ID"), id.Groups[1].Value, StringComparison.OrdinalIgnoreCase)) : null)
+                    ?? units.LastOrDefault(StartsAtOrBefore);
                 if (hit == null)
                 {
                     return string.Empty;
