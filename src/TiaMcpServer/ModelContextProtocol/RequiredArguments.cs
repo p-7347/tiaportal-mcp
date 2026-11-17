@@ -15,17 +15,40 @@ namespace TiaMcpServer.ModelContextProtocol
     /// and EditBlockInterface). This filter checks the call against the tool's own schema first and
     /// answers with every missing argument and its description, so the caller can fix the call in one go.
     /// Registered after ToolDefaults.Apply, which takes preset arguments out of 'required'.
+    /// The same filter passes text arguments sent as a JSON value on as text (CoerceToText) and gives
+    /// every failure that is not an McpException a message.
     /// </summary>
     public static class RequiredArguments
     {
         private static readonly Dictionary<string, List<KeyValuePair<string, string>>> _required =
             new Dictionary<string, List<KeyValuePair<string, string>>>(StringComparer.Ordinal);
 
+        private static readonly Dictionary<string, HashSet<string>> _stringArguments =
+            new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+
         public static McpServerTool Register(McpServerTool tool)
         {
             try
             {
                 var schema = tool.ProtocolTool.InputSchema;
+                var strings = new HashSet<string>(StringComparer.Ordinal);
+
+                if (schema.ValueKind == JsonValueKind.Object &&
+                    schema.TryGetProperty("properties", out var all) && all.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var property in all.EnumerateObject())
+                    {
+                        if (IsStringType(property.Value))
+                        {
+                            strings.Add(property.Name);
+                        }
+                    }
+                }
+
+                lock (_required)
+                {
+                    _stringArguments[tool.ProtocolTool.Name] = strings;
+                }
                 var list = new List<KeyValuePair<string, string>>();
 
                 if (schema.ValueKind == JsonValueKind.Object &&
@@ -93,18 +116,98 @@ namespace TiaMcpServer.ModelContextProtocol
                    ". Nothing was changed; add " + (missing.Count == 1 ? "it" : "them") + " and call again.";
         }
 
+        /// <summary>"type": "string" or ["string", "null"].</summary>
+        private static bool IsStringType(JsonElement property)
+        {
+            if (property.ValueKind != JsonValueKind.Object || !property.TryGetProperty("type", out var type))
+            {
+                return false;
+            }
+
+            if (type.ValueKind == JsonValueKind.String)
+            {
+                return type.GetString() == "string";
+            }
+
+            return type.ValueKind == JsonValueKind.Array &&
+                   type.EnumerateArray().Any(t => t.ValueKind == JsonValueKind.String && t.GetString() == "string") &&
+                   type.EnumerateArray().All(t => t.ValueKind == JsonValueKind.String && (t.GetString() == "string" || t.GetString() == "null"));
+        }
+
+        /// <summary>
+        /// Clients often send a text argument as the JSON value it describes: 'mapping' as an array
+        /// instead of a string holding the array, a label text "1" as the number 1. The SDK then
+        /// fails to bind the argument and the caller only sees "An error occurred invoking '...'"
+        /// with no reason (SetHmiTagDynamization and CreateHmiScreenItem, field report 2026-11-17).
+        /// Such a value is passed on as its JSON text, which is what the tool parses anyway.
+        /// Returns the names that were converted.
+        /// </summary>
+        public static List<string> CoerceToText(string tool, IDictionary<string, JsonElement>? arguments)
+        {
+            var converted = new List<string>();
+            HashSet<string>? strings;
+
+            lock (_required)
+            {
+                _stringArguments.TryGetValue(tool, out strings);
+            }
+
+            if (strings == null || arguments == null)
+            {
+                return converted;
+            }
+
+            foreach (var name in arguments.Keys.ToList())
+            {
+                var value = arguments[name];
+
+                if (!strings.Contains(name) ||
+                    value.ValueKind is JsonValueKind.String or JsonValueKind.Null or JsonValueKind.Undefined)
+                {
+                    continue;
+                }
+
+                // GetRawText of a number, true/false, an array or an object is the text a caller would have typed.
+                using (var document = JsonDocument.Parse(JsonSerializer.Serialize(value.GetRawText())))
+                {
+                    arguments[name] = document.RootElement.Clone();
+                }
+
+                converted.Add(name);
+            }
+
+            return converted;
+        }
+
         public static McpRequestFilter<CallToolRequestParams, CallToolResult> Filter =>
-            next => (context, cancellationToken) =>
+            next => async (context, cancellationToken) =>
             {
                 var name = context.Params?.Name;
-                var message = name == null ? null : Check(name, context.Params!.Arguments);
+
+                if (name == null)
+                {
+                    return await next(context, cancellationToken);
+                }
+
+                var message = Check(name, context.Params!.Arguments);
 
                 if (message != null)
                 {
                     throw new McpException(message);
                 }
 
-                return next(context, cancellationToken);
+                CoerceToText(name, context.Params.Arguments);
+
+                try
+                {
+                    return await next(context, cancellationToken);
+                }
+                catch (Exception ex) when (ex is not McpException && ex is not OperationCanceledException)
+                {
+                    // The SDK shows the message of an McpException only; anything else reaches the caller as
+                    // "An error occurred invoking '...'" with no reason. Say what it was.
+                    throw new McpException($"'{name}' could not be called: {TiaMcpServer.Siemens.Operation.DescribeChain(ex)}", ex);
+                }
             };
     }
 }

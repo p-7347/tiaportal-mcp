@@ -164,7 +164,9 @@ namespace TiaMcpServer.ModelContextProtocol
                 {
                     return new ResponseState
                     {
-                        Message = "TIA-Portal MCP server state retrieved",
+                        Message = "TIA-Portal MCP server state retrieved" + (WritePolicy.AllowWrite
+                            ? string.Empty
+                            : ". Read-only: this server process was started without '--allow-write'. Add \"--allow-write\" to the server's args in the MCP client configuration, then quit the client completely (also from the system tray) and start it again; a process that is already running keeps its mode"),
                         PortalId = state.PortalId,
                         IsConnected = state.IsConnected,
                         Project = state.Project,
