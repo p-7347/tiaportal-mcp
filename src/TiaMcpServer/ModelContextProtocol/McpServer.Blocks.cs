@@ -374,7 +374,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "ExportXmlBlocks", Title = "Export blocks as XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export the program blocks of a PLC software as XML files, all of them or those whose name matches a regular expression. With preservePath the group folders are recreated below exportPath. Stops after about 40 s with 'nextStartAt': call again with startAt=nextStartAt and the same regexName")]
+        [McpServerTool(Name = "ExportXmlBlocks", Title = "Export blocks as XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export the program blocks of a PLC software as XML files, all of them or those whose name matches a regular expression. With preservePath the group folders are recreated below exportPath. Stops after about 30-40 s with 'nextStartAt': call again with startAt=nextStartAt and the same regexName")]
         public static async Task<ResponseExportXmlBlocks> ExportXmlBlocks(
             IProgress<ProgressNotificationValue> progress,
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
@@ -417,7 +417,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 progress.Report(new ProgressNotificationValue { Progress = 0, Total = totalBlocks, Message = $"Starting export of {totalBlocks} blocks..." });
 
                 // Export blocks asynchronously
-                var (exportedBlocks, failures, nextStartAt) = await Task.Run(() => Portal.ExportXmlBlocksPaged(softwarePath, exportPath, regexName, preservePath, startAt, TimeSpan.FromSeconds(40)));
+                var (exportedBlocks, failures, nextStartAt) = await Task.Run(() => Portal.ExportXmlBlocksPaged(softwarePath, exportPath, regexName, preservePath, startAt, TimeSpan.FromSeconds(30)));
 
                 // Build list of inconsistent (skipped) blocks for reporting
                 var inconsistentInfos = new List<ResponseBlockInfo>();

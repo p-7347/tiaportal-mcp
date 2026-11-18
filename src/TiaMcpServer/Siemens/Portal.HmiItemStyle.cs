@@ -100,7 +100,7 @@ namespace TiaMcpServer.Siemens
                     var regex = ItemPropertyRegex(regexName);
                     var list = new List<HmiItemPropertyInfo>();
 
-                    foreach (var (path, value) in ReadItemProperties(item, string.Empty, ItemPropertyDepth))
+                    foreach (var (path, value) in ReadItemProperties(item, string.Empty, ItemPropertyDepth, listing: true, openLists: regex))
                     {
                         if (regex != null && !regex.IsMatch(path))
                         {
@@ -122,7 +122,8 @@ namespace TiaMcpServer.Siemens
         }
 
         /// <summary>Every writable plain value, text and part-object property, as (path, value).</summary>
-        private static IEnumerable<(string Path, object? Value)> ReadItemProperties(IEngineeringObject source, string prefix, int depth)
+        private static IEnumerable<(string Path, object? Value)> ReadItemProperties(IEngineeringObject source, string prefix, int depth,
+            bool listing = false, Regex? openLists = null)
         {
             IList<EngineeringAttributeInfo> infos;
 
@@ -168,7 +169,34 @@ namespace TiaMcpServer.Siemens
                 }
                 else if (value is IEngineeringObject part && value is not IEnumerable && depth > 0)
                 {
-                    foreach (var nested in ReadItemProperties(part, path + ".", depth - 1))
+                    foreach (var nested in ReadItemProperties(part, path + ".", depth - 1, listing, openLists))
+                    {
+                        yield return nested;
+                    }
+                }
+            }
+
+            if (!listing)
+            {
+                yield break;
+            }
+
+            // Lists of part objects (a toolbar's Elements, an alarm control's columns): shown as a
+            // count unless regexName matches the list's path, then element by element as
+            // 'ToolBar.Elements[4].Visible', the name 'SetHmiScreenItemProperties' takes.
+            foreach (var (name, elements) in PartLists(source))
+            {
+                var path = prefix + name;
+
+                if (openLists == null || !openLists.IsMatch(path))
+                {
+                    yield return (path, new PartListSummary(elements.Count));
+                    continue;
+                }
+
+                for (var i = 0; i < elements.Count; i++)
+                {
+                    foreach (var nested in ReadItemProperties(elements[i], $"{path}[{i}].", Math.Max(0, depth - 1), listing, openLists))
                     {
                         yield return nested;
                     }
@@ -176,8 +204,65 @@ namespace TiaMcpServer.Siemens
             }
         }
 
+        /// <summary>Stands for a list of part objects in 'GetHmiScreenItemProperties' when its elements are not shown.</summary>
+        private sealed class PartListSummary
+        {
+            public PartListSummary(int count) => Count = count;
+            public int Count { get; }
+        }
+
+        /// <summary>Compositions that hold none of what the item tools handle elsewhere (dynamizations, events, screen items).</summary>
+        private static readonly HashSet<string> NotPartLists = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "Dynamizations", "EventHandlers", "PropertyEventHandlers", "ScreenItems", "Layers", "Interface"
+        };
+
+        /// <summary>The non-empty lists of part objects of an item or part, e.g. ToolBar's 'Elements'.</summary>
+        internal static List<(string Name, List<IEngineeringObject> Elements)> PartLists(IEngineeringObject source)
+        {
+            var lists = new List<(string, List<IEngineeringObject>)>();
+            IEnumerable<EngineeringCompositionInfo> infos;
+
+            try
+            {
+                infos = source.GetCompositionInfos();
+            }
+            catch (Exception)
+            {
+                return lists;
+            }
+
+            foreach (var info in infos)
+            {
+                if (NotPartLists.Contains(info.Name))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    if (source.GetComposition(info.Name) is IEnumerable composition)
+                    {
+                        var elements = composition.OfType<IEngineeringObject>().ToList();
+
+                        if (elements.Count > 0)
+                        {
+                            lists.Add((info.Name, elements));
+                        }
+                    }
+                }
+                catch (Exception)
+                {
+                    // a composition Openness cannot enumerate is left out
+                }
+            }
+
+            return lists;
+        }
+
         private static string? PropertyText(object? value) => value switch
         {
+            PartListSummary list => $"{list.Count} element(s); pass a regexName that matches this name to list them",
             MultilingualText text => PlainText(text.Items.Select(i => i.Text).FirstOrDefault(t => !string.IsNullOrEmpty(t))),
             _ => ValueText(value)
         };
@@ -185,6 +270,7 @@ namespace TiaMcpServer.Siemens
         private static string PropertyTypeName(object? value) => value switch
         {
             null => "Unknown",
+            PartListSummary => "List",
             System.Drawing.Color => "Color",
             MultilingualText => "Text",
             _ => value.GetType().Name
@@ -434,6 +520,26 @@ namespace TiaMcpServer.Siemens
             for (var i = 0; i < parts.Length - 1; i++)
             {
                 object? next;
+
+                var indexed = Regex.Match(parts[i], @"^(\w+)\s*\[\s*(\d+)\s*\]$");
+
+                if (indexed.Success)
+                {
+                    // 'Elements[4]': element 4 of a list of part objects, counted from 0 as TIA Portal shows it
+                    var elements = PartLists(owner).FirstOrDefault(l => string.Equals(l.Name, indexed.Groups[1].Value, StringComparison.OrdinalIgnoreCase)).Elements;
+                    var index = int.Parse(indexed.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
+
+                    if (elements == null || index >= elements.Count)
+                    {
+                        problem = $"{item.Name}: '{string.Join(".", parts.Take(i + 1))}' does not exist" +
+                                  (elements == null ? "." : $" (the list has {elements.Count} element(s), counted from 0).") +
+                                  " 'GetHmiScreenItemProperties' with a regexName matching the list shows the elements.";
+                        return null;
+                    }
+
+                    owner = elements[index];
+                    continue;
+                }
 
                 try
                 {

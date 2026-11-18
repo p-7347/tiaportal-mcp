@@ -362,6 +362,11 @@ namespace TiaMcpServer.Siemens
                     }
                 }
             }
+
+            foreach (var (name, _) in PartLists(source))
+            {
+                target.Lists.Add($"{where}.{name}");
+            }
         }
 
         private static bool IsPlainValue(object value) =>
