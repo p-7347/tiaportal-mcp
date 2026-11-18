@@ -12,7 +12,7 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         [WriteTool]
         [McpServerTool(Name = "CopyHmiScreen", Title = "Copy HMI screen", Destructive = true, OpenWorld = false),
-         Description("Copy a WinCC Unified screen to a new screen in the same folder, item by item: writable properties, texts, tag and script dynamizations, event scripts, faceplate interfaces. 'replace' rewrites text in every copied string, e.g. 'Servo01=>Servo02'. What Openness cannot read is listed under 'skipped'; a refused write aborts the copy")]
+         Description("Copy a WinCC Unified screen to a new screen in the same folder, item by item: writable properties, texts, tag and script dynamizations, event scripts, faceplate interfaces, toolbar elements and columns. 'replace' rewrites text in every copied string, e.g. 'Servo01=>Servo02'. What Openness cannot read is listed under 'skipped'; a refused write aborts the copy")]
         public static ResponseHmiScreenCopy CopyHmiScreen(
             [Description(HmiPathDescription)] string softwarePath,
             [Description("screenName: the screen to copy, as 'GetHmiScreens' lists it")] string screenName,
@@ -52,7 +52,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 return new ResponseHmiScreenCopy
                 {
                     Message = $"Screen '{screenName}' copied to '{newScreenName}': {result.Items} item(s), {result.Attributes} propert(ies), " +
-                              $"{result.Texts} text(s), {result.Dynamizations} dynamization(s), {result.Events} event script(s); " +
+                              $"{result.Texts} text(s), {result.Dynamizations} dynamization(s), {result.Events} event script(s), {result.Lists} list(s) (toolbar elements, columns); " +
                               $"{result.Replaced} string(s) changed by 'replace'." +
                               (notCopied.Count + result.Warnings.Count > 0
                                   ? $" WARNING: {notCopied.Count + result.Warnings.Count} thing(s) not copied - see 'skipped' and 'warnings'."
@@ -76,11 +76,11 @@ namespace TiaMcpServer.ModelContextProtocol
             }, oneTransaction: false);
         }
 
-        /// <summary>What could not be read, plus the list attributes (columns, toolbar elements, ...) the copy does not re-create.</summary>
+        /// <summary>What could not be read, plus list attributes that are not lists of part objects (those are copied).</summary>
         private static List<string> NotCopied(HmiScreenSnapshot snapshot) =>
             snapshot.Skipped
                 .Concat(snapshot.Screen.Lists.Concat(snapshot.Items.SelectMany(i => i.Ui.Lists))
-                    .Select(l => $"{l}: list of sub-objects (e.g. columns, toolbar elements), not copied - set it in the TIA editor"))
+                    .Select(l => $"{l}: list of sub-objects, not copied - set it in the TIA editor"))
                 .ToList();
 
         [WriteTool]

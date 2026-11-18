@@ -69,17 +69,35 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [McpServerTool(Name = "GetCrossReferences", Title = "Get cross references", ReadOnly = true, OpenWorld = false),
-         Description("Use to see where a tag or block is used, with locations. Get cross references for a PLC software or for one block, type, tag table, tag or block group inside it. Watch tables, force tables and external sources have no cross references")]
+         Description("Use to see where a tag or block is used, with locations, or with 'callers' who calls a block up to the OB. Get cross references for a PLC software or for one block, type, tag table, tag or block group inside it. Watch tables, force tables and external sources have no cross references")]
         public static ResponseCrossReferences GetCrossReferences(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
             [Description("objectPath: optional root-relative path of a block, type, tag table, tag or block group; empty targets the whole PLC software")] string objectPath = "",
             [Description("objectKind: 'auto' (default), 'block', 'type', 'tagTable', 'tag' or 'blockGroup'")] string objectKind = "auto",
             [Description("filter: 'AllObjects' (default), 'ObjectsWithReferences', 'ObjectsWithoutReferences' or 'UnusedObjects'")] string filter = "AllObjects",
             [Description("maxDepth: 1 = sources and their references (default), 2 = also source children, 3 = also reference locations. Keeps large results manageable")] int maxDepth = 1,
-            [Description("maxReferences: optional cap on the number of references returned; the walk also stops by itself after about 40 s. Either way 'truncated' is true and 'stoppedReason' says why - narrow 'objectPath' (e.g. one tag or block) to get the rest")] int? maxReferences = null)
+            [Description("maxReferences: optional cap on the number of references returned; the walk also stops by itself after about 40 s. Either way 'truncated' is true and 'stoppedReason' says why - narrow 'objectPath' (e.g. one tag or block) to get the rest")] int? maxReferences = null,
+            [Description("callers: for a block, 1-5 lists who calls it up that many levels instead of the full result, one line per chain, e.g. 'FB920 SM_PitchHome_Inch <- FB118 G2U1_SM118 (Multiinstance, NW6) <- OB1 Main'. 0 (default) = the normal result")] int callers = 0)
         {
             try
             {
+                if (callers > 0)
+                {
+                    var levels = Math.Min(5, callers);
+                    var chains = Portal.GetCallerChains(softwarePath, objectPath, levels, TimeSpan.FromSeconds(40),
+                        maxReferences.HasValue && maxReferences.Value > 0 ? maxReferences.Value : 100, out var stopped);
+
+                    return new ResponseCrossReferences
+                    {
+                        Message = $"{chains.Count} caller chain(s) for '{objectPath}' up to {levels} level(s)" +
+                                  (stopped != null ? $" - INCOMPLETE: {stopped}" : string.Empty),
+                        CallTree = chains,
+                        Truncated = stopped != null ? true : (bool?)null,
+                        StoppedReason = stopped,
+                        Meta = Ok(new JsonObject { ["callers"] = levels })
+                    };
+                }
+
                 if (!Enum.TryParse<CrossReferenceFilter>(filter, ignoreCase: true, out var parsedFilter))
                 {
                     throw new McpException(

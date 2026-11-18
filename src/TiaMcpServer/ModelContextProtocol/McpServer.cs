@@ -56,7 +56,7 @@ namespace TiaMcpServer.ModelContextProtocol
         #region portal
 
         [McpServerTool(Name = "Connect", Title = "Connect to TIA Portal", Destructive = false, Idempotent = true, OpenWorld = false),
-         Description("Use first in every session. Connect to TIA Portal and return its 'portalId'. Without 'portalId' it attaches to the only running instance, or starts one if none is running; with several running it fails and lists them")]
+         Description("Use first in every session. Connect to TIA Portal and return its 'portalId'. Without 'portalId' it attaches to the only running instance, or starts one if none is running; with several running it fails and lists them. When TIA Portal is busy (dialog, compile, download) it says so within about 25 s instead of hanging; call it again once TIA Portal is free")]
         public static ResponseConnect Connect(
             [Description("portalId: process id of the TIA Portal instance to attach to (see 'GetPortals'). Leave empty when at most one instance is running")] int? portalId = null)
         {
@@ -64,7 +64,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
             try
             {
-                var attachedId = Portal.AttachPortal(portalId);
+                var attachedId = Portal.AttachPortalWithin(portalId, out _);
 
                 return new ResponseConnect
                 {
@@ -640,7 +640,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 {
                     // Attaching is unscoped, as in 'Connect': the instance may not be attached yet,
                     // which is why this tool declares 'portalId' itself and bypasses the filter.
-                    attachedId = Portal.AttachPortal(portalId, out wasAttached);
+                    attachedId = Portal.AttachPortalWithin(portalId, out wasAttached);
                 }
                 catch (Exception ex) when (ex is not PortalException)
                 {

@@ -71,14 +71,16 @@ namespace TiaMcpServer.Siemens
 
                     foreach (var snapshot in snapshots)
                     {
+                        HmiScreenItemBase recreated;
+
                         try
                         {
-                            InTransaction($"MCP: z-order '{snapshot.Name}' on '{screenName}'", () =>
+                            recreated = InTransaction($"MCP: z-order '{snapshot.Name}' on '{screenName}'", () =>
                             {
                                 writer.Step = $"delete item '{snapshot.Name}'";
                                 screen.ScreenItems.Find(snapshot.Name)?.Delete();
 
-                                WriteItemCopy(screen, snapshot, writer);
+                                return WriteItemCopy(screen, snapshot, writer);
                             });
                         }
                         catch (Exception ex) when (ex is not PortalException)
@@ -88,6 +90,8 @@ namespace TiaMcpServer.Siemens
                                 $"That item is unchanged; {(done.Count > 0 ? "already moved: " + string.Join(", ", done) : "nothing was moved")}.", null, ex);
                         }
 
+                        // toolbar elements and columns: a refused value loses only that list (see 'warnings')
+                        WriteListsCopy(recreated, snapshot.Ui, snapshot.Name, writer, screenName);
                         done.Add(snapshot.Name);
                     }
 

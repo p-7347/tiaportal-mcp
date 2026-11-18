@@ -61,6 +61,184 @@ namespace TiaMcpServer.Siemens
         }
 
         /// <summary>
+        /// Who calls a block, up to 'levels' levels: one line per chain from the block up to a block
+        /// nobody calls (an OB) or the level limit, e.g. "FB920 SM_PitchHome_Inch &lt;- FB118 G2U1_SM118 (Multiinstance, NW6) &lt;- OB1 Main".
+        /// A caller is a referencing block whose location is a call, a multi-instance or an instance DB
+        /// and is not a 'Uses' reference (those are the blocks this one calls). Instance DBs end a chain:
+        /// the block that calls with them is listed as a caller of the FB itself.
+        /// </summary>
+        public List<string> GetCallerChains(string softwarePath, string objectPath, int levels, TimeSpan budget, int maxLines, out string? stoppedReason)
+        {
+            string? stopped = null;
+
+            var chains = Operation.Run(_logger, nameof(GetCallerChains), PortalErrorCode.NotFound,
+                () =>
+                {
+                    var block = GetBlock(softwarePath, objectPath)
+                        ?? throw new PortalException(PortalErrorCode.NotFound,
+                            $"No block found at '{objectPath}' in '{softwarePath}'. 'callers' needs a block; use 'GetSoftwareTree' or 'GetBlocks' to find the path.");
+
+                    var clock = System.Diagnostics.Stopwatch.StartNew();
+                    var cache = new Dictionary<PlcBlock, List<(PlcBlock Caller, string How)>>();
+                    var lines = new List<string>();
+
+                    void Walk(PlcBlock current, string chain, HashSet<PlcBlock> onPath, int level)
+                    {
+                        if (stopped != null)
+                        {
+                            return;
+                        }
+
+                        if (lines.Count >= maxLines)
+                        {
+                            stopped = $"stopped at {maxLines} chains";
+                            return;
+                        }
+
+                        if (clock.Elapsed > budget)
+                        {
+                            stopped = $"stopped after {budget.TotalSeconds:0} s to stay inside the tool timeout";
+                            return;
+                        }
+
+                        if (!cache.TryGetValue(current, out var callers))
+                        {
+                            callers = CallersOf(current);
+                            cache[current] = callers;
+                        }
+
+                        if (callers.Count == 0)
+                        {
+                            lines.Add(level == 0 ? $"{BlockLabel(current)}: no callers found" : chain);
+                            return;
+                        }
+
+                        if (level >= levels)
+                        {
+                            lines.Add($"{chain} <- ... ({callers.Count} more caller(s); raise 'callers')");
+                            return;
+                        }
+
+                        foreach (var (caller, how) in callers)
+                        {
+                            var link = $"{chain} <- {BlockLabel(caller)} ({how})";
+
+                            if (onPath.Contains(caller))
+                            {
+                                lines.Add(link + " (recursion)");
+                                continue;
+                            }
+
+                            if (caller is InstanceDB)
+                            {
+                                // the target's own single instances are worth a line; above it, the instance DB of a
+                                // caller FB repeats the chain of the block that calls that FB
+                                if (level == 0 || callers.All(c => c.Caller is InstanceDB))
+                                {
+                                    lines.Add(link);
+                                }
+
+                                continue;
+                            }
+
+                            onPath.Add(caller);
+                            Walk(caller, link, onPath, level + 1);
+                            onPath.Remove(caller);
+                        }
+                    }
+
+                    Walk(block, BlockLabel(block), new HashSet<PlcBlock> { block }, 0);
+
+                    return lines;
+                },
+                ("softwarePath", softwarePath), ("objectPath", objectPath), ("levels", levels));
+
+            stoppedReason = stopped;
+
+            return chains;
+        }
+
+        private static readonly HashSet<Access> CallAccesses = new HashSet<Access>
+        {
+            Access.Call, Access.Multiinstance, Access.MultiinstanceAndSymbol, Access.InstanceDB, Access.InstanceAndSymbol,
+            Access.Parameterinstance, Access.ParameterinstanceAndSymbol
+        };
+
+        /// <summary>The blocks that call 'block' (or hold its instance), each with how and where, e.g. "Multiinstance, NW6".</summary>
+        private static List<(PlcBlock Caller, string How)> CallersOf(PlcBlock block)
+        {
+            var callers = new List<(PlcBlock, string)>();
+            var service = block.GetService<CrossReferenceService>();
+
+            if (service == null)
+            {
+                return callers;
+            }
+
+            foreach (var source in service.GetCrossReferences(CrossReferenceFilter.AllObjects).Sources)
+            {
+                foreach (var reference in source.References)
+                {
+                    if (reference.UnderlyingObject is not PlcBlock caller || caller.Equals(block))
+                    {
+                        continue;
+                    }
+
+                    var calls = reference.Locations
+                        .Where(l => CallAccesses.Contains(l.Access) && l.ReferenceType != ReferenceType.Uses)
+                        .ToList();
+
+                    if (calls.Count == 0 || callers.Any(c => c.Item1.Equals(caller)))
+                    {
+                        continue;
+                    }
+
+                    // "@5_G2U1_Home[0] ▶ NW8 (Pitch Home Search)" -> "NW8": the block is already named in the chain
+                    var where = calls.Select(l => ShortLocation(l.ReferenceLocation)).FirstOrDefault(r => !string.IsNullOrEmpty(r));
+                    var how = calls[0].Access + (where != null ? $", {where}" : string.Empty) +
+                              (calls.Count > 1 ? $" +{calls.Count - 1}" : string.Empty);
+
+                    callers.Add((caller, how));
+                }
+            }
+
+            return callers;
+        }
+
+        private static string? ShortLocation(string? location)
+        {
+            if (string.IsNullOrEmpty(location))
+            {
+                return null;
+            }
+
+            var text = location!;
+            var arrow = text.LastIndexOf('\u25B6');
+
+            if (arrow >= 0)
+            {
+                text = text.Substring(arrow + 1).Trim();
+            }
+
+            var title = text.IndexOf(" (", StringComparison.Ordinal);
+
+            return title > 0 ? text.Substring(0, title) : text;
+        }
+
+        private static string BlockLabel(PlcBlock block)
+        {
+            var kind = block switch
+            {
+                OB => "OB",
+                FB => "FB",
+                FC => "FC",
+                _ => "DB"
+            };
+
+            return $"{kind}{block.Number} {block.Name}";
+        }
+
+        /// <summary>
         /// Maps a path plus kind onto the Openness object that offers the cross reference
         /// service. Probing order matters: block names and type names can collide.
         /// </summary>
