@@ -27,7 +27,7 @@ has since diverged with its own feature set below; it no longer tracks upstream 
   browse symbols, read/write live tag values and poll active alarms - independent of any open TIA
   Portal session
 - "Comfort" tools that reduce multi-step workflows to one call: `GetPlcSummary`,
-  `ResolveObjectPath`, `WhereUsed`, `FindInCode` (full-text search across block/type source),
+  `ResolveObjectPath`, `FindInCode` (full-text search across block/type source),
   `PreviewImport`, `GetBlockSource`/`GetTypeSource`/`GetNetworkSource`, `OpenTiaProject`,
   `CompareExports` (diff two export folders)
 - `GetState` reports progress for a long-running call (e.g. `FindInCode` on a large PLC) still in
@@ -142,7 +142,7 @@ a change summary.
 
 ## Tools
 
-196 tools total. Read-only/ungated tools (105) are always available; `--tools` can list fewer.
+195 tools total. Read-only/ungated tools (104) are always available; `--tools` can list fewer.
 
 | Area                          | Tools                                                                                                                                                                                                  |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -167,7 +167,7 @@ a change summary.
 | Type documents (V21+)         | `ExportTypeAsDocuments`, `ExportTypesAsDocuments`                                                                                                                                                      |
 | HMI, WinCC Unified (read)     | `GetHmiTagTables`, `GetHmiTags`, `GetHmiScreens`, `GetHmiScreenItems`, `GetHmiDynamizations`, `GetHmiDiscreteAlarms`, `GetHmiAnalogAlarms`, `GetHmiAlarmClasses`, `GetHmiTextLists`, `CompareHmiScreens`, `GetHmiTagUsage`, `GetHmiScreenItemProperties`, `GetHmiScriptModules`                                      |
 | HMI, classic WinCC (read)     | `GetComfortScreens`, `GetComfortScreenItems` (Comfort/Basic panels; items read from an XML export of the screen)                                                                                        |
-| Understand and read (comfort) | `GetPlcSummary`, `ResolveObjectPath`, `WhereUsed`, `FindInCode`, `GetBlockSource`, `GetNetworkSource`, `GetTypeSource`, `PreviewImport`, `OpenTiaProject`, `ExportPlcAsDocuments`, `CompareExports`, `SearchExports`    |
+| Understand and read (comfort) | `GetPlcSummary`, `ResolveObjectPath`, `FindInCode`, `GetBlockSource`, `GetNetworkSource`, `GetTypeSource`, `PreviewImport`, `OpenTiaProject`, `ExportPlcAsDocuments`, `CompareExports`, `SearchExports`    |
 
 Write tools (85) require `--allow-write` (see [Write mode](#write-mode) for the handful that
 don't, and why).
