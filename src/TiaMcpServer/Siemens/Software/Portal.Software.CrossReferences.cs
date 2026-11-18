@@ -131,7 +131,13 @@ namespace TiaMcpServer.Siemens
 
                             if (caller is InstanceDB)
                             {
-                                lines.Add(link);
+                                // the target's own single instances are worth a line; above it, the instance DB of a
+                                // caller FB repeats the chain of the block that calls that FB
+                                if (level == 0 || callers.All(c => c.Caller is InstanceDB))
+                                {
+                                    lines.Add(link);
+                                }
+
                                 continue;
                             }
 
@@ -187,7 +193,8 @@ namespace TiaMcpServer.Siemens
                         continue;
                     }
 
-                    var where = calls.Select(l => l.ReferenceLocation).FirstOrDefault(r => !string.IsNullOrEmpty(r));
+                    // "@5_G2U1_Home[0] ▶ NW8 (Pitch Home Search)" -> "NW8": the block is already named in the chain
+                    var where = calls.Select(l => ShortLocation(l.ReferenceLocation)).FirstOrDefault(r => !string.IsNullOrEmpty(r));
                     var how = calls[0].Access + (where != null ? $", {where}" : string.Empty) +
                               (calls.Count > 1 ? $" +{calls.Count - 1}" : string.Empty);
 
@@ -196,6 +203,26 @@ namespace TiaMcpServer.Siemens
             }
 
             return callers;
+        }
+
+        private static string? ShortLocation(string? location)
+        {
+            if (string.IsNullOrEmpty(location))
+            {
+                return null;
+            }
+
+            var text = location!;
+            var arrow = text.LastIndexOf('\u25B6');
+
+            if (arrow >= 0)
+            {
+                text = text.Substring(arrow + 1).Trim();
+            }
+
+            var title = text.IndexOf(" (", StringComparison.Ordinal);
+
+            return title > 0 ? text.Substring(0, title) : text;
         }
 
         private static string BlockLabel(PlcBlock block)
