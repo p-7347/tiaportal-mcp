@@ -280,7 +280,7 @@ namespace TiaMcpServer.Siemens
         /// </summary>
         public HmiDynamizationWriteResult SetHmiTagDynamization(
             string softwarePath, string screenName, string itemName, string propertyName, string tagName,
-            string? mapping = null, string? formula = null)
+            string? mapping = null, string? formula = null, string? mappingMode = null)
         {
             return Operation.Run(_logger, nameof(SetHmiTagDynamization), PortalErrorCode.InvalidParams,
                 () =>
@@ -293,12 +293,38 @@ namespace TiaMcpServer.Siemens
                         throw new PortalException(PortalErrorCode.InvalidParams, "Pass 'mapping' or 'formula', not both.");
                     }
 
+                    var mode = string.IsNullOrWhiteSpace(mappingMode) ? "replace" : mappingMode!.Trim().ToLowerInvariant();
+
+                    if (mode != "replace" && mode != "add" && mode != "remove")
+                    {
+                        throw new PortalException(PortalErrorCode.InvalidParams, $"Unknown mappingMode '{mappingMode}': use 'replace' (default), 'add' or 'remove'.");
+                    }
+
+                    if (mode != "replace" && string.IsNullOrEmpty(mapping))
+                    {
+                        throw new PortalException(PortalErrorCode.InvalidParams, $"mappingMode '{mode}' needs 'mapping' with the entries to {mode}.");
+                    }
+
                     var item = RequireHmiScreenItem(softwarePath, screenName, itemName);
                     var existing = RequireReplaceable(item, propertyName, DynamizationType.Tag);
 
                     var entries = string.IsNullOrEmpty(mapping)
                         ? null
-                        : ParseRangeMapping(mapping!, PropertyValueType(item, propertyName, existing));
+                        : ParseRangeMapping(mapping!, PropertyValueType(item, propertyName, existing), requireValue: mode != "remove");
+
+                    if (mode == "remove")
+                    {
+                        // checked before any write: an exception inside the transaction makes TIA Portal refuse the commit
+                        var current = (existing as TagDynamization)?.ValueConverter?.MappingTable?.Entries.OfType<MappingTableEntryRange>().ToList()
+                                      ?? new List<MappingTableEntryRange>();
+                        var missing = entries!.Where(e => !current.Any(c => SameBound(c.From, e.From) && SameBound(c.To, e.To))).ToList();
+
+                        if (missing.Count > 0)
+                        {
+                            throw new PortalException(PortalErrorCode.NotFound,
+                                $"Nothing was changed: no mapping entry with {string.Join(", ", missing.Select(m => $"from {m.From} to {m.To}"))} on '{itemName}.{propertyName}'. 'GetHmiDynamizations' lists the current entries.");
+                        }
+                    }
 
                     var result = Prepare(item, propertyName, existing, nameof(SetHmiTagDynamization), screenName);
 
@@ -318,12 +344,17 @@ namespace TiaMcpServer.Siemens
 
                         var table = converter.MappingTable;
 
+                        // 'replace' clears the table; 'add' and 'remove' drop only the entries with the
+                        // same from/to as a given one, so 'add' also changes an entry in place
                         foreach (var old in table.Entries.ToList())
                         {
-                            old.Delete();
+                            if (mode == "replace" || (old is MappingTableEntryRange range && entries.Any(e => SameBound(range.From, e.From) && SameBound(range.To, e.To))))
+                            {
+                                old.Delete();
+                            }
                         }
 
-                        if (entries.Count > 0)
+                        if (entries.Count > 0 && mode != "remove")
                         {
                             table.ConditionType = ConditionType.Range;
 
@@ -560,7 +591,24 @@ namespace TiaMcpServer.Siemens
         /// 'from'/'to' are tag values, both required; 'value' is converted to the property's type;
         /// 'flashing', 'alternateValue' and 'flashingRate' are optional.
         /// </summary>
-        private static List<RangeEntrySpec> ParseRangeMapping(string mapping, Type valueType)
+        private static bool SameBound(object? a, object? b)
+        {
+            if (a == null || b == null)
+            {
+                return a == b;
+            }
+
+            try
+            {
+                return Convert.ToDouble(a, System.Globalization.CultureInfo.InvariantCulture) == Convert.ToDouble(b, System.Globalization.CultureInfo.InvariantCulture);
+            }
+            catch (Exception ex) when (ex is FormatException || ex is InvalidCastException || ex is OverflowException)
+            {
+                return string.Equals(Convert.ToString(a, System.Globalization.CultureInfo.InvariantCulture), Convert.ToString(b, System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+            }
+        }
+
+        private static List<RangeEntrySpec> ParseRangeMapping(string mapping, Type valueType, bool requireValue = true)
         {
             System.Text.Json.JsonDocument document;
 
@@ -615,9 +663,16 @@ namespace TiaMcpServer.Siemens
                             $"'mapping' entry {index} needs both 'from' and 'to'; for a single value give it twice, e.g. \"from\":1,\"to\":1. Open ranges cannot be written.");
                     }
 
-                    var value = JsonText(element, "value")
-                        ?? throw new PortalException(PortalErrorCode.InvalidParams, $"'mapping' entry {index} needs a 'value'.");
-                    spec.Value = ConvertPropertyValue(value, valueType, $"mapping entry {index} 'value'");
+                    var value = JsonText(element, "value");
+
+                    if (value != null)
+                    {
+                        spec.Value = ConvertPropertyValue(value, valueType, $"mapping entry {index} 'value'");
+                    }
+                    else if (requireValue)
+                    {
+                        throw new PortalException(PortalErrorCode.InvalidParams, $"'mapping' entry {index} needs a 'value'.");
+                    }
 
                     if (Property(element, "flashing") is { } flashing)
                     {

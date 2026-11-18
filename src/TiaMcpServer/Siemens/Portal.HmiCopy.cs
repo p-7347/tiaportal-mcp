@@ -344,10 +344,17 @@ namespace TiaMcpServer.Siemens
                         target.Values.Add(new KeyValuePair<string, object>(info.Name, value));
                     }
                 }
-                else if (value is IEngineeringObject nested && value is not IEnumerable && depth > 0)
+                else if (value is IEnumerable && value is not string)
+                {
+                    // e.g. an alarm control's columns or toolbar elements: Openness gives them only
+                    // as a list of sub-objects, which the copy does not re-create
+                    target.Lists.Add($"{where}.{info.Name}");
+                }
+                else if (value is IEngineeringObject nested && depth > 0)
                 {
                     var part = new HmiUiSnapshot();
                     ReadAttributes(nested, part, $"{where}.{info.Name}", skipped, depth - 1);
+                    target.Lists.AddRange(part.Lists);
 
                     if (part.Values.Count > 0 || part.Texts.Count > 0 || part.Nested.Count > 0)
                     {
@@ -637,6 +644,9 @@ namespace TiaMcpServer.Siemens
 
         public List<HmiDynamizationSnapshot> Dynamizations { get; } = new List<HmiDynamizationSnapshot>();
         public List<HmiEventSnapshot> Events { get; } = new List<HmiEventSnapshot>();
+
+        /// <summary>Paths of list attributes (columns, toolbar elements, ...) that are read but not copied, incl. those of part objects.</summary>
+        public List<string> Lists { get; } = new List<string>();
     }
 
     public class HmiItemSnapshot
