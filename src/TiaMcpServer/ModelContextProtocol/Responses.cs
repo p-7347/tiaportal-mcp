@@ -459,6 +459,9 @@ namespace TiaMcpServer.ModelContextProtocol
         public IEnumerable<ResponseBlockInfo>? Items { get; set; }
         public IEnumerable<ResponseBlockInfo>? Inconsistent { get; set; }
         public IEnumerable<string>? Failures { get; set; }
+
+        /// <summary>Set when the export stopped on time: pass it as 'startAt' to continue.</summary>
+        public int? NextStartAt { get; set; }
     }
 
     public class ResponseTypes : ResponseMessage

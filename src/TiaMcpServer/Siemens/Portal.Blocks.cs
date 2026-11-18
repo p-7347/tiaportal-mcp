@@ -420,7 +420,21 @@ namespace TiaMcpServer.Siemens
 
         public (List<PlcBlock> Exported, List<string> Failures) ExportXmlBlocks(string softwarePath, string exportPath, string regexName = "", bool preservePath = false)
         {
+            var page = ExportXmlBlocksPaged(softwarePath, exportPath, regexName, preservePath, 0, null);
+
+            return (page.Exported, page.Failures);
+        }
+
+        /// <summary>
+        /// Exports the matching blocks from list position 'startAt' on (in GetBlocks order) and stops
+        /// once 'budget' is spent; NextStartAt is then the position to continue at, otherwise null.
+        /// </summary>
+        public (List<PlcBlock> Exported, List<string> Failures, int? NextStartAt) ExportXmlBlocksPaged(string softwarePath, string exportPath, string regexName, bool preservePath,
+            int startAt, TimeSpan? budget)
+        {
             _logger?.LogInformation("Exporting blocks...");
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            int? nextStartAt = null;
 
             if (IsProjectNull())
             {
@@ -441,11 +455,17 @@ namespace TiaMcpServer.Siemens
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Failed to retrieve block list for {SoftwarePath}", softwarePath);
-                return (exportList, failures);
+                return (exportList, failures, null);
             }
 
-            for (int k = 0; k < list.Count(); k++)
+            for (int k = Math.Max(0, startAt); k < list.Length; k++)
             {
+                if (budget.HasValue && clock.Elapsed > budget.Value)
+                {
+                    nextStartAt = k;
+                    break;
+                }
+
                 var block = list[k];
 
                 _logger?.LogDebug($"- Exporting block {k}/{list.Count()} : {block.Name}");
@@ -538,7 +558,7 @@ namespace TiaMcpServer.Siemens
                 _logger?.LogInformation($"ExportXmlBlocks completed successfully. Exported {exportList.Count} blocks.");
             }
 
-            return (exportList, failures);
+            return (exportList, failures, nextStartAt);
         }
 
         #endregion

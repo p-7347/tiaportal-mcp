@@ -4,6 +4,12 @@
 
 ### Added
 
+- `SetHmiTagDynamization` `mappingMode`: `add` adds single mapping rows (a row with the same from/to is changed) and `remove` deletes rows by from/to, the other rows stay; `replace` (default) writes the whole table as before.
+- `EditBlockNetwork` and `CopyNetwork` take `compile`: the block is compiled right after the edit and the result comes back in `compile`, so the next edit does not find it inconsistent.
+- `GetProjectTree` takes `kind` (`software` or `devices`), `regexName` and `depth`, for projects whose whole tree is too long for the client.
+- `ExportXmlBlocks` stops after about 40 s with `nextStartAt` (call again with `startAt`), instead of running past the client timeout.
+- `CopyHmiScreen` lists in `skipped` the list properties it does not re-create (an alarm control's columns or toolbar elements), and says when items keep a style class; `copyStyleClass` false leaves the style class out.
+- `GetHmiScreenItemProperties` / `SetHmiScreenItemProperties`: lists of part objects, such as an alarm control's toolbar `Elements`, show as a count, and with a `regexName` matching the list element by element (`ToolBar.Elements[4].Visible`), which `SetHmiScreenItemProperties` takes as a property name.
 - Retain settings: `EditBlockInterface` takes `retain` (`Retain`, `NonRetain`, `SetInIDB`; also per item in `moreMembers`) for a top-level Input, Output, InOut or Static member, and `addStatics` of `EditBlockNetwork`/`CopyNetwork` takes a leading word (`RETAIN sZero : Real`).
 - `GetBlockInterface` also reads FB, FC and OB (from an export): members as `Static.sDone` with Section, Remanence, StartValue and Comment. Data blocks are read as before.
 - `FindInCode` works while the PLC is online for objects it read before: the searched texts are kept on disk (temp folder `TiaMcpServerCache`), which also makes the first search after a server restart fast. An object changed since it was read is searched in the older text and listed in `staleCache`; one never read is listed in `unsearchable` with the advice to go offline once.

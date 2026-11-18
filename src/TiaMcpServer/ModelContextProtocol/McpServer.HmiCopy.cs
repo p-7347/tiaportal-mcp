@@ -18,7 +18,8 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("screenName: the screen to copy, as 'GetHmiScreens' lists it")] string screenName,
             [Description("newScreenName: name of the new screen")] string newScreenName,
             [Description("replace: optional text replacements applied in order to every copied string, as 'from=>to' pairs separated by ';', e.g. 'Servo01=>Servo02;SM118=>SM119'. Matching is case-sensitive")] string replace = "",
-            [Description("screenNumber: optional screen number of the new screen")] ushort? screenNumber = null)
+            [Description("screenNumber: optional screen number of the new screen")] ushort? screenNumber = null,
+            [Description("copyStyleClass: copy each item's style class ('StyleItemClass', e.g. 'SimplifiedAlarmControl'), which decides the runtime look (default true); false gives the copies the default style of their kind")] bool copyStyleClass = true)
         {
             var replacements = ParseReplacements(replace);
 
@@ -35,6 +36,15 @@ namespace TiaMcpServer.ModelContextProtocol
                 throw new McpException(pex.Message, pex);
             }
 
+            var styled = snapshot.Items.Where(i => i.Ui.Values.Any(v => v.Key == "StyleItemClass" && !string.IsNullOrEmpty(v.Value?.ToString()))).Select(i => i.Name).ToList();
+
+            if (!copyStyleClass)
+            {
+                snapshot.Items.ForEach(i => i.Ui.Values.RemoveAll(v => v.Key == "StyleItemClass"));
+            }
+
+            var notCopied = NotCopied(snapshot);
+
             return Guarded(nameof(CopyHmiScreen), () =>
             {
                 var result = Portal.WriteHmiScreenCopy(softwarePath, snapshot, newScreenName, replacements, screenNumber);
@@ -44,8 +54,11 @@ namespace TiaMcpServer.ModelContextProtocol
                     Message = $"Screen '{screenName}' copied to '{newScreenName}': {result.Items} item(s), {result.Attributes} propert(ies), " +
                               $"{result.Texts} text(s), {result.Dynamizations} dynamization(s), {result.Events} event script(s); " +
                               $"{result.Replaced} string(s) changed by 'replace'." +
-                              (snapshot.Skipped.Count + result.Warnings.Count > 0
-                                  ? $" WARNING: {snapshot.Skipped.Count + result.Warnings.Count} thing(s) not copied - see 'skipped' and 'warnings'."
+                              (notCopied.Count + result.Warnings.Count > 0
+                                  ? $" WARNING: {notCopied.Count + result.Warnings.Count} thing(s) not copied - see 'skipped' and 'warnings'."
+                                  : string.Empty) +
+                              (copyStyleClass && styled.Count > 0
+                                  ? $" Style class kept on {string.Join(", ", styled.Take(5))}{(styled.Count > 5 ? ", ..." : string.Empty)}: it decides the runtime look (e.g. 'SimplifiedAlarmControl' hides the toolbar); 'copyStyleClass' false leaves it out."
                                   : string.Empty) +
                               $" {SaveHint}",
                     ScreenName = result.Screen?.Name,
@@ -56,12 +69,19 @@ namespace TiaMcpServer.ModelContextProtocol
                     Dynamizations = result.Dynamizations,
                     Events = result.Events,
                     Replaced = result.Replaced,
-                    Skipped = snapshot.Skipped.Count > 0 ? snapshot.Skipped : null,
+                    Skipped = notCopied.Count > 0 ? notCopied : null,
                     Warnings = result.Warnings.Count > 0 ? result.Warnings : null,
                     Meta = OkMeta()
                 };
             }, oneTransaction: false);
         }
+
+        /// <summary>What could not be read, plus the list attributes (columns, toolbar elements, ...) the copy does not re-create.</summary>
+        private static List<string> NotCopied(HmiScreenSnapshot snapshot) =>
+            snapshot.Skipped
+                .Concat(snapshot.Screen.Lists.Concat(snapshot.Items.SelectMany(i => i.Ui.Lists))
+                    .Select(l => $"{l}: list of sub-objects (e.g. columns, toolbar elements), not copied - set it in the TIA editor"))
+                .ToList();
 
         [WriteTool]
         [McpServerTool(Name = "SetHmiItemZOrder", Title = "Bring HMI items to front or send to back", Destructive = true, OpenWorld = false),
@@ -205,7 +225,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 SecondsPerScreen = created.Count > 0 ? Math.Round((clock.Elapsed.TotalSeconds - snapshotSeconds) / created.Count, 1) : (double?)null,
                 AlreadyExisted = existing.Count > 0 ? existing : null,
                 NextNumber = next,
-                Skipped = snapshot.Skipped.Count > 0 ? snapshot.Skipped : null,
+                Skipped = NotCopied(snapshot) is { Count: > 0 } notCopied ? notCopied : null,
                 Warnings = warnings.Count > 0 ? warnings : null,
                 Meta = OkMeta()
             };

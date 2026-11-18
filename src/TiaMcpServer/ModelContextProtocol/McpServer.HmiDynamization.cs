@@ -66,11 +66,12 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("propertyName: the property to dynamize, as named in TIA Portal's property list, e.g. 'BackColor', 'Visible', 'ProcessValue'")] string propertyName,
             [Description("tagName: the HMI tag, as 'GetHmiTags' lists it, e.g. 'Door1_Closed'")] string tagName,
             [Description("mapping: optional JSON array of range entries from tag value to property value, e.g. '[{\"from\":0,\"to\":0,\"value\":\"#00FF00\"},{\"from\":1,\"to\":1,\"value\":\"#FF0000\"}]'. 'from' and 'to' are both required (open ranges cannot be written); colors as '#RRGGBB'; optional per entry: flashing (true), alternateValue, flashingRate (Slow, Medium, Fast). '[]' clears the table; empty (default) keeps the current mapping")] string? mapping = null,
-            [Description("formula: optional value converter formula instead of a mapping; empty (default) keeps the current one")] string? formula = null)
+            [Description("formula: optional value converter formula instead of a mapping; empty (default) keeps the current one")] string? formula = null,
+            [Description("mappingMode: how 'mapping' is applied: 'replace' (default) writes the whole table, 'add' adds the given entries and changes the ones with the same from/to, the rest stay, 'remove' deletes the entries with the given from/to ('value' may be left out). E.g. mapping '[{\"from\":4004,\"to\":4004,\"value\":\"4004 Alarm Statistics\"}]' with 'add' adds one row to a 99-row table")] string? mappingMode = null)
         {
             return Guarded(nameof(SetHmiTagDynamization), () =>
             {
-                var result = Portal.SetHmiTagDynamization(softwarePath, screenName, itemName, propertyName, tagName, mapping, formula);
+                var result = Portal.SetHmiTagDynamization(softwarePath, screenName, itemName, propertyName, tagName, mapping, formula, mappingMode);
                 return DynamizationWritten(MissingTagWarning(softwarePath, tagName) + $"'{itemName}.{propertyName}' on screen '{screenName}' follows HMI tag '{tagName}'.", result);
             });
         }

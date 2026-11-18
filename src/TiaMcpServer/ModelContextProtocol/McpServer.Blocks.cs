@@ -374,14 +374,15 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "ExportXmlBlocks", Title = "Export blocks as XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export the program blocks of a PLC software as XML files, all of them or those whose name matches a regular expression. With preservePath the group folders are recreated below exportPath")]
+        [McpServerTool(Name = "ExportXmlBlocks", Title = "Export blocks as XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export the program blocks of a PLC software as XML files, all of them or those whose name matches a regular expression. With preservePath the group folders are recreated below exportPath. Stops after about 30-40 s with 'nextStartAt': call again with startAt=nextStartAt and the same regexName")]
         public static async Task<ResponseExportXmlBlocks> ExportXmlBlocks(
             IProgress<ProgressNotificationValue> progress,
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
             [Description("exportPath: absolute directory on the PC running this server, e.g. 'C:\\Temp\\export'; relative paths are rejected. Files are named after the blocks")] string exportPath,
             [Description("regexName: regular expression on the block name, matched anywhere ('G3U' also matches G3U10; ^...$ for an exact name); empty finds all")] string regexName = "",
             [Description("preservePath: preserves the path/structure of the PLC software")] bool preservePath = false,
-            [Description("includeAttributes: return each exported object's Openness attributes (about 30 each); pass false for a large export, the files are written either way")] bool includeAttributes = true)
+            [Description("includeAttributes: return each exported object's Openness attributes (about 30 each); pass false for a large export, the files are written either way")] bool includeAttributes = true,
+            [Description("startAt: continue an export that stopped on time: the 'nextStartAt' of the previous call (default 0)")] int startAt = 0)
         {
             var startTime = DateTime.Now;
             
@@ -416,13 +417,14 @@ namespace TiaMcpServer.ModelContextProtocol
                 progress.Report(new ProgressNotificationValue { Progress = 0, Total = totalBlocks, Message = $"Starting export of {totalBlocks} blocks..." });
 
                 // Export blocks asynchronously
-                var (exportedBlocks, failures) = await Task.Run(() => Portal.ExportXmlBlocks(softwarePath, exportPath, regexName, preservePath));
+                var (exportedBlocks, failures, nextStartAt) = await Task.Run(() => Portal.ExportXmlBlocksPaged(softwarePath, exportPath, regexName, preservePath, startAt, TimeSpan.FromSeconds(30)));
 
                 // Build list of inconsistent (skipped) blocks for reporting
                 var inconsistentInfos = new List<ResponseBlockInfo>();
                 if (allBlocks != null)
                 {
-                    foreach (var b in allBlocks)
+                    // only the part of the list this call went through, so a paged export reports each once
+                    foreach (var b in allBlocks.Skip(Math.Max(0, startAt)).Take((nextStartAt ?? totalBlocks) - Math.Max(0, startAt)))
                     {
                         if (b != null && b.IsConsistent == false)
                         {
@@ -481,11 +483,15 @@ namespace TiaMcpServer.ModelContextProtocol
                 Logger?.LogInformation($"Export completed: {exportedCount} blocks exported in {duration:F2} seconds");
 
                 var success = failures.Count == 0;
+                var paged = nextStartAt.HasValue
+                    ? $" Stopped after {duration:0} s at block {nextStartAt.Value} of {totalBlocks} to stay inside the client timeout - call again with startAt={nextStartAt.Value}."
+                    : string.Empty;
                 return new ResponseExportXmlBlocks
                 {
-                    Message = success
+                    Message = (success
                         ? $"Export completed: {exportedCount} blocks with regex '{regexName}' exported from '{softwarePath}' to '{exportPath}'"
-                        : $"Export completed with {failures.Count} failure(s): {exportedCount} of {totalBlocks} blocks exported from '{softwarePath}' to '{exportPath}'. First failure: {failures[0]}",
+                        : $"Export completed with {failures.Count} failure(s): {exportedCount} of {totalBlocks} blocks exported from '{softwarePath}' to '{exportPath}'. First failure: {failures[0]}") + paged,
+                    NextStartAt = nextStartAt,
                     Items = responseList,
                     Inconsistent = inconsistentInfos,
                     Failures = success ? null : failures,
@@ -620,7 +626,8 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("previewFile: optional absolute path; the edited block XML is written there and nothing is imported")] string previewFile = "",
             [Description("sclFile: for replace/insert, instead of networkFile: absolute path of a text file with the SCL statements of the new network ('#' names refer to this block's interface). TIA compiles it in a scratch FB that is deleted again, also in preview")] string sclFile = "",
             [Description("title: optional network title for replace/insert, e.g. 'Vision : 2D Result Check'. Empty (default) keeps the replaced network's title and comment when the new network has none (an SCL network never has)")] string title = "",
-            [Description("addStatics: optional new Static members (FB only) added in the same import, as SCL declarations, e.g. 'sDone : Bool; sCnt : Int := 0; aOld : Array[1..2] of Bool'; a leading RETAIN (or SetInIDB) makes one retentive: 'RETAIN sZero : Real'. The new network can use them right away. For Structs or other sections use 'EditBlockInterface'")] string addStatics = "")
+            [Description("addStatics: optional new Static members (FB only) added in the same import, as SCL declarations, e.g. 'sDone : Bool; sCnt : Int := 0; aOld : Array[1..2] of Bool'; a leading RETAIN (or SetInIDB) makes one retentive: 'RETAIN sZero : Real'. The new network can use them right away. For Structs or other sections use 'EditBlockInterface'")] string addStatics = "",
+            [Description("compile: compile the block right after the change and return the compiler result in 'compile' (default false), so the next edit does not find it inconsistent. The change stays even if the compile reports errors")] bool compile = false)
         {
             WritePolicy.EnsureEnabled(nameof(EditBlockNetwork));
 
@@ -642,7 +649,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
 
                 var result = Portal.EditBlockNetwork(softwarePath, blockPath, action, networkIndex, networkFile, sourceNetworkIndex, previewFile, sclFile, title, addStatics);
-                return NetworkEdited(result, action, networkIndex, title, string.Empty);
+                return NetworkEdited(result, action, networkIndex, title, string.Empty, compile, softwarePath);
             }
             catch (PortalException pex)
             {
@@ -667,7 +674,8 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("renames: optional JSON object of text to replace in the copied network, applied in order, e.g. '{\"G2U5\":\"G2U6\",\"VIS_XG1\":\"VIS_XG2\"}'")] string renames = "",
             [Description("addStatics: optional new Static members of the target FB, as SCL declarations, e.g. 'sDone : Bool; aOld : Array[1..2] of Bool'")] string addStatics = "",
             [Description("title: optional title for the copied network; empty keeps the source network's title")] string title = "",
-            [Description("previewFile: optional absolute path; the edited target block XML is written there and nothing is imported")] string previewFile = "")
+            [Description("previewFile: optional absolute path; the edited target block XML is written there and nothing is imported")] string previewFile = "",
+            [Description("compile: compile the block right after the change and return the compiler result in 'compile' (default false), so the next edit does not find it inconsistent. The change stays even if the compile reports errors")] bool compile = false)
         {
             WritePolicy.EnsureEnabled(nameof(CopyNetwork));
 
@@ -685,7 +693,7 @@ namespace TiaMcpServer.ModelContextProtocol
                     : " Replaced: " + string.Join(", ", result.Renamed.Select(r => $"'{r.Key}' x{r.Value}")) + "." +
                       (result.Renamed.Any(r => r.Value == 0) ? " A replacement with x0 did not occur in the network; check its spelling." : string.Empty);
 
-                return NetworkEdited(result, action, networkIndex, title, $" Copied from network {sourceNetworkIndex} of '{sourceBlockPath}'.{counts}");
+                return NetworkEdited(result, action, networkIndex, title, $" Copied from network {sourceNetworkIndex} of '{sourceBlockPath}'.{counts}", compile, softwarePath);
             }
             catch (PortalException pex)
             {
@@ -697,8 +705,12 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        private static ResponseNetworkEdit NetworkEdited(Portal.NetworkEditResult result, string action, int networkIndex, string title, string extra)
+        private static ResponseNetworkEdit NetworkEdited(Portal.NetworkEditResult result, string action, int networkIndex, string title, string extra,
+            bool compile = false, string softwarePath = "")
         {
+            var (compiled, compileError) = CompileAfterEdit(compile && result.PreviewFile == null,
+                () => Portal.CompileCodeBlock(softwarePath, result.BlockPath));
+
             var verb = action.Trim().ToLowerInvariant() switch
             {
                 "delete" => "deleted",
@@ -708,7 +720,10 @@ namespace TiaMcpServer.ModelContextProtocol
 
             var message = result.PreviewFile != null
                 ? $"Preview: network {networkIndex} {verb} in '{result.BlockPath}' ({result.NetworksBefore} -> {result.NetworksAfter} networks), written to '{result.PreviewFile}'. Nothing was imported."
-                : $"Network {networkIndex} {verb} in '{result.BlockPath}' ({result.NetworksBefore} -> {result.NetworksAfter} networks). Compile the block to check it ('CompileCodeBlock'). {SaveHint}";
+                : $"Network {networkIndex} {verb} in '{result.BlockPath}' ({result.NetworksBefore} -> {result.NetworksAfter} networks). " +
+                  (compiled != null
+                      ? $"Compiled: {compiled.State}, {compiled.ErrorCount} error(s), {compiled.WarningCount} warning(s)" + (compiled.State == CompilerResultState.Error ? "; the change was kept, fix the errors listed in 'compile'. " : ". ")
+                      : compileError != null ? $"Not compiled: {compileError} " : "Compile the block to check it ('CompileCodeBlock' or 'compile' true). ") + SaveHint;
 
             if (result.CompiledFirst.Count > 0)
             {
@@ -761,6 +776,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 Backup = result.Backup,
                 BackupWarning = result.BackupWarning,
                 PreviewFile = result.PreviewFile,
+                Compile = compiled == null ? null : BuildCompileResponse(compiled, result.BlockPath),
                 Message = message + BackupNote(backup),
                 Meta = result.PreviewFile != null
                     ? new JsonObject { ["timestamp"] = DateTime.Now, ["success"] = true }

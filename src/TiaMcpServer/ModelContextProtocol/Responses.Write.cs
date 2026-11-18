@@ -40,6 +40,9 @@ namespace TiaMcpServer.ModelContextProtocol
 
         /// <summary>With 'previewFile': where the edited block XML was written (nothing imported).</summary>
         public string? PreviewFile { get; set; }
+
+        /// <summary>The compiler result when 'compile' was true; null otherwise.</summary>
+        public ResponseCompileSoftware? Compile { get; set; }
     }
 
     public class ResponseInterfaceEdit : ResponseMessage

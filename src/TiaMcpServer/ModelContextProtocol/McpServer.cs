@@ -516,8 +516,11 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region devices
 
-        [McpServerTool(Name = "GetProjectTree", Title = "Get project tree", ReadOnly = true, OpenWorld = false), Description("Use right after Connect to learn the device and software paths (e.g. 'PLC_1'). Show the structure of the current project or session as a tree of devices, device items, groups and PLC/HMI software. Use it to find the device and software paths other tools expect")]
-        public static ResponseProjectTree GetProjectTree()
+        [McpServerTool(Name = "GetProjectTree", Title = "Get project tree", ReadOnly = true, OpenWorld = false), Description("Use right after Connect to learn the device and software paths (e.g. 'PLC_1'). Show the structure of the current project or session as a tree of devices, device items, groups and PLC/HMI software. Use it to find the device and software paths other tools expect. On a big project narrow it with 'kind', 'regexName' or 'depth'")]
+        public static ResponseProjectTree GetProjectTree(
+            [Description("kind: optional 'software' (only the PLC and HMI programs and the devices holding them) or 'devices' (devices and groups, no device items); empty (default) shows everything")] string kind = "",
+            [Description("regexName: optional regular expression; only matching lines and the lines above them are shown, e.g. 'PLC_1|PROFINET'")] string regexName = "",
+            [Description("depth: optional number of levels below the project to show, e.g. 3; 0 (default) shows all")] int depth = 0)
         {
             try
             {
@@ -525,10 +528,12 @@ namespace TiaMcpServer.ModelContextProtocol
 
                 if (!string.IsNullOrEmpty(tree))
                 {
+                    var (shown, omitted) = FilterTree(tree, kind, regexName, depth);
+
                     return new ResponseProjectTree
                     {
-                        Message = "Project tree retrieved",
-                        Tree = "```\n" + tree + "\n```",
+                        Message = omitted > 0 ? $"Project tree retrieved, {omitted} line(s) left out by the filters" : "Project tree retrieved",
+                        Tree = "```\n" + shown + "\n```",
                         Meta = new JsonObject
                         {
                             ["timestamp"] = DateTime.Now,
@@ -545,6 +550,73 @@ namespace TiaMcpServer.ModelContextProtocol
             {
                 throw new McpException($"Unexpected error retrieving project tree: {ex.Message}", ex);
             }
+        }
+
+        /// <summary>
+        /// Filters the text tree by line: a line's level is its prefix width / 4. A kept line keeps
+        /// its ancestors, so every shown path still reads from the project down.
+        /// </summary>
+        private static (string Tree, int Omitted) FilterTree(string tree, string kind, string regexName, int depth)
+        {
+            var mode = (kind ?? string.Empty).Trim().ToLowerInvariant();
+
+            if (mode != "" && mode != "software" && mode != "devices")
+            {
+                throw new McpException($"Unknown kind '{kind}': use 'software', 'devices' or leave it empty.");
+            }
+
+            if (mode == "" && string.IsNullOrWhiteSpace(regexName) && depth <= 0)
+            {
+                return (tree.TrimEnd(), 0);
+            }
+
+            System.Text.RegularExpressions.Regex? regex = null;
+
+            if (!string.IsNullOrWhiteSpace(regexName))
+            {
+                try
+                {
+                    regex = new System.Text.RegularExpressions.Regex(regexName, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                }
+                catch (ArgumentException ex)
+                {
+                    throw new McpException($"regexName is not a valid regular expression: {ex.Message}");
+                }
+            }
+
+            var lines = tree.Replace("\r", string.Empty).Split('\n').Where(l => l.Length > 0).ToList();
+            var levels = lines.Select(l => (l.TakeWhile(c => c == ' ' || c == '\u2502' || c == '\u251c' || c == '\u2514' || c == '\u2500').Count() + 3) / 4).ToList();
+            var keep = new bool[lines.Count];
+            var stack = new List<int>();
+
+            for (var i = 0; i < lines.Count; i++)
+            {
+                while (stack.Count > 0 && levels[stack[stack.Count - 1]] >= levels[i])
+                {
+                    stack.RemoveAt(stack.Count - 1);
+                }
+
+                var line = lines[i];
+                var isSoftware = line.Contains("[PLC Program]") || line.Contains("[HMI Program]");
+                var isItem = line.Contains("[DeviceItem]") || line.Contains("[Hardware Component]");
+                var match = i == 0
+                    || ((depth <= 0 || levels[i] <= depth)
+                        && (mode != "software" || isSoftware)
+                        && (mode != "devices" || (!isItem && !isSoftware))
+                        && (regex == null || regex.IsMatch(line)));
+
+                if (match)
+                {
+                    keep[i] = true;
+                    stack.ForEach(a => keep[a] = true);
+                }
+
+                stack.Add(i);
+            }
+
+            var shown = lines.Where((_, i) => keep[i]).ToList();
+
+            return (string.Join("\n", shown), lines.Count - shown.Count);
         }
 
         #endregion
