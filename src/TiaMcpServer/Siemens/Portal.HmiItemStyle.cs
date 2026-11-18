@@ -188,13 +188,15 @@ namespace TiaMcpServer.Siemens
             {
                 var path = prefix + name;
 
-                if (openLists == null || (!openLists.IsMatch(path) && !Enumerable.Range(0, elements.Count).Any(i => openLists.IsMatch($"{path}[{i}]"))))
+                // with a regexName every element is read and the caller's filter picks the lines,
+                // so 'ToolBar.Elements.*Visible' works as well as 'Elements'
+                if (openLists == null)
                 {
                     yield return (path, new PartListSummary(elements.Count));
                     continue;
                 }
 
-                // 33 toolbar elements x 20 properties is ~700 lines: without an index in regexName
+                // 33 toolbar elements x 20 properties is ~700 lines: without '[' in regexName
                 // ('Elements\[4\]') only the properties people set on elements are shown
                 var full = openLists.ToString().Contains("[");
 
