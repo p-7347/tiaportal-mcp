@@ -338,7 +338,7 @@ namespace TiaMcpServer.Siemens
                         if (item is not HmiIOField)
                         {
                             throw new PortalException(PortalErrorCode.InvalidParams,
-                                $"'tag' on create binds an IO field's ProcessValue; for a {kind} use 'BindHmiTag' with the property to dynamize.");
+                                $"'tag' on create binds an IO field's ProcessValue; for a {kind} use 'SetHmiTagDynamization' with the property to dynamize.");
                         }
 
                         BindTag(item, "ProcessValue", tag!);
@@ -389,30 +389,6 @@ namespace TiaMcpServer.Siemens
                     return true;
                 },
                 ("softwarePath", softwarePath), ("screenName", screenName), ("itemName", itemName));
-        }
-
-        /// <summary>
-        /// Binds an HMI tag to one property of a screen item, e.g. an IO field's ProcessValue or a
-        /// rectangle's BackColor. An existing tag binding on that property is re-pointed.
-        /// </summary>
-        public HmiScreenItemBase BindHmiTag(string softwarePath, string screenName, string itemName, string propertyName, string tagName)
-        {
-            return Operation.Run(_logger, nameof(BindHmiTag), PortalErrorCode.CreateFailed,
-                () =>
-                {
-                    if (string.IsNullOrWhiteSpace(propertyName) || string.IsNullOrWhiteSpace(tagName))
-                    {
-                        throw new PortalException(PortalErrorCode.InvalidParams, "'propertyName' and 'tagName' are both required.");
-                    }
-
-                    var item = RequireHmiScreenItem(softwarePath, screenName, itemName);
-
-                    BindTag(item, propertyName, tagName);
-
-                    return item;
-                },
-                ("softwarePath", softwarePath), ("screenName", screenName), ("itemName", itemName),
-                ("propertyName", propertyName), ("tagName", tagName));
         }
 
         /// <summary>

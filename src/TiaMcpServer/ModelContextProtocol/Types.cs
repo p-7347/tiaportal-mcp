@@ -9,13 +9,6 @@ namespace TiaMcpServer.ModelContextProtocol
         public string? AccessMode { get; set; }
     }
 
-    public class BlockGroupInfo
-    {
-        public string? Name { get; set; }
-        public IEnumerable<BlockGroupInfo>? Groups { get; set; }
-        public IEnumerable<ResponseBlockInfo>? Blocks { get; set; }
-    }
-
     /// <summary>
     /// One row of a watch or force table. The three row kinds (watch entry, force entry and a
     /// plain comment row) share a composition in Openness, so they share one DTO here and the

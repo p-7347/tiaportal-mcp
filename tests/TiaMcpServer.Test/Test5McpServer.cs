@@ -147,15 +147,15 @@ namespace TiaMcpServer.Test
         [TestMethod]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0)]
         //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath)]
-        public void Test_505_McpServer_GetSoftwareInfo(string projectPath, string softwarePath)
+        public void Test_505_McpServer_GetPlcSummary(string projectPath, string softwarePath)
         {
 
             McpServer.Connect();
             McpServer.OpenProject(projectPath);
 
             var success = true;
-            var response = McpServer.GetSoftwareInfo(softwarePath);
-            WriteMessage("McpServer.GetSoftwareInfo()", response);
+            var response = McpServer.GetPlcSummary(softwarePath);
+            WriteMessage("McpServer.GetPlcSummary()", response);
 
             McpServer.CloseProject();
 

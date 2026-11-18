@@ -55,18 +55,6 @@ The result shows, for every instance, its portalId (process id), the open projec
 Use the GetPortals tool to choose the portalId when more than one instance is running.";
         }
 
-        [McpServerPrompt(Name = "OpenProject"), Description("Open a local project (.apXX) or session (.alsXX) in TIA Portal")]
-        public static string OpenProject(string projectPath)
-        {
-            return $@"Open the TIA Portal project.
-
-Common parameter values:
-- projectPath: the full path to the project file (.ap19, .ap20, .ap21, etc.) or local session file (.als19, .als20, .als21, etc.).
-
-Use the OpenProject tool with this parameter:
-- path: {projectPath}";
-        }
-
         [McpServerPrompt(Name = "CloseProject"), Description("Close the current project or session")]
         public static string CloseProject()
         {
@@ -581,7 +569,7 @@ Use the SaveAsProject tool with these parameters:
         [McpServerPrompt(Name = "OpenTiaProject"), Description("Connect and open a project in one step; returns the software paths")]
         public static string OpenTiaProject(string projectPath, string portalId = "")
         {
-            return $@"Connect to TIA Portal if not already connected, open the given project or session, and return the device and PLC software paths the other tools need. Replaces the Connect then OpenProject then GetProjectTree sequence.
+            return $@"Connect to TIA Portal if not already connected, open the given project or session, and return the device and PLC software paths the other tools need. Replaces the Connect, open project and GetProjectTree sequence.
 
 Common parameter values:
 - projectPath: full path of the .apXX project or .alsXX session file on the machine running this server
@@ -648,18 +636,6 @@ Use the GetDevices tool (it takes no parameters).";
         #endregion
 
         #region Software Templates
-
-        [McpServerPrompt(Name = "GetSoftwareInfo"), Description("Show details of one PLC software")]
-        public static string GetSoftwareInfo(string softwarePath)
-        {
-            return $@"Get PLC software info.
-
-Common parameter values:
-- softwarePath: defines the path in the project structure to the PLC software
-
-Use the GetSoftwareInfo tool with these parameters:
-- softwarePath: {softwarePath}";
-        }
 
         [McpServerPrompt(Name = "CompileSoftware"), Description("Compile a PLC software and list every compiler message")]
         public static string CompileSoftware(string softwarePath, string password = "")
@@ -786,18 +762,6 @@ Common parameter values:
 Use the GetBlocks tool with these parameters:
 - softwarePath: {softwarePath}
 - regexName: {regexName}";
-        }
-
-        [McpServerPrompt(Name = "GetBlocksWithHierarchy"), Description("List all blocks of a PLC software with their group hierarchy")]
-        public static string GetBlocksWithHierarchy(string softwarePath)
-        {
-            return $@"Get a list of all blocks with their group hierarchy from the software.
-
-Common parameter values:
-- softwarePath: defines the path in the project structure to the software
-
-Use the GetBlocksWithHierarchy tool with these parameters:
-- softwarePath: {softwarePath}";
         }
 
         [McpServerPrompt(Name = "ExportXmlBlock"), Description("Export one block as XML")]
@@ -2250,26 +2214,6 @@ Use the DeleteHmiScreenItem tool with these parameters:
 - softwarePath: {softwarePath}
 - screenName: {screenName}
 - itemName: {itemName}";
-        }
-
-        [McpServerPrompt(Name = "BindHmiTag"), Description("Bind an HMI tag to a property of a screen item")]
-        public static string BindHmiTag(string softwarePath, string screenName, string itemName, string propertyName, string tagName)
-        {
-            return $@"Bind an HMI tag to a property of a WinCC Unified screen item as a tag dynamization.
-
-Common parameter values:
-- softwarePath: path of the WinCC Unified HMI software, e.g. 'HMI_1/HMI_RT_1'
-- screenName: name of the screen
-- itemName: name of the item
-- propertyName: property to dynamize, e.g. 'ProcessValue' or 'Visible'
-- tagName: name of the HMI tag
-
-Use the BindHmiTag tool with these parameters:
-- softwarePath: {softwarePath}
-- screenName: {screenName}
-- itemName: {itemName}
-- propertyName: {propertyName}
-- tagName: {tagName}";
         }
 
         [McpServerPrompt(Name = "GetHmiDynamizations"), Description("Show what drives the properties of WinCC Unified screen items")]

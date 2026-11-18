@@ -231,7 +231,7 @@ namespace TiaMcpServer
                         };
 
                         serverOptions.ServerInstructions =
-                            "Exposes Siemens TIA Portal via Openness. Call 'Connect' first, then 'OpenProject' with an " +
+                            "Exposes Siemens TIA Portal via Openness. Call 'Connect' first, or 'OpenTiaProject' with an " +
                             "absolute .apXX project or .alsXX session path. Use 'GetProjectTree' or 'GetSoftwareTree' to " +
                             "discover the path strings that the other tools expect. Export and import tools operate on " +
                             "the local file system of the machine running this server. Every request is independent: " +
@@ -240,7 +240,7 @@ namespace TiaMcpServer
                             " TIA projects are binary and reachable only through this server, so use these tools rather " +
                             "than reading project files or writing your own Openness scripts. Task guide: " +
                             "(1) Start: 'Connect' attaches to the running TIA Portal and picks up the project already open " +
-                            "there ('GetState' shows it); call 'OpenProject' only for a different project, since it closes the " +
+                            "there ('GetState' shows it); call 'OpenTiaProject' only for a different project, since it closes the " +
                             "open one. Then 'GetProjectTree' for the software path (e.g. 'PLC_1') and 'GetBlocks' or " +
                             "'ResolveObjectPath' for block paths. " +
                             "(2) Understand code: 'GetBlockSource' or 'GetNetworkSource' to read a block, 'FindInCode' to " +

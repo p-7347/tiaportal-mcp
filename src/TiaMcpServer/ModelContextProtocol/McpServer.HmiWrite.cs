@@ -109,7 +109,7 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("width: optional width in pixels")] uint? width = null,
             [Description("height: optional height in pixels")] uint? height = null,
             [Description("text: optional text for a Button, Label or Text, written to every project language. Plain text is stored as '<body><p>...</p></body>', a line break as '<br />'. No bold or color inside a text (Openness refuses it): use 'SetHmiScreenItemProperties' (Font.Weight, ForeColor) for the whole item")] string? text = null,
-            [Description("tag: optional HMI tag to bind to an IOField's ProcessValue. For other properties use 'BindHmiTag'")] string? tag = null,
+            [Description("tag: optional HMI tag to bind to an IOField's ProcessValue. For other properties use 'SetHmiTagDynamization'")] string? tag = null,
             [Description("eventType: optional event for 'scriptCode', e.g. 'Tapped' (click), 'Down' (press), 'Up' (release). For more events or many items use 'SetHmiItemEventScript'")] string? eventType = null,
             [Description("scriptCode: optional JavaScript body of the 'eventType' script, e.g. 'Tags(\"Btn_Sel\").Write(1);'")] string? scriptCode = null)
         {
@@ -153,23 +153,6 @@ namespace TiaMcpServer.ModelContextProtocol
             {
                 Portal.DeleteHmiScreenItem(softwarePath, screenName, itemName);
                 return Deleted("HMI screen item", $"{screenName}/{itemName}");
-            });
-        }
-
-        [WriteTool]
-        [McpServerTool(Name = "BindHmiTag", Title = "Bind HMI tag to screen item", Destructive = true, Idempotent = true, OpenWorld = false),
-         Description("Bind an HMI tag to a property of a WinCC Unified screen item (a tag dynamization), e.g. an IOField's 'ProcessValue' or a Rectangle's 'BackColor'. An existing tag binding on that property is re-pointed. Returns the item as read back")]
-        public static ResponseHmiScreenItemWrite BindHmiTag(
-            [Description(HmiPathDescription)] string softwarePath,
-            [Description("screenName: name of the screen")] string screenName,
-            [Description("itemName: name of the item")] string itemName,
-            [Description("propertyName: the item property to dynamize, as named in TIA Portal's property list, e.g. 'ProcessValue', 'Visible', 'BackColor'")] string propertyName,
-            [Description("tagName: the HMI tag to bind, as 'GetHmiTags' lists it")] string tagName)
-        {
-            return Guarded(nameof(BindHmiTag), () =>
-            {
-                var item = Portal.BindHmiTag(softwarePath, screenName, itemName, propertyName, tagName);
-                return HmiItemWritten(MissingTagWarning(softwarePath, tagName) + $"'{itemName}.{propertyName}' on screen '{screenName}' bound to HMI tag '{tagName}'.", item);
             });
         }
 

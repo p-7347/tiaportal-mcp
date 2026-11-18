@@ -11,7 +11,7 @@ namespace TiaMcpServer.ModelContextProtocol
 {
     /// <summary>
     /// Lets the server's command line preset the tool arguments 'path' (the project file of
-    /// OpenProject), 'softwarePath', 'exportPath', 'preservePath' and 'withDependencies', so a client configures them once (the "args" of its MCP server entry)
+    /// OpenTiaProject), 'softwarePath', 'exportPath', 'preservePath' and 'withDependencies', so a client configures them once (the "args" of its MCP server entry)
     /// instead of the model passing them on every call.
     ///
     /// Callers: Program.cs (Configure at startup, Apply for each registered tool, Filter as the

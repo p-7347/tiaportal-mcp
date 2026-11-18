@@ -197,7 +197,7 @@ namespace TiaMcpServer.Siemens
         {
             var group = GetPlcBlockGroupByPath(softwarePath, groupPath ?? string.Empty)
                 ?? throw new PortalException(PortalErrorCode.NotFound,
-                    $"Block group '{groupPath}' not found in '{softwarePath}'. 'GetBlocksWithHierarchy' lists the groups.");
+                    $"Block group '{groupPath}' not found in '{softwarePath}'. 'GetSoftwareTree' lists the groups.");
 
             var list = new List<PlcBlock>();
             GetBlocksRecursive(group, list, regexName ?? string.Empty);

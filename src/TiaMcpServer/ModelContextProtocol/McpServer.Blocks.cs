@@ -63,7 +63,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GetBlocks", Title = "Get blocks", ReadOnly = true, OpenWorld = false), Description("Use to find a block's path from its name. Flat list with each block's path; for the group tree use 'GetBlocksWithHierarchy'. List the program blocks of a PLC software, optionally filtered by a name or regular expression")]
+        [McpServerTool(Name = "GetBlocks", Title = "Get blocks", ReadOnly = true, OpenWorld = false), Description("Use to find a block's path from its name. Flat list with each block's path (the path shows its groups); for the group tree, empty groups included, use 'GetSoftwareTree' with sections 'blocks'. List the program blocks of a PLC software, optionally filtered by a name or regular expression")]
         public static ResponseBlocks GetBlocks(
             [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
             [Description("regexName: regular expression on the block name, matched anywhere ('G3U' also matches G3U10; ^...$ for an exact name); empty finds all")] string regexName = "",
@@ -154,41 +154,6 @@ namespace TiaMcpServer.ModelContextProtocol
         // Openness reports ModifiedDate in UTC; an Unspecified kind is taken as UTC too.
         private static DateTime AsUtc(DateTime value) =>
             value.Kind == DateTimeKind.Local ? value.ToUniversalTime() : DateTime.SpecifyKind(value, DateTimeKind.Utc);
-
-        [McpServerTool(Name = "GetBlocksWithHierarchy", Title = "Get blocks with hierarchy", ReadOnly = true, OpenWorld = false), Description("Use to see the whole block tree with its group nesting in one call. Get a list of all blocks with their group hierarchy from the PLC software. To find one block by name use 'GetBlocks'; to see types, tags, tables and sources as well use 'GetSoftwareTree'")]
-        public static ResponseBlocksWithHierarchy GetBlocksWithHierarchy(
-        [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath,
-        [Description("includeAttributes: also return every Openness attribute of each block (about 30 each, the bulk of the reply on a large PLC)")] bool includeAttributes = false)
-        {
-            try
-            {
-                var rootGroup = Portal.GetBlockRootGroup(softwarePath);
-                if (rootGroup is not null)
-                {
-                    var hierarchy = Helper.BuildBlockHierarchy(rootGroup, Portal, includeAttributes);
-                    return new ResponseBlocksWithHierarchy
-                    {
-                        Message = $"Block hierarchy retrieved from '{softwarePath}'",
-                        Root = hierarchy,
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true
-                        }
-                    };
-                }
-                else
-                {
-                    // Specific failure: root group could not be resolved
-                    throw new McpException($"Block root group not found for '{softwarePath}'");
-                }
-            }
-            catch (Exception ex) when (ex is not McpException)
-            {
-                // Generic unexpected failure wrapper
-                throw new McpException($"Unexpected error retrieving block hierarchy for '{softwarePath}': {ex.Message}", ex);
-            }
-        }
 
         [McpServerTool(Name = "ExportXmlBlock", Title = "Export block as XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Use to get a block's full SimaticML (lossless; what 'ImportXmlBlock' and 'EditBlockNetwork' use), e.g. as the source of a network; to read code prefer 'GetBlockSource'. Writes one XML file named after the block into exportPath, below its group folders when preservePath is true. An existing file is replaced; inconsistent blocks are rejected")]
         public static ResponseExportXmlBlock ExportXmlBlock(

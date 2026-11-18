@@ -6,6 +6,13 @@
 
 - `WhereUsed`: it called the same Openness cross reference service as `GetCrossReferences` and only flattened the result, so it was never faster; on a big DB it walked every member and stopped at its 40 s budget with an incomplete list (`MES_PLC01_FromMES`: about 52 s, 63 uses, cut off). Use `GetCrossReferences` (`maxDepth` 2 for DB members) or, for the uses of a big DB's members, `FindInCode` with a `nameFilter` (same DB: about 13-23 s, every line with its network text).
 
+Four tools that another tool already does in full (fewer tools to choose from, about 1.3 KB less tool description):
+
+- `OpenProject`: `OpenTiaProject` opens the same project or session (same checks, and an open project is reused), connects first when needed and returns the software paths. `--project-path` now presets only `OpenTiaProject`.
+- `GetSoftwareInfo`: it returned the software name and its Openness attributes, which are only the name. `GetPlcSummary` gives the name plus counts, languages and the inconsistent and protected objects.
+- `GetBlocksWithHierarchy`: `GetBlocks` returns the same block fields with each block's group path (and pages); `GetSoftwareTree` with `sections` `blocks` shows the group tree, empty groups included.
+- `BindHmiTag`: `SetHmiTagDynamization` with only `tagName` binds the tag the same way (an existing tag binding is re-pointed) and also backs up the previous dynamization.
+
 ### Added
 
 - `SetHmiTagDynamization` `mappingMode`: `add` adds single mapping rows (a row with the same from/to is changed) and `remove` deletes rows by from/to, the other rows stay; `replace` (default) writes the whole table as before.
