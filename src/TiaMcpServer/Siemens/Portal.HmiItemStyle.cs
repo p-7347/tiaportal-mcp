@@ -188,21 +188,36 @@ namespace TiaMcpServer.Siemens
             {
                 var path = prefix + name;
 
-                if (openLists == null || !openLists.IsMatch(path))
+                // with a regexName every element is read and the caller's filter picks the lines,
+                // so 'ToolBar.Elements.*Visible' works as well as 'Elements'
+                if (openLists == null)
                 {
                     yield return (path, new PartListSummary(elements.Count));
                     continue;
                 }
 
+                // 33 toolbar elements x 20 properties is ~700 lines: without '[' in regexName
+                // ('Elements\[4\]') only the properties people set on elements are shown
+                var full = openLists.ToString().Contains("[");
+
                 for (var i = 0; i < elements.Count; i++)
                 {
                     foreach (var nested in ReadItemProperties(elements[i], $"{path}[{i}].", Math.Max(0, depth - 1), listing, openLists))
                     {
-                        yield return nested;
+                        if (full || ElementSummary.Contains(nested.Path.Substring(nested.Path.LastIndexOf('.') + 1)))
+                        {
+                            yield return nested;
+                        }
                     }
                 }
             }
         }
+
+        /// <summary>The element properties listed when regexName opens a list without naming an element.</summary>
+        private static readonly HashSet<string> ElementSummary = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "Visible", "Enabled", "Width", "Text", "ToolTipText", "Authorization", "Key", "AlarmBlock", "AlarmStatisticBlock"
+        };
 
         /// <summary>Stands for a list of part objects in 'GetHmiScreenItemProperties' when its elements are not shown.</summary>
         private sealed class PartListSummary
