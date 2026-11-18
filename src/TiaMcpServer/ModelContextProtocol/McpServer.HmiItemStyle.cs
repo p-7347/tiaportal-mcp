@@ -19,7 +19,7 @@ namespace TiaMcpServer.ModelContextProtocol
             "Names as TIA Portal's property list and 'GetHmiScreenItemProperties' show them, e.g. 'BackColor', 'BorderColor', 'BorderWidth', 'ForeColor', 'OutputFormat', 'Font.Size', or 'ToolBar.Elements[4].Visible' for an element of a list (counted from 0)";
 
         [McpServerTool(Name = "GetHmiScreenItemProperties", Title = "Get HMI screen item properties", ReadOnly = true, OpenWorld = false),
-         Description("List the settable properties of one WinCC Unified screen item with their current value and type (colors as '#RRGGBB', enums with their allowed values), including part objects such as 'Font.Size'. Lists of part objects (a toolbar's 'ToolBar.Elements', columns) show as a count; a regexName matching the list, e.g. 'Elements', shows each element as 'ToolBar.Elements[4].Visible'. Use it to find the property names for 'SetHmiScreenItemProperties' and 'CopyHmiItemStyle'")]
+         Description("List the settable properties of one WinCC Unified screen item with their current value and type (colors as '#RRGGBB', enums with their allowed values), including part objects such as 'Font.Size'. Lists of part objects (a toolbar's 'ToolBar.Elements', columns) show as a count; a regexName matching the list, e.g. 'Elements', shows each element's Visible, Enabled, Width, Text and the like as 'ToolBar.Elements[4].Visible', an index in it ('Elements\\[4\\]') every property of that element. Use it to find the property names for 'SetHmiScreenItemProperties' and 'CopyHmiItemStyle'")]
         public static ResponseHmiItemProperties GetHmiScreenItemProperties(
             [Description(HmiPathDescription)] string softwarePath,
             [Description("screenName: name of the screen")] string screenName,
