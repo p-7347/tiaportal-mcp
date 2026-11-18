@@ -756,22 +756,6 @@ Use the GetCrossReferences tool with these parameters:
 - maxDepth: {maxDepth}";
         }
 
-        [McpServerPrompt(Name = "WhereUsed"), Description("Find where a tag, block, type or tag table is used")]
-        public static string WhereUsed(string softwarePath, string name, string kind = "any")
-        {
-            return $@"Answer 'what uses this?' for a tag, block, PLC data type or tag table by name. Resolves the name, picks the right object kind and flattens the cross-reference tree to a plain list of users. Use 'GetCrossReferences' instead when the full nested result or a specific filter is needed.
-
-Common parameter values:
-- softwarePath: defines the path in the project structure to the software
-- name: the object to look up, by bare name or by full root-relative path
-- kind: restrict resolution to 'block', 'type', 'tag' or 'tagTable'. Default 'any' picks the single match, and reports the candidates when the name is ambiguous
-
-Use the WhereUsed tool with these parameters:
-- softwarePath: {softwarePath}
-- name: {name}
-- kind: {kind}";
-        }
-
         #endregion
 
         #region Block Templates

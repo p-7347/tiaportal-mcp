@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Removed
+
+- `WhereUsed`: it called the same Openness cross reference service as `GetCrossReferences` and only flattened the result, so it was never faster; on a big DB it walked every member and stopped at its 40 s budget with an incomplete list (`MES_PLC01_FromMES`: about 52 s, 63 uses, cut off). Use `GetCrossReferences` (`maxDepth` 2 for DB members) or, for the uses of a big DB's members, `FindInCode` with a `nameFilter` (same DB: about 13-23 s, every line with its network text).
+
 ### Added
 
 - `SetHmiTagDynamization` `mappingMode`: `add` adds single mapping rows (a row with the same from/to is changed) and `remove` deletes rows by from/to, the other rows stay; `replace` (default) writes the whole table as before.

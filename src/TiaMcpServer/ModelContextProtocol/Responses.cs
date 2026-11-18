@@ -823,34 +823,6 @@ namespace TiaMcpServer.ModelContextProtocol
         public DateTime? LastModified { get; set; }
     }
 
-    /// <summary>One object that uses the object WhereUsed was asked about.</summary>
-    public class ResponseUsage
-    {
-        public string? UsedBy { get; set; }
-
-        public string? Path { get; set; }
-
-        public string? Address { get; set; }
-
-        public string? TypeName { get; set; }
-
-        /// <summary>The member that is used, e.g. 'Unit[1].Count', when not the object as a whole.</summary>
-        public string? Member { get; set; }
-    }
-
-    public class ResponseWhereUsed : ResponseMessage
-    {
-        /// <summary>The resolved path of the object that was looked up.</summary>
-        public string? Path { get; set; }
-
-        public string? Kind { get; set; }
-
-        public IEnumerable<ResponseUsage>? Items { get; set; }
-
-        /// <summary>All uses found; more than 'items' when maxResults cut the list.</summary>
-        public int? Total { get; set; }
-    }
-
     #endregion
 
 }

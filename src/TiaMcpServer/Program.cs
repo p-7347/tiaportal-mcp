@@ -244,7 +244,7 @@ namespace TiaMcpServer
                             "open one. Then 'GetProjectTree' for the software path (e.g. 'PLC_1') and 'GetBlocks' or " +
                             "'ResolveObjectPath' for block paths. " +
                             "(2) Understand code: 'GetBlockSource' or 'GetNetworkSource' to read a block, 'FindInCode' to " +
-                            "search code text, 'GetCrossReferences' or 'WhereUsed' for who uses a tag or block, 'GetTags' for " +
+                            "search code text, 'GetCrossReferences' for who uses a tag or block (maxDepth 2 for DB members; for a big DB 'FindInCode' with a nameFilter is faster), 'GetTags' for " +
                             "tags, 'GetDbStartValues' for DB contents. " +
                             "(3) Change code, one block at a time, in this order: 'GoOffline' if the PLC is online (compile " +
                             "and import fail while online); read the block ('GetBlockSource', 'GetNetworkSource', for LAD XML " +
