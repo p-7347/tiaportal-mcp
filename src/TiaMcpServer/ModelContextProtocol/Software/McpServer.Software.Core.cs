@@ -15,42 +15,6 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         #region plc software
 
-        [McpServerTool(Name = "GetSoftwareInfo", Title = "Get software info", ReadOnly = true, OpenWorld = false), Description("Show name, description and attributes of one PLC software")]
-        public static ResponseSoftwareInfo GetSoftwareInfo(
-            [Description("softwarePath: PLC software, e.g. 'PLC_1'")] string softwarePath)
-        {
-            try
-            {
-                var software = Portal.GetPlcSoftware(softwarePath);
-                if (software is not null)
-                {
-
-                    var attributes = Helper.GetAttributeList(software);
-
-                    return new ResponseSoftwareInfo
-                    {
-                        Message = $"Software info retrieved from '{softwarePath}'",
-                        Name = software.Name,
-                        Attributes = attributes,
-                        Description = software.ToString(),
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true
-                        }
-                    };
-                }
-                else
-                {
-                    throw new McpException($"Software not found at '{softwarePath}'");
-                }
-            }
-            catch (Exception ex) when (ex is not McpException)
-            {
-                throw new McpException($"Unexpected error retrieving software info from '{softwarePath}': {ex.Message}", ex);
-            }
-        }
-
         [McpServerTool(Name = "CompileSoftware", Title = "Compile software", Destructive = false, Idempotent = true, OpenWorld = false),
          Description("Compile the PLC software and report every compiler message with the object it belongs to, so errors can be fixed without re-reading the whole PLC. Warnings are reported as a successful compile with detail; only errors fail the call")]
         public static ResponseCompileSoftware CompileSoftware(

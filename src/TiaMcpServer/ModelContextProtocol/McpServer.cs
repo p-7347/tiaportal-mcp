@@ -314,7 +314,8 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "OpenProject", Title = "Open project/session", Destructive = true, Idempotent = true, OpenWorld = false), Description("Open a local project (.apXX) or local session (.alsXX) in the connected TIA Portal and make it the current project. Closes the project or session that is open first. Needs a prior Connect; OpenTiaProject connects and opens in one call")]
+        // Not an MCP tool any more: 'OpenTiaProject' does the same and also connects and returns the
+        // software paths. Kept as the shared open step of OpenTiaProject (OpenAndDescribe) and the tests.
         public static ResponseOpenProject OpenProject(
             [Description("path: full path of the .apXX project or .alsXX session file on the machine running this server")] string path)
         {
@@ -624,7 +625,7 @@ namespace TiaMcpServer.ModelContextProtocol
         #region lookup
 
         [McpServerTool(Name = "OpenTiaProject", Title = "Connect/open a project", Destructive = true, Idempotent = true, OpenWorld = false),
-         Description("Connect to TIA Portal if not already connected, open the given project or session, and return the 'portalId' plus the device and PLC software paths the other tools need. Replaces the Connect then OpenProject then GetProjectTree sequence")]
+         Description("Connect to TIA Portal if not already connected, open the given project or session, and return the 'portalId' plus the device and PLC software paths the other tools need. Replaces the Connect, open project and GetProjectTree sequence")]
         public static async Task<ResponseOpenTiaProject> OpenTiaProject(
             [Description("path: full path of the .apXX project or .alsXX session file on the machine running this server")] string path,
             [Description("portalId: process id of the TIA Portal instance to open it in (see 'GetPortals'). Leave empty when at most one instance is running")] int? portalId = null,

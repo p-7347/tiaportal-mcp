@@ -42,7 +42,7 @@ has since diverged with its own feature set below; it no longer tracks upstream 
 | `--logging <1\|2\|3>`     | `1` stderr, `2` debug output, `3` Windows event log. Omit for no logging. |
 | `--doctor`                | Print the environment report and exit without starting the MCP server.    |
 | `--allow-write`           | Register the project-mutating tools. Omitted by default; see below.       |
-| `--project-path <file>`   | Preset for the `path` argument of `OpenProject` / `OpenTiaProject`. See below. |
+| `--project-path <file>`   | Preset for the `path` argument of `OpenTiaProject`. See below. |
 | `--software-path <path>`  | Preset for the `softwarePath` tool argument, e.g. `PLC_1`. See below.     |
 | `--export-path <path>`    | Preset for the `exportPath` tool argument. See below.                     |
 | `--preserve-path <bool>`  | Preset for the `preservePath` tool argument (`true` or `false`). See below. |
@@ -74,7 +74,7 @@ TiaMcpServer.exe hmitags C:\Work\HMITags.xlsx --hmi HMI_1 --apply      # preview
 ## Presetting tool arguments
 
 `softwarePath`, `exportPath`, `preservePath` and `withDependencies` (the `ExportSource*` tools) appear in many tools, `path` (the project file) in
-`OpenProject` and `OpenTiaProject`. Set them once in the `args`
+`OpenTiaProject`. Set them once in the `args`
 of the MCP server entry in your client's JSON configuration and the model no longer has to pass them:
 
 ```json
@@ -142,22 +142,22 @@ a change summary.
 
 ## Tools
 
-195 tools total. Read-only/ungated tools (104) are always available; `--tools` can list fewer.
+191 tools total. Read-only/ungated tools (101) are always available; `--tools` can list fewer.
 
 | Area                          | Tools                                                                                                                                                                                                  |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Portal and state              | `Connect`, `Disconnect`, `GetPortals`, `GetState`, `Doctor`, `GetChangeLog`, `GetProjectStatus`                                                                                                                                          |
-| Project and session           | `GetProject`, `OpenProject`, `SaveProject`, `SaveAsProject`, `ArchiveProject`, `CloseProject`                                                                                                                            |
+| Project and session           | `GetProject`, `OpenTiaProject`, `SaveProject`, `SaveAsProject`, `ArchiveProject`, `CloseProject`                                                                                                                            |
 | Devices                       | `GetProjectTree`, `GetDevices`, `GetDeviceInfo`, `GetDeviceItemInfo`, `GetGsdDependencies`, `GetDeviceMasterCopies`, `FindHardwareCatalogEntries`                                                     |
 | Network topology              | `GetSubnets`, `GetNetworkInterfaceInfo`                                                                                                                                                               |
 | CAx (AutomationML)            | `ExportCax`                                                                                                                                                                                            |
 | PRONETA                       | `CompareNetworkCsv`                                                                                                                                                                                    |
 | Engineering-station online    | `GetOnlineState`, `GoOnline`, `GoOffline`                                                                                                                                                             |
 | Direct PLC (S7CommPlus, experimental) | `ConnectPlcDirect`, `DisconnectPlcDirect`, `BrowsePlcTagsDirect`, `ReadPlcTagValuesDirect`, `WritePlcTagValueDirect`, `GetActivePlcAlarmsDirect`                                             |
-| PLC software                  | `GetSoftwareInfo`, `GetSoftwareTree`, `CompileSoftware`, `CompileCodeBlock`, `CompareSoftware`, `GetBlockFingerprints`, `GetSoftwareChecksum`, `GetSafetyInfo`                                                                                                                                            |
+| PLC software                  | `GetPlcSummary`, `GetSoftwareTree`, `CompileSoftware`, `CompileCodeBlock`, `CompareSoftware`, `GetBlockFingerprints`, `GetSoftwareChecksum`, `GetSafetyInfo`                                                                                                                                            |
 | Technology objects            | `GetTechnologyObjects`, `GetTechnologyObjectParameters`                                                                                                                                              |
 | ProDiag                       | `GetProDiagInfo`, `ExportProDiagSupervisions`                                                                                                                                                         |
-| Blocks                        | `GetBlocks`, `GetBlockInfo`, `GetBlocksWithHierarchy`, `GetBlockInterface`, `GetDbStartValues`, `ExportXmlBlock`, `ExportXmlBlocks`                                                                                        |
+| Blocks                        | `GetBlocks`, `GetBlockInfo`, `GetBlockInterface`, `GetDbStartValues`, `ExportXmlBlock`, `ExportXmlBlocks`                                                                                        |
 | Types                         | `GetTypes`, `GetTypeInfo`, `ExportXmlType`, `ExportXmlTypes`                                                                                                                                           |
 | Tags and constants            | `GetTagTables`, `GetTagTableInfo`, `GetTags`, `GetTagInfo`, `GetConstants`, `ExportXmlTagTable`                                                                                                        |
 | Watch and force tables        | `GetWatchTables`, `GetWatchTableInfo`, `GetForceTables`, `ExportXmlWatchTable`                                                                                                                         |
@@ -187,7 +187,7 @@ don't, and why).
 | Type documents (V21+)      | `ImportTypeFromDocuments`, `ImportTypesFromDocuments`                                                                                                                                           |
 | Devices and network        | `CreateDevice`, `CreateDeviceWithItem`, `DeleteDevice`, `CreateDeviceGroup`, `DeleteDeviceGroup`, `SetIpAddress`, `ConnectToSubnet`, `DisconnectFromSubnet`                                      |
 | CAx (AutomationML)         | `ImportCax`                                                                                                                                                                                     |
-| HMI, WinCC Unified (write) | `CreateHmiScreen`, `DeleteHmiScreen`, `CreateHmiScreenItem`, `UpdateHmiScreenItem`, `SetHmiScreenItemProperties`, `CopyHmiItemStyle`, `SetHmiItemEventScript`, `DeleteHmiItemEventScript`, `DeleteHmiScreenItem`, `BindHmiTag`, `SetHmiTagDynamization`, `SetHmiScriptDynamization`, `SetHmiFlashingDynamization`, `DeleteHmiDynamization`, `CreateHmiFaceplate`, `SetHmiFaceplateInterface`, `CopyHmiScreen`, `CopyHmiScreens`, `SetHmiItemZOrder`, `CreateHmiTag`, `CreateHmiTags`, `UpdateHmiTags`, `DeleteHmiTags`, `SetHmiAlarms`, `DeleteHmiAlarms`, `ImportHmiScriptModules` |
+| HMI, WinCC Unified (write) | `CreateHmiScreen`, `DeleteHmiScreen`, `CreateHmiScreenItem`, `UpdateHmiScreenItem`, `SetHmiScreenItemProperties`, `CopyHmiItemStyle`, `SetHmiItemEventScript`, `DeleteHmiItemEventScript`, `DeleteHmiScreenItem`, `SetHmiTagDynamization`, `SetHmiScriptDynamization`, `SetHmiFlashingDynamization`, `DeleteHmiDynamization`, `CreateHmiFaceplate`, `SetHmiFaceplateInterface`, `CopyHmiScreen`, `CopyHmiScreens`, `SetHmiItemZOrder`, `CreateHmiTag`, `CreateHmiTags`, `UpdateHmiTags`, `DeleteHmiTags`, `SetHmiAlarms`, `DeleteHmiAlarms`, `ImportHmiScriptModules` |
 
 `GetSoftwareTree` accepts a `sections` argument - any comma separated subset of
 `blocks,types,tags,watch,sources`, default `all` - to keep the output small on a large PLC.
@@ -209,7 +209,7 @@ Paths used by these tools are **root-relative**: `1_Tests/FC_Block_1`, not
 ## Prompts (slash commands)
 
 Every tool has a prompt of the same name that you can start as a slash command, for example
-`/mcp__tia-mcp-server__OpenProject D:\Siemens\Test\TestProject1_V21.ap21`. The part after `mcp__` is
+`/mcp__tia-mcp-server__OpenTiaProject D:\Siemens\Test\TestProject1_V21.ap21`. The part after `mcp__` is
 the server name from your MCP configuration. Claude Code shows the prompt description and the
 argument names, matches the typed values to the arguments by position and requires every argument
 without a default. A prompt only sends text to the model, which then calls the tool.
@@ -224,7 +224,7 @@ folder:
 Claude Code itself splits the text at every space and drops the words beyond the last argument. The
 server joins the pieces of a quoted value again, so the value reaches the tool unchanged; `""`
 passes an empty value. All typed words together must not exceed the number of arguments of the
-prompt, so a prompt with few arguments (for example `GetSoftwareInfo`, which only has
+prompt, so a prompt with few arguments (for example `GetPlcSummary`, which only has
 `softwarePath`) cannot take a value of several words: write a normal request instead of the slash
 command.
 

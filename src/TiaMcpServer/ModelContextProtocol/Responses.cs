@@ -16,12 +16,6 @@ namespace TiaMcpServer.ModelContextProtocol
         public IEnumerable<Attribute>? Attributes { get; set; }
     }
 
-    public class ResponseSoftwareInfo : ResponseAttributes
-    {
-        public string? Name { get; set; }
-        public string? Description { get; set; }
-    }
-
     public class ResponseDeviceInfo : ResponseAttributes
     {
         public string? Name { get; set; }
@@ -48,10 +42,6 @@ namespace TiaMcpServer.ModelContextProtocol
         public DateTime? ModifiedDate { get; set; }
         public bool? IsKnowHowProtected { get; set; }
         public string? Description { get; set; }
-    }
-    public class ResponseBlocksWithHierarchy : ResponseMessage
-    {
-        public BlockGroupInfo? Root { get; set; }
     }
 
     public class ResponseTypeInfo : ResponseAttributes
