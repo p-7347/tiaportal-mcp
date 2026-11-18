@@ -135,6 +135,15 @@ namespace TiaMcpServer.ModelContextProtocol
                 FlattenUi(values, $"{prefix}|{nested.Key}", nested.Value, map);
             }
 
+            // toolbar elements, columns: by element name, so the same element is compared on both screens
+            foreach (var list in ui.PartLists)
+            {
+                foreach (var element in list.Value)
+                {
+                    FlattenUi(values, $"{prefix}|{list.Key}[{element.Name ?? element.Index.ToString(System.Globalization.CultureInfo.InvariantCulture)}]", element.Ui, map);
+                }
+            }
+
             FlattenDynamizations(values, prefix, ui.Dynamizations, map);
 
             foreach (var handler in ui.Events)

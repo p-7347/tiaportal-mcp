@@ -144,9 +144,12 @@ namespace TiaMcpServer.Siemens
                             return created;
                         });
 
+                        WriteListsCopy(screen, source.Screen, "screen", writer, newScreenName);
+
                         foreach (var item in source.Items)
                         {
-                            InTransaction($"MCP: copy item '{item.Name}' to '{newScreenName}'", () => WriteItemCopy(screen, item, writer));
+                            var createdItem = InTransaction($"MCP: copy item '{item.Name}' to '{newScreenName}'", () => WriteItemCopy(screen, item, writer));
+                            WriteListsCopy(createdItem, item.Ui, item.Name, writer, newScreenName);
                         }
 
                         return new HmiScreenCopyResult
@@ -157,6 +160,7 @@ namespace TiaMcpServer.Siemens
                             Texts = writer.Texts,
                             Dynamizations = writer.Dynamizations,
                             Events = writer.Events,
+                            Lists = writer.Lists,
                             Replaced = writer.Replaced,
                             Warnings = writer.Warnings
                         };
@@ -175,7 +179,7 @@ namespace TiaMcpServer.Siemens
 ("softwarePath", softwarePath), ("source", source.Name), ("newScreenName", newScreenName));
         }
 
-        private static void WriteItemCopy(HmiScreen screen, HmiItemSnapshot item, CopyWriter writer)
+        private static HmiScreenItemBase WriteItemCopy(HmiScreen screen, HmiItemSnapshot item, CopyWriter writer)
         {
             writer.Step = $"create item '{item.Name}' ({item.Type.Name})";
             var created = CreateItemOfType(screen.ScreenItems, item);
@@ -185,7 +189,7 @@ namespace TiaMcpServer.Siemens
 
             if (created is not HmiFaceplateContainer faceplate)
             {
-                return;
+                return created;
             }
 
             foreach (var part in item.Interface)
@@ -215,6 +219,58 @@ namespace TiaMcpServer.Siemens
                 }
 
                 writer.WriteDynamizations(target, part.Dynamizations, $"{item.Name}.Interface.{part.PropertyName}");
+            }
+
+            return created;
+        }
+
+        /// <summary>
+        /// Copies the element values of the lists of part objects (ToolBar.Elements, Columns, ...) onto the
+        /// existing object, each list in a transaction of its own after the item is committed: a value TIA
+        /// Portal refuses there loses only that list (reported under warnings), not the item or the copy.
+        /// </summary>
+        private void WriteListsCopy(IEngineeringObject created, HmiUiSnapshot source, string where, CopyWriter writer, string newScreenName)
+        {
+            if (!HasPartLists(source))
+            {
+                return;
+            }
+
+            foreach (var (path, name, elements) in ListJobs(source, string.Empty))
+            {
+                var attributes = writer.Attributes;
+                var lists = writer.Lists;
+                var warnings = writer.Warnings.Count;
+
+                try
+                {
+                    InTransaction($"MCP: copy list '{where}.{path}{name}' to '{newScreenName}'",
+                        () => writer.WriteList(created, path, name, elements, where));
+                }
+                catch (Exception ex) when (ex is not PortalException)
+                {
+                    writer.Attributes = attributes;
+                    writer.Lists = lists;
+                    writer.Warnings.RemoveRange(warnings, writer.Warnings.Count - warnings);
+                    writer.Warnings.Add($"{where}.{path}{name}: list not copied, TIA Portal refused '{writer.Step}' ({Operation.DescribeChain(ex)}); set it in the TIA editor");
+                }
+            }
+        }
+
+        /// <summary>The lists of part objects of a snapshot and its part objects, with the path to their owner ('ToolBar.').</summary>
+        private static IEnumerable<(string Path, string Name, List<HmiListElementSnapshot> Elements)> ListJobs(HmiUiSnapshot ui, string path)
+        {
+            foreach (var list in ui.PartLists)
+            {
+                yield return (path, list.Key, list.Value);
+            }
+
+            foreach (var nested in ui.Nested)
+            {
+                foreach (var job in ListJobs(nested.Value, $"{path}{nested.Key}."))
+                {
+                    yield return job;
+                }
             }
         }
 
@@ -301,6 +357,10 @@ namespace TiaMcpServer.Siemens
                 return;
             }
 
+            // Lists of part objects (a toolbar's Elements, an alarm control's Columns): Openness has no
+            // Create for them, a new item already holds the same fixed set, so their elements' values are copied
+            var partLists = PartLists(source);
+
             foreach (var info in infos)
             {
                 if (exclude.Contains(info.Name, StringComparer.Ordinal) || info.AccessMode == EngineeringAttributeAccessMode.None ||
@@ -346,9 +406,11 @@ namespace TiaMcpServer.Siemens
                 }
                 else if (value is IEnumerable && value is not string)
                 {
-                    // e.g. an alarm control's columns or toolbar elements: Openness gives them only
-                    // as a list of sub-objects, which the copy does not re-create
-                    target.Lists.Add($"{where}.{info.Name}");
+                    // a list attribute that is not one of the part lists below: not re-created
+                    if (!partLists.Any(l => string.Equals(l.Name, info.Name, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        target.Lists.Add($"{where}.{info.Name}");
+                    }
                 }
                 else if (value is IEngineeringObject nested && depth > 0)
                 {
@@ -356,18 +418,44 @@ namespace TiaMcpServer.Siemens
                     ReadAttributes(nested, part, $"{where}.{info.Name}", skipped, depth - 1);
                     target.Lists.AddRange(part.Lists);
 
-                    if (part.Values.Count > 0 || part.Texts.Count > 0 || part.Nested.Count > 0)
+                    if (part.Values.Count > 0 || part.Texts.Count > 0 || part.Nested.Count > 0 || part.PartLists.Count > 0)
                     {
                         target.Nested[info.Name] = part;
                     }
                 }
             }
 
-            foreach (var (name, _) in PartLists(source))
+            foreach (var (name, elements) in partLists)
             {
-                target.Lists.Add($"{where}.{name}");
+                var list = new List<HmiListElementSnapshot>();
+
+                for (var i = 0; i < elements.Count; i++)
+                {
+                    var element = new HmiListElementSnapshot { Index = i, Name = ElementName(elements[i]) };
+                    ReadAttributes(elements[i], element.Ui, $"{where}.{name}[{i}]", skipped, Math.Max(0, depth - 1), "Name");
+                    list.Add(element);
+                }
+
+                target.PartLists[name] = list;
             }
         }
+
+        /// <summary>An element's own name (columns and toolbar elements have one), used to find the same element on the copy.</summary>
+        private static string? ElementName(IEngineeringObject element)
+        {
+            try
+            {
+                return element.GetAttribute("Name") as string;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>True when the snapshot or one of its part objects holds a list of part objects.</summary>
+        private static bool HasPartLists(HmiUiSnapshot ui) =>
+            ui.PartLists.Count > 0 || ui.Nested.Values.Any(HasPartLists);
 
         private static bool IsPlainValue(object value) =>
             value is string || value.GetType().IsPrimitive || value.GetType().IsEnum || value is ValueType;
@@ -447,6 +535,7 @@ namespace TiaMcpServer.Siemens
             public int Texts { get; private set; }
             public int Dynamizations { get; private set; }
             public int Events { get; private set; }
+            public int Lists { get; set; }
             public int Replaced { get; private set; }
             public List<string> Warnings { get; } = new List<string>();
 
@@ -541,6 +630,87 @@ namespace TiaMcpServer.Siemens
                         Warnings.Add($"{where}.{nested.Key}: no such part on the copy");
                     }
                 }
+            }
+
+            /// <summary>
+            /// Writes the element values of one list of part objects. Openness has no Create or Delete for
+            /// these elements: a new item holds the same fixed set, so each element is found by its name
+            /// (or its position when it has none) and only its values are written.
+            /// </summary>
+            public void WriteList(IEngineeringObject root, string path, string name, List<HmiListElementSnapshot> elements, string where)
+            {
+                var owner = root;
+                Step = $"{where}.{path}{name}";
+
+                foreach (var part in path.Split(new[] { '.' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    if (owner.GetAttribute(part) is not IEngineeringObject next)
+                    {
+                        Warnings.Add($"{where}.{path}{name}: no such part on the copy; list not copied");
+                        return;
+                    }
+
+                    owner = next;
+                }
+
+                WriteListOn(owner, name, elements, $"{where}.{path}{name}");
+            }
+
+            private void WriteListOn(IEngineeringObject owner, string name, List<HmiListElementSnapshot> elements, string where)
+            {
+                var targets = PartLists(owner).FirstOrDefault(l => string.Equals(l.Name, name, StringComparison.OrdinalIgnoreCase)).Elements;
+
+                if (targets == null)
+                {
+                    Warnings.Add($"{where}: the copy has no such list; not copied");
+                    return;
+                }
+
+                var missing = new List<string>();
+                var byName = new Dictionary<string, int>(StringComparer.Ordinal);
+
+                for (var i = 0; i < targets.Count; i++)
+                {
+                    var targetName = ElementName(targets[i]);
+
+                    if (targetName != null && !byName.ContainsKey(targetName))
+                    {
+                        byName[targetName] = i;
+                    }
+                }
+
+                foreach (var element in elements)
+                {
+                    var index = element.Name != null
+                        ? byName.TryGetValue(element.Name, out var found) ? found : -1
+                        : element.Index < targets.Count ? element.Index : -1;
+
+                    if (index < 0)
+                    {
+                        missing.Add(element.Name ?? $"[{element.Index}]");
+                        continue;
+                    }
+
+                    var target = targets[index];
+                    var at = $"{where}[{index}]";
+                    WriteAttributes(target, element.Ui, at);
+
+                    foreach (var inner in element.Ui.PartLists)
+                    {
+                        WriteListOn(target, inner.Key, inner.Value, $"{at}.{inner.Key}");
+                    }
+                }
+
+                if (missing.Count > 0)
+                {
+                    Warnings.Add($"{where}: element(s) {string.Join(", ", missing)} not on the copy; not copied");
+                }
+                else if (elements.Any(e => e.Name == null) && elements.Count != targets.Count)
+                {
+                    Warnings.Add($"{where}: the source has {elements.Count} element(s), the copy {targets.Count}; copied by position - check it in the TIA editor");
+                }
+
+                Lists++;
             }
 
             public void WriteDynamizations(UIBase target, List<HmiDynamizationSnapshot> source, string where)
@@ -650,8 +820,18 @@ namespace TiaMcpServer.Siemens
         public List<HmiDynamizationSnapshot> Dynamizations { get; } = new List<HmiDynamizationSnapshot>();
         public List<HmiEventSnapshot> Events { get; } = new List<HmiEventSnapshot>();
 
-        /// <summary>Paths of list attributes (columns, toolbar elements, ...) that are read but not copied, incl. those of part objects.</summary>
+        /// <summary>Paths of list attributes that are not copied (not lists of part objects), incl. those of part objects.</summary>
         public List<string> Lists { get; } = new List<string>();
+
+        /// <summary>Lists of part objects (ToolBar's 'Elements', an alarm control's 'Columns'): list name to its elements.</summary>
+        public Dictionary<string, List<HmiListElementSnapshot>> PartLists { get; } = new Dictionary<string, List<HmiListElementSnapshot>>(StringComparer.OrdinalIgnoreCase);
+    }
+
+    public class HmiListElementSnapshot
+    {
+        public int Index { get; set; }
+        public string? Name { get; set; }
+        public HmiUiSnapshot Ui { get; } = new HmiUiSnapshot();
     }
 
     public class HmiItemSnapshot
@@ -693,6 +873,9 @@ namespace TiaMcpServer.Siemens
         public int Texts { get; set; }
         public int Dynamizations { get; set; }
         public int Events { get; set; }
+
+        /// <summary>Lists of part objects (toolbar elements, columns) whose element values were copied.</summary>
+        public int Lists { get; set; }
         public int Replaced { get; set; }
         public List<string> Warnings { get; set; } = new List<string>();
     }

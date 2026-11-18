@@ -15,6 +15,9 @@ Four tools that another tool already does in full (fewer tools to choose from, a
 
 ### Added
 
+- `CopyHmiScreen`, `CopyHmiScreens` and `SetHmiItemZOrder` copy the element values of lists of part objects: an alarm control's toolbar `Elements` (Visible, Enabled, Width, ...) and the `Columns` of an alarm or alarm statistics view. Openness has no create/delete for these elements, so a new item already has the same set; each element is found by name (columns) or position (toolbar elements). Each list is written in a transaction of its own: a value TIA Portal refuses loses only that list, reported under `warnings`. `CompareHmiScreens` compares these element values too.
+- `Connect` / `OpenTiaProject` no longer hang while TIA Portal is busy: after a few seconds without an answer they look at TIA Portal's windows and, when a dialog blocks the main window or the window does not respond (compile, download, the Openness access prompt), say so with the dialog titles; at the latest after about 25 s they answer. The attach keeps waiting in the background and the next `Connect` returns at once when TIA Portal is free.
+- `GetCrossReferences` `callers` (1-5): for a block, who calls it up that many levels, one compact line per chain (`FB920 SM_PitchHome_Inch <- FB118 G2U1_SM118 (Multiinstance, NW6) <- OB1 Main`) in `callTree` instead of the full result; 40 s budget, at most 100 chains (or `maxReferences`).
 - `SetHmiTagDynamization` `mappingMode`: `add` adds single mapping rows (a row with the same from/to is changed) and `remove` deletes rows by from/to, the other rows stay; `replace` (default) writes the whole table as before.
 - `EditBlockNetwork` and `CopyNetwork` take `compile`: the block is compiled right after the edit and the result comes back in `compile`, so the next edit does not find it inconsistent.
 - `GetProjectTree` takes `kind` (`software` or `devices`), `regexName` and `depth`, for projects whose whole tree is too long for the client.

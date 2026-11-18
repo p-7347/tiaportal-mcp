@@ -713,7 +713,7 @@ Use the GetPlcSummary tool with these parameters:
         }
 
         [McpServerPrompt(Name = "GetCrossReferences"), Description("List cross references of a PLC software or one object")]
-        public static string GetCrossReferences(string softwarePath, string objectPath = "", string objectKind = "auto", string filter = "AllObjects", string maxDepth = "1")
+        public static string GetCrossReferences(string softwarePath, string objectPath = "", string objectKind = "auto", string filter = "AllObjects", string maxDepth = "1", string callers = "")
         {
             return $@"Get cross references for a PLC software or for one block, type, tag table, tag or block group inside it. Watch tables, force tables and external sources have no cross references.
 
@@ -723,13 +723,14 @@ Common parameter values:
 - objectKind: 'auto' (default), 'block', 'type', 'tagTable', 'tag' or 'blockGroup'
 - filter: 'AllObjects' (default), 'ObjectsWithReferences', 'ObjectsWithoutReferences' or 'UnusedObjects'
 - maxDepth: 1 = sources and their references (default), 2 = also source children, 3 = also reference locations. Keeps large results manageable
+- callers: for a block, 1-5 lists who calls it up that many levels (one line per chain up to the OB) instead of the full result; empty or 0 = normal result
 
 Use the GetCrossReferences tool with these parameters:
 - softwarePath: {softwarePath}
 - objectPath: {objectPath}
 - objectKind: {objectKind}
 - filter: {filter}
-- maxDepth: {maxDepth}";
+- maxDepth: {maxDepth}{OptionalParameter("callers", callers)}";
         }
 
         #endregion

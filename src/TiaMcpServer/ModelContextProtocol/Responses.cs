@@ -199,6 +199,9 @@ namespace TiaMcpServer.ModelContextProtocol
         /// the sources listed are complete up to that point, later ones are missing.
         /// </summary>
         public string? StoppedReason { get; set; }
+
+        /// <summary>With 'callers': one line per caller chain, from the block up to an OB or the level limit.</summary>
+        public List<string>? CallTree { get; set; }
     }
 
     #endregion
